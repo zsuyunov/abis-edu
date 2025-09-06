@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Session</title>
+</head>
+<body>
+    <h1>Clearing all sessions...</h1>
+    <script>
+        // Clear all cookies
+        const cookiesToClear = [
+            "auth_token",
+            "__session", 
+            "__session_61dFzdSC",
+            "__clerk_db_jwt",
+            "__clerk_db_jwt_u6pPacZK",
+            "__clerk_db_jwt_TDWNA_Aa", 
+            "__clerk_db_jwt_61dFzdSC",
+            "__client_uat",
+            "__client_uat_61dFzdSC",
+            "__client_uat_u6pPacZK",
+            "__client_uat_TDWNA_Aa"
+        ];
+        
+        cookiesToClear.forEach(cookie => {
+            document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+            document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=localhost;`;
+            document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.localhost;`;
+        });
+        
+        // Clear all storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        alert("All sessions cleared! Redirecting to login...");
+        window.location.href = "http://localhost:3000/login";
+    </script>
+</body>
+</html>

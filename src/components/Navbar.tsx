@@ -1,9 +1,53 @@
-import { UserButton } from "@clerk/nextjs";
-import { currentUser } from "@clerk/nextjs/server";
-import Image from "next/image";
+"use client";
 
-const Navbar = async () => {
-  const user = await currentUser();
+import Image from "next/image";
+import { usePowerUser, usePowerLogout } from "@/hooks/usePowerfulApi";
+import { NavLoader, PowerButton } from "@/components/ui/PowerLoader";
+import { useEffect, useState } from "react";
+
+const Navbar = () => {
+  const { data: userData, isLoading: loading } = usePowerUser();
+  const logoutMutation = usePowerLogout();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Prevent hydration mismatch by waiting for client-side hydration
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Extract user data with instant fallback - ensure consistent server/client rendering
+  const user = userData?.user || {
+    id: 'admin',
+    phone: '+998901234500',
+    role: 'admin', // Fixed: consistent with fallbackUser
+    name: 'Admin',
+    surname: 'User'
+  };
+
+  // Format role display
+  const getRoleDisplay = (role: string) => {
+    switch (role) {
+      case 'main_director':
+        return 'Main Director';
+      case 'support_director':
+        return 'Support Director';
+      case 'admin':
+        return 'Admin';
+      case 'teacher':
+        return 'Teacher';
+      case 'student':
+        return 'Student';
+      case 'parent':
+        return 'Parent';
+      default:
+        return role;
+    }
+  };
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
+  };
+
   return (
     <div className="flex items-center justify-between p-4">
       {/* SEARCH BAR */}
@@ -27,13 +71,27 @@ const Navbar = async () => {
           </div>
         </div>
         <div className="flex flex-col">
-          <span className="text-xs leading-3 font-medium">John Doe</span>
-          <span className="text-[10px] text-gray-500 text-right">
-            {user?.publicMetadata?.role as string}
-          </span>
+          {!isHydrated || loading ? (
+            <NavLoader />
+          ) : (
+            <>
+              <span className="text-xs leading-3 font-medium transition-all duration-200">
+                {user?.name} {user?.surname}
+              </span>
+              <span className="text-[10px] text-gray-500 text-right transition-all duration-200">
+                {getRoleDisplay(user?.role)}
+              </span>
+            </>
+          )}
         </div>
-        {/* <Image src="/avatar.png" alt="" width={36} height={36} className="rounded-full"/> */}
-        <UserButton />
+        
+        <PowerButton
+          onClick={handleLogout}
+          loading={logoutMutation.isPending}
+          className="bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600"
+        >
+          {logoutMutation.isPending ? 'Logging out...' : 'Logout'}
+        </PowerButton>
       </div>
     </div>
   );

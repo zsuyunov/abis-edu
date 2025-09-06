@@ -54,8 +54,6 @@ const SubjectForm = ({
     }
   }, [state, router, type, setOpen]);
 
-  const { teachers } = relatedData;
-
   return (
     <form className="flex flex-col gap-8" onSubmit={onSubmit}>
       <h1 className="text-xl font-semibold">
@@ -69,7 +67,28 @@ const SubjectForm = ({
           defaultValue={data?.name}
           register={register}
           error={errors?.name}
+          required
         />
+        
+        <div className="flex flex-col gap-2 w-full md:w-1/4">
+          <label className="text-xs text-gray-500">
+            Status <span className="text-red-500">*</span>
+          </label>
+          <select
+            className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900"
+            {...register("status")}
+            defaultValue={data?.status || "ACTIVE"}
+          >
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+          {errors.status?.message && (
+            <p className="text-xs text-red-400">
+              {errors.status.message.toString()}
+            </p>
+          )}
+        </div>
+
         {data && (
           <InputField
             label="Id"
@@ -80,28 +99,6 @@ const SubjectForm = ({
             hidden
           />
         )}
-        <div className="flex flex-col gap-2 w-full md:w-1/4">
-          <label className="text-xs text-gray-500">Teachers</label>
-          <select
-            multiple
-            className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
-            {...register("teachers")}
-            defaultValue={data?.teachers}
-          >
-            {teachers.map(
-              (teacher: { id: string; name: string; surname: string }) => (
-                <option value={teacher.id} key={teacher.id}>
-                  {teacher.name + " " + teacher.surname}
-                </option>
-              )
-            )}
-          </select>
-          {errors.teachers?.message && (
-            <p className="text-xs text-red-400">
-              {errors.teachers.message.toString()}
-            </p>
-          )}
-        </div>
       </div>
       {state.error && (
         <span className="text-red-500">Something went wrong!</span>

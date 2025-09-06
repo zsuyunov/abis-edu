@@ -9,174 +9,1049 @@ datasource db {
 
 model Admin {
   id       String @id
-  username String @unique
+  phone    String @unique
+  password String
 }
 
 model Student {
-  id          String       @id
-  username    String       @unique
-  name        String
-  surname     String
-  email       String?      @unique
-  phone       String?      @unique
-  address     String
-  img         String?
-  bloodType   String
-  sex         UserSex
-  createdAt   DateTime     @default(now())
-  parentId    String
-  parent      Parent       @relation(fields: [parentId], references: [id])
-  classId     Int
-  class       Class        @relation(fields: [classId], references: [id])
-  gradeId     Int
-  grade       Grade        @relation(fields: [gradeId], references: [id])
-  attendances Attendance[]
-  results     Result[]
-  birthday    DateTime
+  id                  String               @id
+  phone               String               @unique
+  createdAt           DateTime             @default(now())
+  classId             Int?
+  password            String
+  archivedAt          DateTime?
+  branchId            Int?
+  dateOfBirth         DateTime?
+  firstName           String
+  gender              UserSex
+  lastName            String
+  restoredAt          DateTime?
+  status              StudentStatus        @default(ACTIVE)
+  studentId           String               @unique
+  updatedAt           DateTime             @updatedAt
+  archiveComments     ArchiveComment[]
+  attendances         Attendance[]
+  complaints          Complaint[]
+  documentAssignments DocumentAssignment[]
+  examResults         ExamResult[]
+  grades              Grade[]
+  homeworkSubmissions HomeworkSubmission[]
+  results             Result[]
+  branch              Branch?              @relation(fields: [branchId], references: [id])
+  class               Class?               @relation(fields: [classId], references: [id])
+  attachments         StudentAttachment[]
+  studentParents      StudentParent[]
+
+  @@index([branchId, status])
+  @@index([classId, status])
+  @@index([branchId, classId])
+  @@index([firstName, lastName])
+  @@index([createdAt])
 }
 
 model Teacher {
-  id        String    @id
-  username  String    @unique
-  name      String
-  surname   String
-  email     String?   @unique
-  phone     String?   @unique
-  address   String
-  img       String?
-  bloodType String
-  sex       UserSex
-  createdAt DateTime  @default(now())
-  subjects  Subject[]
-  lessons   Lesson[]
-  classes   Class[]
-  birthday  DateTime
+  id                  String               @id
+  email               String?
+  phone               String               @unique
+  address             String
+  createdAt           DateTime             @default(now())
+  password            String
+  archivedAt          DateTime?
+  dateOfBirth         DateTime
+  firstName           String
+  gender              UserSex
+  lastName            String
+  restoredAt          DateTime?
+  status              TeacherStatus        @default(ACTIVE)
+  teacherId           String               @unique
+  updatedAt           DateTime             @updatedAt
+  archiveComments     ArchiveComment[]
+  attendances         Attendance[]
+  complaints          Complaint[]
+  documentAssignments DocumentAssignment[]
+  exams               Exam[]
+  examResults         ExamResult[]
+  grades              Grade[]
+  homework            Homework[]
+  TeacherAssignment   TeacherAssignment[]
+  attachments         TeacherAttachment[]
+  education           TeacherEducation?
+  passport            TeacherPassport?
+  timetables          Timetable[]
+  timetableTopics     TimetableTopic[]
+
+  @@index([firstName, lastName])
+  @@index([status, createdAt])
 }
 
 model Parent {
-  id        String    @id
-  username  String    @unique
-  name      String
-  surname   String
-  email     String?   @unique
-  phone     String    @unique
-  address   String
-  createdAt DateTime  @default(now())
-  students  Student[]
+  id              String           @id
+  phone           String           @unique
+  createdAt       DateTime         @default(now())
+  password        String
+  archivedAt      DateTime?
+  firstName       String
+  lastName        String
+  parentId        String           @unique
+  restoredAt      DateTime?
+  status          ParentStatus     @default(ACTIVE)
+  updatedAt       DateTime         @updatedAt
+  branchId        Int
+  archiveComments ArchiveComment[]
+  complaints      Complaint[]
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  studentParents  StudentParent[]
+
+  @@index([branchId, status])
+  @@index([firstName, lastName])
+  @@index([status, createdAt])
 }
 
-model Grade {
+model StudentParent {
+  id           Int                @id @default(autoincrement())
+  studentId    String
+  parentId     String
+  relationship ParentRelationship
+  createdAt    DateTime           @default(now())
+  parent       Parent             @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student      Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, parentId, relationship])
+  @@index([parentId])
+}
+
+model GradeLevel {
   id    Int @id @default(autoincrement())
   level Int @unique
-
-  students Student[]
-  classess Class[]
 }
 
 model Class {
-  id       Int    @id @default(autoincrement())
-  name     String @unique
-  capacity Int
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  capacity          Int
+  academicYearId    Int
+  archivedAt        DateTime?
+  branchId          Int
+  createdAt         DateTime            @default(now())
+  educationType     ClassEducationType
+  language          ClassLanguage
+  restoredAt        DateTime?
+  status            ClassStatus         @default(ACTIVE)
+  updatedAt         DateTime            @updatedAt
+  archiveComments   ArchiveComment[]
+  attendances       Attendance[]
+  academicYear      AcademicYear        @relation(fields: [academicYearId], references: [id])
+  branch            Branch              @relation(fields: [branchId], references: [id])
+  complaints        Complaint[]
+  documents         Document[]
+  exams             Exam[]
+  grades            Grade[]
+  homework          Homework[]
+  students          Student[]
+  TeacherAssignment TeacherAssignment[]
+  timetables        Timetable[]
+  timetableTopics   TimetableTopic[]
 
-  supervisorId  String?
-  supervisor    Teacher?       @relation(fields: [supervisorId], references: [id])
-  lessons       Lesson[]
-  students      Student[]
-  gradeId       Int
-  grade         Grade          @relation(fields: [gradeId], references: [id])
-  events        Event[]
-  announcements Announcement[]
+  @@index([branchId, status])
+  @@index([academicYearId, status])
+  @@index([branchId, academicYearId])
+  @@index([status, createdAt])
 }
 
 model Subject {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  teachers Teacher[]
-  lessons  Lesson[]
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  archivedAt        DateTime?
+  createdAt         DateTime            @default(now())
+  restoredAt        DateTime?
+  status            SubjectStatus       @default(ACTIVE)
+  updatedAt         DateTime            @updatedAt
+  archiveComments   ArchiveComment[]
+  attendances       Attendance[]
+  complaints        Complaint[]
+  exams             Exam[]
+  grades            Grade[]
+  homework          Homework[]
+  TeacherAssignment TeacherAssignment[]
+  timetables        Timetable[]
+  timetableTopics   TimetableTopic[]
 }
 
-model Lesson {
-  id        Int      @id @default(autoincrement())
-  name      String
-  day       Day
-  startTime DateTime
-  endTime   DateTime
+model Timetable {
+  id              Int              @id @default(autoincrement())
+  branchId        Int
+  classId         Int
+  academicYearId  Int
+  subjectId       Int
+  teacherId       String
+  fullDate        DateTime
+  day             Day
+  startTime       DateTime
+  endTime         DateTime
+  roomNumber      String
+  buildingName    String?
+  status          TimetableStatus  @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  archivedAt      DateTime?
+  restoredAt      DateTime?
+  archiveComments ArchiveComment[]
+  attendances     Attendance[]
+  exams           Exam[]
+  grades          Grade[]
+  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  class           Class            @relation(fields: [classId], references: [id])
+  subject         Subject          @relation(fields: [subjectId], references: [id])
+  teacher         Teacher          @relation(fields: [teacherId], references: [id])
+  topics          TimetableTopic[]
 
-  subjectId   Int
-  subject     Subject      @relation(fields: [subjectId], references: [id])
-  classId     Int
-  class       Class        @relation(fields: [classId], references: [id])
-  teacherId   String
-  teacher     Teacher      @relation(fields: [teacherId], references: [id])
-  exams       Exam[]
-  assignments Assignment[]
-  attendances Attendance[]
+  @@index([branchId, academicYearId, classId, subjectId])
+  @@index([teacherId, fullDate])
+  @@index([classId, day, startTime])
+  @@index([fullDate, startTime, endTime])
+  @@index([status, createdAt])
+  @@index([teacherId, status])
+}
+
+model TimetableTopic {
+  id                 Int          @id @default(autoincrement())
+  title              String
+  description        String?
+  attachments        String[]
+  timetableId        Int
+  teacherId          String
+  subjectId          Int
+  classId            Int
+  branchId           Int
+  academicYearId     Int
+  status             TopicStatus  @default(DRAFT)
+  completedAt        DateTime?
+  progressPercentage Int          @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  academicYear       AcademicYear @relation(fields: [academicYearId], references: [id])
+  branch             Branch       @relation(fields: [branchId], references: [id])
+  class              Class        @relation(fields: [classId], references: [id])
+  subject            Subject      @relation(fields: [subjectId], references: [id])
+  teacher            Teacher      @relation(fields: [teacherId], references: [id])
+  timetable          Timetable    @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+
+  @@index([timetableId, teacherId])
+  @@index([classId, subjectId, academicYearId])
+  @@index([teacherId, status, createdAt])
 }
 
 model Exam {
-  id        Int      @id @default(autoincrement())
-  title     String
-  startTime DateTime
-  endTime   DateTime
+  id              Int              @id @default(autoincrement())
+  startTime       String
+  endTime         String
+  academicYearId  Int
+  archivedAt      DateTime?
+  branchId        Int
+  classId         Int
+  createdAt       DateTime         @default(now())
+  date            DateTime
+  fullMarks       Int              @default(100)
+  name            String
+  passingMarks    Int              @default(40)
+  restoredAt      DateTime?
+  roomNumber      String
+  status          ExamStatus       @default(SCHEDULED)
+  subjectId       Int
+  teacherId       String
+  timetableId     Int?
+  updatedAt       DateTime         @updatedAt
+  archiveComments ArchiveComment[]
+  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  class           Class            @relation(fields: [classId], references: [id])
+  subject         Subject          @relation(fields: [subjectId], references: [id])
+  teacher         Teacher          @relation(fields: [teacherId], references: [id])
+  timetable       Timetable?       @relation(fields: [timetableId], references: [id])
+  examResults     ExamResult[]
+  results         Result[]
 
-  lessonId Int
-  lesson   Lesson   @relation(fields: [lessonId], references: [id])
-  results  Result[]
+  @@index([branchId, academicYearId, classId, subjectId])
+  @@index([teacherId, date])
+  @@index([status, date])
+  @@index([date, startTime, endTime])
 }
 
-model Assignment {
-  id        Int      @id @default(autoincrement())
-  title     String
-  startDate DateTime
-  dueDate   DateTime
+model ExamResult {
+  id            Int      @id @default(autoincrement())
+  marksObtained Float
+  status        String
+  examId        Int
+  studentId     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  branchId      Int
+  feedback      String?
+  teacherId     String?
+  branch        Branch   @relation(fields: [branchId], references: [id])
+  exam          Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student       Student  @relation(fields: [studentId], references: [id])
+  teacher       Teacher? @relation(fields: [teacherId], references: [id])
 
-  lessonId Int
-  lesson   Lesson   @relation(fields: [lessonId], references: [id])
-  results  Result[]
+  @@unique([examId, studentId])
+  @@index([studentId, status])
+  @@index([teacherId, examId])
+  @@index([branchId, studentId])
+}
+
+model Homework {
+  id                  Int                  @id @default(autoincrement())
+  title               String
+  description         String?
+  assignedDate        DateTime             @default(now())
+  dueDate             DateTime
+  status              HomeworkStatus       @default(ACTIVE)
+  branchId            Int
+  academicYearId      Int
+  classId             Int
+  subjectId           Int
+  teacherId           String
+  archivedAt          DateTime?
+  restoredAt          DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  allowLateSubmission Boolean              @default(true)
+  instructions        String?
+  latePenalty         Float?
+  passingGrade        Float?
+  totalPoints         Float?
+  archiveComments     ArchiveComment[]
+  academicYear        AcademicYear         @relation(fields: [academicYearId], references: [id])
+  branch              Branch               @relation(fields: [branchId], references: [id])
+  class               Class                @relation(fields: [classId], references: [id])
+  subject             Subject              @relation(fields: [subjectId], references: [id])
+  teacher             Teacher              @relation(fields: [teacherId], references: [id])
+  attachments         HomeworkAttachment[]
+  submissions         HomeworkSubmission[]
+  results             Result[]
+
+  @@index([branchId, academicYearId, classId, subjectId])
+  @@index([teacherId, assignedDate])
+  @@index([status, dueDate])
+  @@index([teacherId, status])
+}
+
+model HomeworkSubmission {
+  id             Int                    @id @default(autoincrement())
+  submissionDate DateTime?
+  status         SubmissionStatus       @default(NOT_SUBMITTED)
+  grade          Float?
+  feedback       String?
+  homeworkId     Int
+  studentId      String
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  content        String?
+  isLate         Boolean                @default(false)
+  homework       Homework               @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  student        Student                @relation(fields: [studentId], references: [id])
+  attachments    SubmissionAttachment[]
+
+  @@unique([homeworkId, studentId])
+  @@index([studentId, status])
+  @@index([homeworkId, submissionDate])
+  @@index([homeworkId, status])
 }
 
 model Result {
-  id    Int @id @default(autoincrement())
-  score Int
-
-  examId       Int?
-  exam         Exam?       @relation(fields: [examId], references: [id])
-  assignmentId Int?
-  assignment   Assignment? @relation(fields: [assignmentId], references: [id])
-  studentId    String
-  student      Student     @relation(fields: [studentId], references: [id])
+  id         Int       @id @default(autoincrement())
+  score      Int
+  examId     Int?
+  studentId  String
+  homeworkId Int?
+  exam       Exam?     @relation(fields: [examId], references: [id])
+  homework   Homework? @relation(fields: [homeworkId], references: [id])
+  student    Student   @relation(fields: [studentId], references: [id])
 }
 
 model Attendance {
-  id      Int      @id @default(autoincrement())
-  date    DateTime
-  present Boolean
+  id              Int              @id @default(autoincrement())
+  date            DateTime
+  studentId       String
+  archived        Boolean          @default(false)
+  archivedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  notes           String?
+  restoredAt      DateTime?
+  status          AttendanceStatus @default(PRESENT)
+  timetableId     Int
+  updatedAt       DateTime         @updatedAt
+  academicYearId  Int
+  branchId        Int
+  classId         Int
+  subjectId       Int
+  teacherId       String
+  archiveComments ArchiveComment[]
+  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  class           Class            @relation(fields: [classId], references: [id])
+  student         Student          @relation(fields: [studentId], references: [id])
+  subject         Subject          @relation(fields: [subjectId], references: [id])
+  teacher         Teacher          @relation(fields: [teacherId], references: [id])
+  timetable       Timetable        @relation(fields: [timetableId], references: [id])
 
-  studentId String
-  student   Student @relation(fields: [studentId], references: [id])
-  lessonId  Int
-  lesson    Lesson  @relation(fields: [lessonId], references: [id])
+  @@unique([studentId, timetableId, date])
+  @@index([branchId, classId, date])
+  @@index([branchId, academicYearId, date])
+  @@index([teacherId, date])
+}
+
+model Grade {
+  id              Int              @id @default(autoincrement())
+  academicYearId  Int
+  archivedAt      DateTime?
+  branchId        Int
+  classId         Int
+  createdAt       DateTime         @default(now())
+  date            DateTime
+  description     String?
+  maxValue        Float            @default(100)
+  month           Int?
+  restoredAt      DateTime?
+  status          GradeStatus      @default(ACTIVE)
+  studentId       String
+  subjectId       Int
+  teacherId       String
+  term            Int?
+  timetableId     Int?
+  type            GradeType
+  updatedAt       DateTime         @updatedAt
+  value           Float
+  week            Int?
+  year            Int
+  archiveComments ArchiveComment[]
+  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  class           Class            @relation(fields: [classId], references: [id])
+  student         Student          @relation(fields: [studentId], references: [id])
+  subject         Subject          @relation(fields: [subjectId], references: [id])
+  teacher         Teacher          @relation(fields: [teacherId], references: [id])
+  timetable       Timetable?       @relation(fields: [timetableId], references: [id])
+
+  @@index([studentId, subjectId, academicYearId])
+  @@index([classId, subjectId, type, date])
+}
+
+model Complaint {
+  id            Int                      @id @default(autoincrement())
+  title         String
+  description   String
+  category      ComplaintCategory
+  priority      ComplaintPriority        @default(MEDIUM)
+  status        ComplaintStatus          @default(PENDING)
+  senderType    String
+  studentId     String?
+  parentId      String?
+  teacherId     String?
+  branchId      Int
+  classId       Int?
+  subjectId     Int?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  resolvedAt    DateTime?
+  branch        Branch                   @relation(fields: [branchId], references: [id])
+  class         Class?                   @relation(fields: [classId], references: [id])
+  parent        Parent?                  @relation(fields: [parentId], references: [id])
+  student       Student?                 @relation(fields: [studentId], references: [id])
+  subject       Subject?                 @relation(fields: [subjectId], references: [id])
+  teacher       Teacher?                 @relation(fields: [teacherId], references: [id])
+  attachments   ComplaintAttachment[]
+  statusHistory ComplaintStatusHistory[]
+
+  @@index([branchId, status, createdAt])
+  @@index([studentId, status])
+  @@index([parentId, status])
+  @@index([teacherId, status])
+}
+
+model ComplaintAttachment {
+  id          Int       @id @default(autoincrement())
+  fileName    String
+  filePath    String
+  fileType    String
+  fileSize    Int
+  complaintId Int
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+}
+
+model ComplaintStatusHistory {
+  id            Int              @id @default(autoincrement())
+  fromStatus    ComplaintStatus?
+  toStatus      ComplaintStatus
+  comment       String?
+  changedBy     String
+  changedByRole String
+  complaintId   Int
+  createdAt     DateTime         @default(now())
+  complaint     Complaint        @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id              Int                  @id @default(autoincrement())
+  title           String
+  description     String?
+  documentType    DocumentType
+  status          DocumentStatus       @default(ACTIVE)
+  fileName        String
+  filePath        String
+  fileType        String
+  fileSize        Int
+  audienceType    DocumentAudienceType
+  branchId        Int?
+  classId         Int?
+  academicYearId  Int?
+  tags            String[]
+  keywords        String[]
+  expiryDate      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  archivedAt      DateTime?
+  restoredAt      DateTime?
+  createdBy       String
+  archiveComments ArchiveComment[]
+  academicYear    AcademicYear?        @relation(fields: [academicYearId], references: [id])
+  branch          Branch?              @relation(fields: [branchId], references: [id])
+  class           Class?               @relation(fields: [classId], references: [id])
+  assignments     DocumentAssignment[]
+  downloads       DocumentDownload[]
+  versions        DocumentVersion[]
+
+  @@index([status, documentType, audienceType])
+  @@index([branchId, classId, academicYearId])
+  @@index([createdAt, expiryDate])
+}
+
+model DocumentAssignment {
+  id           Int       @id @default(autoincrement())
+  documentId   Int
+  studentId    String?
+  teacherId    String?
+  assignedAt   DateTime  @default(now())
+  viewedAt     DateTime?
+  downloadedAt DateTime?
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  student      Student?  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher      Teacher?  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, studentId])
+  @@unique([documentId, teacherId])
+  @@index([studentId, viewedAt])
+  @@index([teacherId, viewedAt])
+}
+
+model DocumentVersion {
+  id            Int      @id @default(autoincrement())
+  documentId    Int
+  versionNumber Int
+  fileName      String
+  filePath      String
+  fileType      String
+  fileSize      Int
+  changeLog     String?
+  createdBy     String
+  createdAt     DateTime @default(now())
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, versionNumber])
+  @@index([documentId, createdAt])
+}
+
+model DocumentDownload {
+  id           Int      @id @default(autoincrement())
+  documentId   Int
+  downloadedBy String
+  userType     String
+  downloadedAt DateTime @default(now())
+  ipAddress    String?
+  userAgent    String?
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, downloadedAt])
+  @@index([downloadedBy, downloadedAt])
 }
 
 model Event {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String
-  startTime   DateTime
-  endTime     DateTime
-
-  classId Int?
-  class   Class? @relation(fields: [classId], references: [id])
+  id             Int                  @id @default(autoincrement())
+  title          String
+  description    String
+  startTime      DateTime
+  endTime        DateTime
+  branchIds      Int[]
+  classIds       Int[]
+  createdAt      DateTime             @default(now())
+  createdBy      String
+  isAllBranches  Boolean              @default(true)
+  parentIds      String[]
+  studentIds     String[]
+  targetAudience EventAudience        @default(ALL_USERS)
+  teacherIds     String[]
+  updatedAt      DateTime             @updatedAt
+  userIds        String[]
+  participations EventParticipation[]
 }
 
 model Announcement {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String
-  date        DateTime
+  id             Int           @id @default(autoincrement())
+  title          String
+  description    String
+  date           DateTime
+  branchIds      Int[]
+  classIds       Int[]
+  createdAt      DateTime      @default(now())
+  createdBy      String
+  isAllBranches  Boolean       @default(true)
+  parentIds      String[]
+  studentIds     String[]
+  targetAudience EventAudience @default(ALL_USERS)
+  teacherIds     String[]
+  updatedAt      DateTime      @updatedAt
+  userIds        String[]
+}
 
-  classId Int?
-  class   Class? @relation(fields: [classId], references: [id])
+model EventParticipation {
+  id              Int                 @id @default(autoincrement())
+  eventId         Int
+  userId          String?
+  studentId       String?
+  teacherId       String?
+  parentId        String?
+  participantType ParticipantType
+  status          ParticipationStatus @default(PENDING)
+  respondedAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  event           Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@unique([eventId, studentId])
+  @@unique([eventId, teacherId])
+  @@unique([eventId, parentId])
+}
+
+model Branch {
+  id                Int                 @id @default(autoincrement())
+  shortName         String              @unique
+  legalName         String
+  stir              String              @unique
+  phone             String
+  region            String
+  address           String
+  status            BranchStatus        @default(ACTIVE)
+  website           String?
+  email             String?
+  district          String
+  longitude         Float
+  latitude          Float
+  directorId        Int?                @unique
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  archivedAt        DateTime?
+  restoredAt        DateTime?
+  archiveComments   ArchiveComment[]
+  attendances       Attendance[]
+  director          Director?           @relation(fields: [directorId], references: [id])
+  classes           Class[]
+  complaints        Complaint[]
+  documents         Document[]
+  exams             Exam[]
+  examResults       ExamResult[]
+  grades            Grade[]
+  homework          Homework[]
+  mealPlans         MealPlan[]
+  messages          Message[]
+  parents           Parent[]
+  students          Student[]
+  TeacherAssignment TeacherAssignment[]
+  timetables        Timetable[]
+  timetableTopics   TimetableTopic[]
+  users             User[]
+}
+
+model Director {
+  id             Int      @id @default(autoincrement())
+  firstName      String
+  lastName       String
+  phone          String
+  passportNumber String   @unique
+  email          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  branch         Branch?
+}
+
+model User {
+  id               String           @id @default(cuid())
+  firstName        String
+  lastName         String
+  gender           UserGender
+  dateOfBirth      DateTime
+  phone            String           @unique
+  userId           String           @unique
+  email            String?          @unique
+  status           UserStatus       @default(ACTIVE)
+  address          String
+  position         UserPosition
+  branchId         Int?
+  password         String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  archivedAt       DateTime?
+  restoredAt       DateTime?
+  archiveComments  ArchiveComment[]
+  mealApprovals    MealApproval[]   @relation("MealApprovals")
+  createdMealPlans MealPlan[]       @relation("CreatedMealPlans")
+  receivedMessages Message[]        @relation("ReceivedMessages")
+  sentMessages     Message[]        @relation("SentMessages")
+  branch           Branch?          @relation(fields: [branchId], references: [id])
+  attachments      UserAttachment[]
+  education        UserEducation?
+  passport         UserPassport?
+}
+
+model UserPassport {
+  id             Int      @id @default(autoincrement())
+  userId         String   @unique
+  country        String
+  documentNumber String
+  issueDate      DateTime
+  expiryDate     DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserEducation {
+  id              Int      @id @default(autoincrement())
+  userId          String   @unique
+  institutionName String
+  specialization  String
+  documentSeries  String
+  graduationDate  DateTime
+  languageSkills  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserAttachment {
+  id           Int      @id @default(autoincrement())
+  userId       String
+  fileName     String
+  originalName String
+  fileUrl      String
+  fileType     String
+  fileSize     Int
+  mimeType     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AcademicYear {
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  startDate         DateTime
+  endDate           DateTime
+  isCurrent         Boolean             @default(false)
+  status            AcademicYearStatus  @default(ACTIVE)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  archivedAt        DateTime?
+  restoredAt        DateTime?
+  archiveComments   ArchiveComment[]
+  attendances       Attendance[]
+  classes           Class[]
+  documents         Document[]
+  exams             Exam[]
+  grades            Grade[]
+  homework          Homework[]
+  semesters         Semester[]
+  TeacherAssignment TeacherAssignment[]
+  timetables        Timetable[]
+  timetableTopics   TimetableTopic[]
+}
+
+model Semester {
+  id             Int          @id @default(autoincrement())
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  academicYearId Int
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([academicYearId, name])
+}
+
+model ArchiveComment {
+  id             Int           @id @default(autoincrement())
+  userId         String?
+  branchId       Int?
+  teacherId      String?
+  subjectId      Int?
+  classId        Int?
+  parentId       String?
+  studentId      String?
+  academicYearId Int?
+  timetableId    Int?
+  attendanceId   Int?
+  gradeId        Int?
+  documentId     Int?
+  homeworkId     Int?
+  examId         Int?
+  comment        String
+  action         String
+  createdBy      String
+  createdAt      DateTime      @default(now())
+  academicYear   AcademicYear? @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  attendance     Attendance?   @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  branch         Branch?       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  class          Class?        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  document       Document?     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  exam           Exam?         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  grade          Grade?        @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  homework       Homework?     @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  parent         Parent?       @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student        Student?      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject        Subject?      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher        Teacher?      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  timetable      Timetable?    @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id          Int                 @id @default(autoincrement())
+  senderId    String
+  receiverId  String
+  branchId    Int?
+  role        String
+  subject     String
+  body        String
+  status      MessageStatus       @default(SENT)
+  readAt      DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  branch      Branch?             @relation(fields: [branchId], references: [id])
+  receiver    User                @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender      User                @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  attachments MessageAttachment[]
+}
+
+model MessageAttachment {
+  id           Int      @id @default(autoincrement())
+  messageId    Int
+  fileName     String
+  originalName String
+  fileUrl      String
+  fileType     String
+  fileSize     Int
+  mimeType     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+}
+
+model TeacherPassport {
+  id             Int      @id @default(autoincrement())
+  teacherId      String   @unique
+  country        String
+  documentNumber String
+  issueDate      DateTime
+  expiryDate     DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  teacher        Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model TeacherEducation {
+  id              Int      @id @default(autoincrement())
+  teacherId       String   @unique
+  institutionName String
+  specialization  String
+  documentSeries  String
+  graduationDate  DateTime
+  languageSkills  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  teacher         Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model TeacherAttachment {
+  id           Int      @id @default(autoincrement())
+  teacherId    String
+  fileType     String
+  fileName     String
+  originalName String
+  fileUrl      String
+  filePath     String
+  fileSize     Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  teacher      Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model StudentAttachment {
+  id           Int      @id @default(autoincrement())
+  studentId    String
+  fileType     String
+  fileName     String
+  originalName String
+  fileUrl      String
+  filePath     String
+  fileSize     Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model HomeworkAttachment {
+  id           Int            @id @default(autoincrement())
+  fileName     String
+  originalName String
+  fileType     AttachmentType
+  fileUrl      String
+  filePath     String
+  fileSize     Int
+  duration     Float?
+  mimeType     String
+  homeworkId   Int
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  homework     Homework       @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+
+  @@index([homeworkId, fileType])
+}
+
+model SubmissionAttachment {
+  id           Int                @id @default(autoincrement())
+  fileName     String
+  originalName String
+  fileType     AttachmentType
+  fileUrl      String
+  filePath     String
+  fileSize     Int
+  duration     Float?
+  mimeType     String
+  submissionId Int
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  submission   HomeworkSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, fileType])
+}
+
+model MealPlan {
+  id             Int            @id @default(autoincrement())
+  title          String
+  weekStartDate  DateTime
+  weekEndDate    DateTime
+  status         MealPlanStatus @default(PENDING_APPROVAL)
+  branchId       Int
+  createdById    String
+  autoApprovedAt DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  meals          Meal[]
+  approvals      MealApproval[]
+  branch         Branch         @relation(fields: [branchId], references: [id])
+  createdBy      User           @relation("CreatedMealPlans", fields: [createdById], references: [id])
+
+  @@index([branchId, status, createdAt])
+  @@index([createdById, status])
+}
+
+model Meal {
+  id              Int      @id @default(autoincrement())
+  day             Day
+  mealType        MealType
+  recipeTitle     String
+  description     String?
+  ingredients     String[]
+  allergens       String[]
+  calories        Int?
+  preparationTime Int?
+  servingSize     String?
+  mealPlanId      Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  mealPlan        MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+
+  @@index([mealPlanId, day, mealType])
+}
+
+model MealApproval {
+  id           Int            @id @default(autoincrement())
+  status       ApprovalStatus
+  comment      String?
+  approvedAt   DateTime       @default(now())
+  mealPlanId   Int
+  approverId   String
+  approverType ApproverType
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  approver     User           @relation("MealApprovals", fields: [approverId], references: [id])
+  mealPlan     MealPlan       @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([mealPlanId, approverType])
+  @@index([approverId, status])
+}
+
+model TeacherAssignment {
+  id             Int                   @id @default(autoincrement())
+  teacherId      String
+  branchId       Int
+  classId        Int
+  subjectId      Int?
+  academicYearId Int
+  role           TeacherAssignmentRole @default(TEACHER)
+  status         String                @default("ACTIVE")
+  assignedAt     DateTime              @default(now())
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime
+  AcademicYear   AcademicYear          @relation(fields: [academicYearId], references: [id])
+  Branch         Branch                @relation(fields: [branchId], references: [id])
+  Class          Class                 @relation(fields: [classId], references: [id])
+  Subject        Subject?              @relation(fields: [subjectId], references: [id])
+  Teacher        Teacher               @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, branchId, classId, subjectId, academicYearId])
+  @@index([branchId, status])
+  @@index([classId, academicYearId])
+  @@index([classId, academicYearId, role])
+  @@index([role, status])
+  @@index([subjectId, academicYearId])
+  @@index([teacherId, status])
+}
+
+enum EventAudience {
+  ALL_USERS
+  ALL_STUDENTS
+  ALL_TEACHERS
+  ALL_PARENTS
+  SPECIFIC_BRANCHES
+  SPECIFIC_CLASSES
+  SPECIFIC_USERS
+}
+
+enum ParticipantType {
+  USER
+  STUDENT
+  TEACHER
+  PARENT
+}
+
+enum ParticipationStatus {
+  PENDING
+  PARTICIPATING
+  NOT_PARTICIPATING
 }
 
 enum UserSex {
@@ -190,4 +1065,234 @@ enum Day {
   WEDNESDAY
   THURSDAY
   FRIDAY
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SubjectStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ParentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ParentRelationship {
+  Father
+  Mother
+  Guardian
+  Other
+}
+
+enum UserGender {
+  MALE
+  FEMALE
+}
+
+enum UserPosition {
+  MAIN_DIRECTOR
+  SUPPORT_DIRECTOR
+  MAIN_HR
+  SUPPORT_HR
+  MAIN_ADMISSION
+  SUPPORT_ADMISSION
+  DOCTOR
+  CHIEF
+}
+
+enum ClassLanguage {
+  UZBEK
+  RUSSIAN
+  ENGLISH
+  CHINESE
+  ARABIC
+  KOREAN
+  JAPANESE
+  FRENCH
+  GERMAN
+}
+
+enum ClassEducationType {
+  KINDERGARTEN
+  PRIMARY
+  SECONDARY
+  HIGH
+}
+
+enum ClassStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AcademicYearStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum TimetableStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum GradeType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  TERMLY
+  YEARLY
+  EXAM_MIDTERM
+  EXAM_FINAL
+  EXAM_NATIONAL
+}
+
+enum GradeStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ComplaintCategory {
+  ACADEMIC
+  DISCIPLINE
+  FACILITIES
+  TEACHER_BEHAVIOR
+  STUDENT_BEHAVIOR
+  ADMINISTRATIVE
+  TECHNICAL
+  OTHER
+}
+
+enum ComplaintPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ComplaintStatus {
+  PENDING
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum DocumentType {
+  LESSON_PLAN
+  EXAM_GUIDE
+  HOMEWORK
+  ASSIGNMENT
+  NOTICE
+  SYLLABUS
+  STUDY_MATERIAL
+  REFERENCE
+  FORM
+  POLICY
+  OTHER
+}
+
+enum DocumentStatus {
+  ACTIVE
+  ARCHIVED
+  EXPIRED
+}
+
+enum DocumentAudienceType {
+  TEACHERS
+  STUDENTS
+  MIXED
+}
+
+enum HomeworkStatus {
+  ACTIVE
+  EXPIRED
+  ARCHIVED
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  LATE
+  NOT_SUBMITTED
+  GRADED
+}
+
+enum ExamStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum TopicStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AttachmentType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  AUDIO
+  VIDEO
+  LINK
+  OTHER
+}
+
+enum MealPlanStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  AUTO_APPROVED
+}
+
+enum MealType {
+  LUNCH
+  SNACK
+}
+
+enum ApprovalStatus {
+  APPROVED
+  REJECTED
+}
+
+enum ApproverType {
+  DOCTOR
+  SUPPORT_DIRECTOR
+}
+
+enum TeacherAssignmentRole {
+  TEACHER
+  SUPERVISOR
 }

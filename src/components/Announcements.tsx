@@ -1,28 +1,51 @@
-import prisma from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
+import { headers } from "next/headers";
 
 const Announcements = async () => {
-  const { userId, sessionClaims } = auth();
-  const role = (sessionClaims?.metadata as { role?: string })?.role;
+  const headersList = headers();
+  const userId = headersList.get("x-user-id");
+  const role = headersList.get("x-user-role");
 
+  // Map roles to audience targeting conditions based on new schema
   const roleConditions = {
-    teacher: { lessons: { some: { teacherId: userId! } } },
-    student: { students: { some: { id: userId! } } },
-    parent: { students: { some: { parentId: userId! } } },
-  };
-
-  const data = await prisma.announcement.findMany({
-    take: 3,
-    orderBy: { date: "desc" },
-    where: {
-      ...(role !== "admin" && {
-        OR: [
-          { classId: null },
-          { class: roleConditions[role as keyof typeof roleConditions] || {} },
-        ],
-      }),
+    teacher: {
+      OR: [
+        { targetAudience: "ALL_TEACHERS" },
+        { targetAudience: "ALL_USERS" },
+        { teacherIds: { has: userId! } },
+      ],
     },
-  });
+    student: {
+      OR: [
+        { targetAudience: "ALL_STUDENTS" },
+        { targetAudience: "ALL_USERS" },
+        { studentIds: { has: userId! } },
+      ],
+    },
+    parent: {
+      OR: [
+        { targetAudience: "ALL_PARENTS" },
+        { targetAudience: "ALL_USERS" },
+        { parentIds: { has: userId! } },
+      ],
+    },
+    user: {
+      OR: [
+        { targetAudience: "ALL_USERS" },
+        { userIds: { has: userId! } },
+      ],
+    },
+  } as const;
+
+  const condition = role === "admin" ? {} : (roleConditions[(role || "user") as keyof typeof roleConditions] as any);
+
+  const data = await withPrismaRetry(() =>
+    prisma.announcement.findMany({
+      take: 3,
+      orderBy: { date: "desc" },
+      where: condition,
+    })
+  );
 
   return (
     <div className="bg-white p-4 rounded-md">

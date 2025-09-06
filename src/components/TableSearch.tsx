@@ -2,17 +2,37 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 
 const TableSearch = () => {
   const router = useRouter();
+  const [searchValue, setSearchValue] = useState("");
+
+  // Get initial search value from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const searchParam = params.get("search");
+    if (searchParam) {
+      setSearchValue(searchParam);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const value = (e.currentTarget[0] as HTMLInputElement).value;
-
     const params = new URLSearchParams(window.location.search);
-    params.set("search", value);
+    if (searchValue.trim()) {
+      params.set("search", searchValue.trim());
+    } else {
+      params.delete("search");
+    }
+    router.push(`${window.location.pathname}?${params}`);
+  };
+
+  const handleClear = () => {
+    setSearchValue("");
+    const params = new URLSearchParams(window.location.search);
+    params.delete("search");
     router.push(`${window.location.pathname}?${params}`);
   };
 
@@ -25,8 +45,19 @@ const TableSearch = () => {
       <input
         type="text"
         placeholder="Search..."
+        value={searchValue}
+        onChange={(e) => setSearchValue(e.target.value)}
         className="w-[200px] p-2 bg-transparent outline-none"
       />
+      {searchValue && (
+        <button
+          type="button"
+          onClick={handleClear}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <Image src="/close.png" alt="Clear" width={12} height={12} />
+        </button>
+      )}
     </form>
   );
 };

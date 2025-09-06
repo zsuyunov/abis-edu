@@ -1,207 +1,217 @@
-import { Day, PrismaClient, UserSex } from "@prisma/client";
+/* eslint-disable no-console */
+import { PrismaClient, UserGender, UserPosition, UserStatus, ParentStatus, StudentStatus, TeacherStatus } from '@prisma/client';
+import { AuthService } from '../src/lib/auth';
+
 const prisma = new PrismaClient();
 
+async function ensureDefaultBranch() {
+  let branch = await prisma.branch.findFirst();
+  if (!branch) {
+    branch = await prisma.branch.create({
+      data: {
+        shortName: 'MAIN',
+        legalName: 'Main School Branch',
+        stir: '123456789',
+        phone: '+998900000000',
+        region: 'Tashkent',
+        address: 'Main street 1',
+        district: 'Tashkent',
+        longitude: 69.2401,
+        latitude: 41.2995,
+        status: 'ACTIVE',
+      },
+    });
+  }
+  return branch;
+}
+
+async function upsertAdmin(phone: string, password: string) {
+  const hashed = await AuthService.hashPassword(password);
+  await prisma.admin.upsert({
+    where: { phone },
+    update: { password: hashed },
+    create: {
+      id: 'admin-1',
+      phone,
+      password: hashed,
+    },
+  });
+}
+
+async function upsertUser(position: UserPosition, phone: string, password: string, branchId: number) {
+  const now = new Date('1990-01-01');
+  const hashed = await AuthService.hashPassword(password);
+  await prisma.user.upsert({
+    where: { phone },
+    update: { password: hashed, position, branchId },
+    create: {
+      firstName: position,
+      lastName: 'User',
+      gender: UserGender.MALE,
+      dateOfBirth: now,
+      phone,
+      userId: `${position.toLowerCase()}-001`,
+      status: UserStatus.ACTIVE,
+      address: 'Address',
+      position,
+      branchId,
+      password: hashed,
+    },
+  });
+}
+
+async function upsertTeacher(phone: string, password: string, branchId: number) {
+  const hashed = await AuthService.hashPassword(password);
+  await prisma.teacher.upsert({
+    where: { phone },
+    update: { password: hashed },
+    create: {
+      id: 'teacher-1',
+      firstName: 'Teacher',
+      lastName: 'One',
+      gender: 'MALE',
+      dateOfBirth: new Date('1990-01-01'),
+      phone,
+      teacherId: 'T-001',
+      password: hashed,
+      email: 'teacher@example.com',
+      address: 'Address',
+      status: TeacherStatus.ACTIVE,
+    },
+  });
+}
+
+async function upsertParent(phone: string, password: string, branchId: number) {
+  const hashed = await AuthService.hashPassword(password);
+  await prisma.parent.upsert({
+    where: { phone },
+    update: { password: hashed, status: ParentStatus.ACTIVE },
+    create: {
+      id: 'parent-1',
+      firstName: 'Parent',
+      lastName: 'One',
+      phone,
+      parentId: 'P-001',
+      password: hashed,
+      status: ParentStatus.ACTIVE,
+      branchId,
+    },
+  });
+}
+
+async function upsertStudent(phone: string, password: string, branchId: number) {
+  // Need a class and parent to satisfy relations
+  let parent = await prisma.parent.findUnique({ where: { phone } });
+  if (!parent) {
+    const hashed = await AuthService.hashPassword(password);
+    parent = await prisma.parent.create({
+      data: {
+        id: 'parent-for-student',
+        firstName: 'Parent',
+        lastName: 'ForStudent',
+        phone,
+        parentId: 'P-STD-001',
+        password: hashed,
+        status: ParentStatus.ACTIVE,
+        branchId,
+      },
+    });
+  }
+
+  // Ensure a minimal academic year and class
+  let ay = await prisma.academicYear.findFirst();
+  if (!ay) {
+    ay = await prisma.academicYear.create({
+      data: {
+        name: '2024-2025',
+        startDate: new Date('2024-09-01'),
+        endDate: new Date('2025-06-01'),
+        isCurrent: true,
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  let klass = await prisma.class.findFirst();
+  if (!klass) {
+    // Need a teacher to create a class
+    let t = await prisma.teacher.findFirst();
+    if (!t) {
+      await upsertTeacher('+998900000001', '123456', branchId);
+      t = await prisma.teacher.findFirst();
+    }
+    klass = await prisma.class.create({
+      data: {
+        name: '1-A',
+        capacity: 30,
+        branchId,
+        academicYearId: ay.id,
+        language: 'UZBEK',
+        educationType: 'PRIMARY',
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  const hashed = await AuthService.hashPassword(password);
+  const student = await prisma.student.upsert({
+    where: { phone },
+    update: { password: hashed, branchId, classId: klass.id },
+    create: {
+      id: 'student-1',
+      firstName: 'Student',
+      lastName: 'One',
+      dateOfBirth: new Date('2012-01-01'),
+      phone,
+      studentId: 'S-001',
+      password: hashed,
+      gender: 'MALE',
+      status: StudentStatus.ACTIVE,
+      branchId,
+      classId: klass.id,
+    },
+  });
+
+  // Create the student-parent relationship
+  await prisma.studentParent.upsert({
+    where: {
+      studentId_parentId_relationship: {
+        studentId: student.id,
+        parentId: parent.id,
+        relationship: 'Mother',
+      },
+    },
+    update: {},
+    create: {
+      studentId: student.id,
+      parentId: parent.id,
+      relationship: 'Mother',
+    },
+  });
+}
+
 async function main() {
-  // ADMIN
-  await prisma.admin.create({
-    data: {
-      id: "admin1",
-      username: "admin1",
-    },
-  });
-  await prisma.admin.create({
-    data: {
-      id: "admin2",
-      username: "admin2",
-    },
-  });
+  const branch = await ensureDefaultBranch();
 
-  // GRADE
-  for (let i = 1; i <= 6; i++) {
-    await prisma.grade.create({
-      data: {
-        level: i,
-      },
-    });
-  }
+  // Core roles requested
+  await upsertUser(UserPosition.CHIEF, '+998901234598', '123456', branch.id);
+  await upsertUser(UserPosition.DOCTOR, '+998901234599', '123456', branch.id);
 
-  // CLASS
-  for (let i = 1; i <= 6; i++) {
-    await prisma.class.create({
-      data: {
-        name: `${i}A`, 
-        gradeId: i, 
-        capacity: Math.floor(Math.random() * (20 - 15 + 1)) + 15,
-      },
-    });
-  }
+  // Optional: ensure the rest of roles exist for testing
+  await upsertAdmin('+998901234500', '123456');
+  await upsertUser(UserPosition.MAIN_DIRECTOR, '+998901234501', '123456', branch.id);
+  await upsertUser(UserPosition.SUPPORT_DIRECTOR, '+998901234502', '123456', branch.id);
+  await upsertUser(UserPosition.MAIN_HR, '+998901234503', '123456', branch.id);
+  await upsertUser(UserPosition.SUPPORT_HR, '+998901234504', '123456', branch.id);
+  await upsertUser(UserPosition.MAIN_ADMISSION, '+998901234505', '123456', branch.id);
+  await upsertUser(UserPosition.SUPPORT_ADMISSION, '+998901234506', '123456', branch.id);
 
-  // SUBJECT
-  const subjectData = [
-    { name: "Mathematics" },
-    { name: "Science" },
-    { name: "English" },
-    { name: "History" },
-    { name: "Geography" },
-    { name: "Physics" },
-    { name: "Chemistry" },
-    { name: "Biology" },
-    { name: "Computer Science" },
-    { name: "Art" },
-  ];
+  // Teacher / Parent / Student sample
+  await upsertTeacher('+998901234507', '123456', branch.id);
+  await upsertParent('+998901234508', '123456', branch.id);
+  await upsertStudent('+998901234509', '123456', branch.id);
 
-  for (const subject of subjectData) {
-    await prisma.subject.create({ data: subject });
-  }
-
-  // TEACHER
-  for (let i = 1; i <= 15; i++) {
-    await prisma.teacher.create({
-      data: {
-        id: `teacher${i}`, // Unique ID for the teacher
-        username: `teacher${i}`,
-        name: `TName${i}`,
-        surname: `TSurname${i}`,
-        email: `teacher${i}@example.com`,
-        phone: `123-456-789${i}`,
-        address: `Address${i}`,
-        bloodType: "A+",
-        sex: i % 2 === 0 ? UserSex.MALE : UserSex.FEMALE,
-        subjects: { connect: [{ id: (i % 10) + 1 }] }, 
-        classes: { connect: [{ id: (i % 6) + 1 }] }, 
-        birthday: new Date(new Date().setFullYear(new Date().getFullYear() - 30)),
-      },
-    });
-  }
-
-  // LESSON
-  for (let i = 1; i <= 30; i++) {
-    await prisma.lesson.create({
-      data: {
-        name: `Lesson${i}`, 
-        day: Day[
-          Object.keys(Day)[
-            Math.floor(Math.random() * Object.keys(Day).length)
-          ] as keyof typeof Day
-        ], 
-        startTime: new Date(new Date().setHours(new Date().getHours() + 1)), 
-        endTime: new Date(new Date().setHours(new Date().getHours() + 3)), 
-        subjectId: (i % 10) + 1, 
-        classId: (i % 6) + 1, 
-        teacherId: `teacher${(i % 15) + 1}`, 
-      },
-    });
-  }
-
-  // PARENT
-  for (let i = 1; i <= 25; i++) {
-    await prisma.parent.create({
-      data: {
-        id: `parentId${i}`,
-        username: `parentId${i}`,
-        name: `PName ${i}`,
-        surname: `PSurname ${i}`,
-        email: `parent${i}@example.com`,
-        phone: `123-456-789${i}`,
-        address: `Address${i}`,
-      },
-    });
-  }
-
-  // STUDENT
-  for (let i = 1; i <= 50; i++) {
-    await prisma.student.create({
-      data: {
-        id: `student${i}`, 
-        username: `student${i}`, 
-        name: `SName${i}`,
-        surname: `SSurname ${i}`,
-        email: `student${i}@example.com`,
-        phone: `987-654-321${i}`,
-        address: `Address${i}`,
-        bloodType: "O-",
-        sex: i % 2 === 0 ? UserSex.MALE : UserSex.FEMALE,
-        parentId: `parentId${Math.ceil(i / 2) % 25 || 25}`, 
-        gradeId: (i % 6) + 1, 
-        classId: (i % 6) + 1, 
-        birthday: new Date(new Date().setFullYear(new Date().getFullYear() - 10)),
-      },
-    });
-  }
-
-  // EXAM
-  for (let i = 1; i <= 10; i++) {
-    await prisma.exam.create({
-      data: {
-        title: `Exam ${i}`, 
-        startTime: new Date(new Date().setHours(new Date().getHours() + 1)), 
-        endTime: new Date(new Date().setHours(new Date().getHours() + 2)), 
-        lessonId: (i % 30) + 1, 
-      },
-    });
-  }
-
-  // ASSIGNMENT
-  for (let i = 1; i <= 10; i++) {
-    await prisma.assignment.create({
-      data: {
-        title: `Assignment ${i}`, 
-        startDate: new Date(new Date().setHours(new Date().getHours() + 1)), 
-        dueDate: new Date(new Date().setDate(new Date().getDate() + 1)), 
-        lessonId: (i % 30) + 1, 
-      },
-    });
-  }
-
-  // RESULT
-  for (let i = 1; i <= 10; i++) {
-    await prisma.result.create({
-      data: {
-        score: 90, 
-        studentId: `student${i}`, 
-        ...(i <= 5 ? { examId: i } : { assignmentId: i - 5 }), 
-      },
-    });
-  }
-
-  // ATTENDANCE
-  for (let i = 1; i <= 10; i++) {
-    await prisma.attendance.create({
-      data: {
-        date: new Date(), 
-        present: true, 
-        studentId: `student${i}`, 
-        lessonId: (i % 30) + 1, 
-      },
-    });
-  }
-
-  // EVENT
-  for (let i = 1; i <= 5; i++) {
-    await prisma.event.create({
-      data: {
-        title: `Event ${i}`, 
-        description: `Description for Event ${i}`, 
-        startTime: new Date(new Date().setHours(new Date().getHours() + 1)), 
-        endTime: new Date(new Date().setHours(new Date().getHours() + 2)), 
-        classId: (i % 5) + 1, 
-      },
-    });
-  }
-
-  // ANNOUNCEMENT
-  for (let i = 1; i <= 5; i++) {
-    await prisma.announcement.create({
-      data: {
-        title: `Announcement ${i}`, 
-        description: `Description for Announcement ${i}`, 
-        date: new Date(), 
-        classId: (i % 5) + 1, 
-      },
-    });
-  }
-
-  console.log("Seeding completed successfully.");
+  console.log('Seed completed.');
 }
 
 main()
@@ -213,3 +223,5 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
+

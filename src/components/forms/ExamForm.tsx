@@ -1,46 +1,26 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import InputField from "../InputField";
-import {
-  examSchema,
-  ExamSchema,
-  subjectSchema,
-  SubjectSchema,
-} from "@/lib/formValidationSchemas";
-import {
-  createExam,
-  createSubject,
-  updateExam,
-  updateSubject,
-} from "@/lib/actions";
+import { useState, useEffect } from "react";
 import { useFormState } from "react-dom";
-import { Dispatch, SetStateAction, useEffect } from "react";
-import { toast } from "react-toastify";
-import { useRouter } from "next/navigation";
+import { createExam, updateExam } from "@/lib/actions";
+import Image from "next/image";
 
-const ExamForm = ({
-  type,
-  data,
-  setOpen,
-  relatedData,
-}: {
+interface ExamFormProps {
   type: "create" | "update";
   data?: any;
-  setOpen: Dispatch<SetStateAction<boolean>>;
-  relatedData?: any;
-}) => {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<ExamSchema>({
-    resolver: zodResolver(examSchema),
-  });
+  onClose: () => void;
+  onSuccess: () => void;
+}
 
-  // AFTER REACT 19 IT'LL BE USEACTIONSTATE
+interface FilterData {
+  branches: { id: number; shortName: string }[];
+  academicYears: { id: number; name: string }[];
+  classes: { id: number; name: string; branchId: number; academicYearId: number }[];
+  subjects: { id: number; name: string }[];
+  teachers: { id: string; firstName: string; lastName: string; teacherId: string; branchId: number; subjects: { id: number }[] }[];
+}
 
+const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
   const [state, formAction] = useFormState(
     type === "create" ? createExam : updateExam,
     {
@@ -49,90 +29,217 @@ const ExamForm = ({
     }
   );
 
-  const onSubmit = handleSubmit((data) => {
-    console.log(data);
-    formAction(data);
+  const [filterData, setFilterData] = useState<FilterData>({
+    branches: [],
+    academicYears: [],
+    classes: [],
+    subjects: [],
+    teachers: [],
   });
 
-  const router = useRouter();
+  // Form state
+  const [formData, setFormData] = useState({
+    name: data?.name || "",
+    date: data?.date ? new Date(data.date).toISOString().split('T')[0] : "",
+    startTime: data?.startTime || "",
+    endTime: data?.endTime || "",
+    roomNumber: data?.roomNumber || "",
+    fullMarks: data?.fullMarks || 100,
+    passingMarks: data?.passingMarks || 40,
+    status: data?.status || "SCHEDULED",
+    branchId: data?.branchId || "",
+    academicYearId: data?.academicYearId || "",
+    classId: data?.classId || "",
+    subjectId: data?.subjectId || "",
+    teacherId: data?.teacherId || "",
+  });
 
+  // Time options
+  const timeSlots = [];
+  for (let hour = 7; hour <= 18; hour++) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const time12 = `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+      timeSlots.push({ value: time12, label: time12 });
+    }
+  }
+
+  const handleSubmit = (formDataObj: FormData) => {
+    Object.entries(formData).forEach(([key, value]) => {
+      formDataObj.append(key, value.toString());
+    });
+
+    if (type === "update" && data?.id) {
+      formDataObj.append("id", data.id.toString());
+    }
+
+    formAction(formDataObj);
+  };
+
+  // Handle form submission
   useEffect(() => {
     if (state.success) {
-      toast(`Exam has been ${type === "create" ? "created" : "updated"}!`);
-      setOpen(false);
-      router.refresh();
+      onSuccess();
+      onClose();
     }
-  }, [state, router, type, setOpen]);
-
-  const { lessons } = relatedData;
+  }, [state, onSuccess, onClose]);
 
   return (
-    <form className="flex flex-col gap-8" onSubmit={onSubmit}>
-      <h1 className="text-xl font-semibold">
-        {type === "create" ? "Create a new exam" : "Update the exam"}
-      </h1>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold">
+              {type === "create" ? "Create Exam" : "Update Exam"}
+            </h2>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+              <Image src="/close.png" alt="close" width={16} height={16} />
+            </button>
+          </div>
 
-      <div className="flex justify-between flex-wrap gap-4">
-        <InputField
-          label="Exam title"
-          name="title"
-          defaultValue={data?.title}
-          register={register}
-          error={errors?.title}
-        />
-        <InputField
-          label="Start Date"
-          name="startTime"
-          defaultValue={data?.startTime}
-          register={register}
-          error={errors?.startTime}
-          type="datetime-local"
-        />
-        <InputField
-          label="End Date"
-          name="endTime"
-          defaultValue={data?.endTime}
-          register={register}
-          error={errors?.endTime}
-          type="datetime-local"
-        />
-        {data && (
-          <InputField
-            label="Id"
-            name="id"
-            defaultValue={data?.id}
-            register={register}
-            error={errors?.id}
-            hidden
-          />
-        )}
-        <div className="flex flex-col gap-2 w-full md:w-1/4">
-          <label className="text-xs text-gray-500">Lesson</label>
-          <select
-            className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
-            {...register("lessonId")}
-            defaultValue={data?.teachers}
-          >
-            {lessons.map((lesson: { id: number; name: string }) => (
-              <option value={lesson.id} key={lesson.id}>
-                {lesson.name}
-              </option>
-            ))}
-          </select>
-          {errors.lessonId?.message && (
-            <p className="text-xs text-red-400">
-              {errors.lessonId.message.toString()}
-            </p>
+          <form action={handleSubmit} className="space-y-6">
+            {/* Basic Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Exam Name *
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  placeholder="e.g., Mid-Term Mathematics Exam"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Exam Date *
+                </label>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Room Number *
+                </label>
+                <input
+                  type="text"
+                  value={formData.roomNumber}
+                  onChange={(e) => setFormData(prev => ({ ...prev, roomNumber: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  placeholder="e.g., Room 101"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Start Time *
+                </label>
+                <select
+                  value={formData.startTime}
+                  onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  required
+                >
+                  <option value="">Select Start Time</option>
+                  {timeSlots.map((slot) => (
+                    <option key={slot.value} value={slot.value}>
+                      {slot.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  End Time *
+                </label>
+                <select
+                  value={formData.endTime}
+                  onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  required
+                >
+                  <option value="">Select End Time</option>
+                  {timeSlots
+                    .filter(slot => !formData.startTime || slot.value > formData.startTime)
+                    .map((slot) => (
+                    <option key={slot.value} value={slot.value}>
+                      {slot.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Marks *
+                </label>
+                <input
+                  type="number"
+                  value={formData.fullMarks}
+                  onChange={(e) => setFormData(prev => ({ ...prev, fullMarks: parseInt(e.target.value) }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  min="1"
+                  max="1000"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Passing Marks *
+                </label>
+                <input
+                  type="number"
+                  value={formData.passingMarks}
+                  onChange={(e) => setFormData(prev => ({ ...prev, passingMarks: parseInt(e.target.value) }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  min="0"
+                  max={formData.fullMarks}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Submit Buttons */}
+            <div className="flex justify-end space-x-3 pt-6 border-t">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              >
+                {type === "create" ? "Create Exam" : "Update Exam"}
+              </button>
+            </div>
+          </form>
+
+          {state.error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+              Something went wrong. Please try again.
+            </div>
           )}
         </div>
       </div>
-      {state.error && (
-        <span className="text-red-500">Something went wrong!</span>
-      )}
-      <button className="bg-blue-400 text-white p-2 rounded-md">
-        {type === "create" ? "Create" : "Update"}
-      </button>
-    </form>
+    </div>
   );
 };
 

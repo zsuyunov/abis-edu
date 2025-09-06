@@ -1,0 +1,104 @@
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+
+const SubjectTeachersModal = ({
+  subject,
+}: {
+  subject: any;
+}) => {
+  const [open, setOpen] = useState(false);
+
+  // Safely access teacher assignments
+  const teacherAssignments = subject?.TeacherAssignment || [];
+  const hasTeachers = teacherAssignments.length > 0;
+
+  return (
+    <>
+      <button
+        className="w-7 h-7 flex items-center justify-center rounded-full bg-lamaSky hover:bg-lamaSkyLight"
+        onClick={() => setOpen(true)}
+        title="View Teachers"
+      >
+        <Image src="/view.png" alt="" width={16} height={16} />
+      </button>
+      {open && (
+        <div className="w-screen h-screen absolute left-0 top-0 bg-black bg-opacity-60 z-50 flex items-center justify-center">
+          <div className="bg-white p-4 rounded-md relative w-[90%] md:w-[70%] lg:w-[60%] xl:w-[50%] 2xl:w-[40%]">
+            <div className="p-4 flex flex-col gap-4 max-w-md">
+              <span className="text-xl font-medium">
+                Teachers for {subject?.name || 'Unknown Subject'}
+              </span>
+              
+              {!hasTeachers ? (
+                <p className="text-gray-500">No teachers assigned to this subject.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm text-gray-600 mb-2">
+                    Total: {teacherAssignments.length} teacher(s)
+                  </p>
+                  <div className="max-h-60 overflow-y-auto">
+                    {teacherAssignments.map((assignment: any) => {
+                      const teacher = assignment?.Teacher;
+                      if (!teacher) return null;
+                      
+                      return (
+                        <div 
+                          key={teacher.id} 
+                          className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50"
+                        >
+                          <Image
+                            src="/noAvatar.png"
+                            alt=""
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">
+                              {teacher.firstName} {teacher.lastName}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {teacher.email || teacher.phone}
+                            </span>
+                          </div>
+                          <div className="ml-auto">
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              teacher.status === "ACTIVE" 
+                                ? "bg-green-100 text-green-800" 
+                                : "bg-red-100 text-red-800"
+                            }`}>
+                              {teacher.status}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                  onClick={() => setOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div
+              className="absolute top-4 right-4 cursor-pointer"
+              onClick={() => setOpen(false)}
+            >
+              <Image src="/close.png" alt="" width={14} height={14} />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default SubjectTeachersModal;

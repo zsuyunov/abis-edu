@@ -1,6 +1,6 @@
 import Image from "next/image";
 import AttendanceChart from "./AttendanceChart";
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 
 const AttendanceChartContainer = async () => {
   const today = new Date();
@@ -11,17 +11,19 @@ const AttendanceChartContainer = async () => {
 
   lastMonday.setDate(today.getDate() - daysSinceMonday);
 
-  const resData = await prisma.attendance.findMany({
-    where: {
-      date: {
-        gte: lastMonday,
+  const resData = await withPrismaRetry(() =>
+    prisma.attendance.findMany({
+      where: {
+        date: {
+          gte: lastMonday,
+        },
       },
-    },
-    select: {
-      date: true,
-      present: true,
-    },
-  });
+      select: {
+        date: true,
+        status: true,
+      },
+    })
+  );
 
   // console.log(data)
 
@@ -43,7 +45,7 @@ const AttendanceChartContainer = async () => {
     if (dayOfWeek >= 1 && dayOfWeek <= 5) {
       const dayName = daysOfWeek[dayOfWeek - 1];
 
-      if (item.present) {
+      if (item.status === "PRESENT") {
         attendanceMap[dayName].present += 1;
       } else {
         attendanceMap[dayName].absent += 1;
