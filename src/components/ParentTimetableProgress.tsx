@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -88,7 +89,7 @@ const ParentTimetableProgress = ({
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
+      {/* HEADER }
       <div className="text-center">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">
           {selectedChild?.firstName}'s Learning Progress
@@ -103,7 +104,7 @@ const ParentTimetableProgress = ({
         )}
       </div>
 
-      {/* OVERALL PROGRESS SUMMARY */}
+      {/* OVERALL PROGRESS SUMMARY }
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center gap-2">
           <Image src="/result.png" alt="Progress" width={20} height={20} />
@@ -137,7 +138,7 @@ const ParentTimetableProgress = ({
           </div>
         </div>
 
-        {/* Overall Completion Rate */}
+        {/* Overall Completion Rate }
         <div className="mt-6 p-4 bg-white rounded-lg border border-blue-100">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">Overall Completion Rate</span>
@@ -166,7 +167,7 @@ const ParentTimetableProgress = ({
         </div>
       </div>
 
-      {/* SUBJECT-WISE PROGRESS */}
+      {/* SUBJECT-WISE PROGRESS }
       <div className="bg-white border border-gray-200 rounded-lg">
         <div className="p-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -189,7 +190,7 @@ const ParentTimetableProgress = ({
                   </span>
                 </div>
 
-                {/* Progress Bar */}
+                {/* Progress Bar }
                 <div className="mb-3">
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div 
@@ -199,7 +200,7 @@ const ParentTimetableProgress = ({
                   </div>
                 </div>
 
-                {/* Subject Stats */}
+                {/* Subject Stats }
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div className="text-center p-2 bg-gray-50 rounded">
                     <div className="font-bold text-gray-900">{subject.totalLessons}</div>
@@ -219,7 +220,7 @@ const ParentTimetableProgress = ({
                   </div>
                 </div>
 
-                {/* Progress Insights */}
+                {/* Progress Insights }
                 <div className="mt-3 p-3 bg-gray-50 rounded text-sm">
                   {subject.completionRate >= 80 ? (
                     <div className="text-green-700 flex items-center gap-2">
@@ -263,7 +264,7 @@ const ParentTimetableProgress = ({
         )}
       </div>
 
-      {/* PERFORMANCE INSIGHTS */}
+      {/* PERFORMANCE INSIGHTS }
       <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-yellow-900 mb-4 flex items-center gap-2">
           <Image src="/parent.png" alt="Insights" width={20} height={20} />
@@ -316,7 +317,7 @@ const ParentTimetableProgress = ({
         </div>
       </div>
 
-      {/* ACADEMIC PERIOD INFO */}
+      {/* ACADEMIC PERIOD INFO }
       {progressData.currentAcademicYear && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between text-sm">
@@ -338,3 +339,6 @@ const ParentTimetableProgress = ({
 };
 
 export default ParentTimetableProgress;
+
+
+*/

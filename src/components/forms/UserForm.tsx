@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import InputField from "../InputField";
-import PasswordField from "../PasswordField";
+import PasswordInput from "../PasswordInput";
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import {
   userSchema,
@@ -61,12 +61,21 @@ const UserForm = ({
 
   const onSubmit = handleSubmit((data) => {
     console.log(data);
+    
+    // Custom validation: Branch is required for positions that need it
+    if (!noBranchPositions.includes(data.position) && (!data.branchId || data.branchId === 0)) {
+      toast.error("Branch is required for this position!");
+      return;
+    }
+    
     // Include attachment URLs in the data
     const formDataWithAttachments = {
       ...data,
       attachments: attachments,
+      // For updates, only include password if it's provided and not empty
+      ...(type === "update" ? (data.password && data.password.trim() !== '' ? { password: data.password } : {}) : {}),
     };
-    formAction(formDataWithAttachments);
+    formAction(formDataWithAttachments as any);
   });
 
   const router = useRouter();
@@ -266,7 +275,7 @@ const UserForm = ({
 
         <div className="flex flex-col gap-2 w-full md:w-1/4">
           <label className="text-xs text-gray-500">
-            Date of Birth <span className="text-red-500">*</span>
+            Date of Birth
           </label>
           <input
             type="date"
@@ -317,7 +326,7 @@ const UserForm = ({
         
         <div className="flex flex-col gap-2 w-full md:w-1/4">
           <label className="text-xs text-gray-500">
-            Address <span className="text-red-500">*</span>
+            Address
           </label>
           <input
             type="text"
@@ -330,15 +339,18 @@ const UserForm = ({
             <p className="text-xs text-red-400">{errors.address.message.toString()}</p>
           )}
         </div>
-        <PasswordField
-          label="Password"
-          name="password"
-          defaultValue=""
-          register={register}
-          error={errors.password}
-          required={type === "create"}
-          inputProps={{ placeholder: type === "create" ? "Required" : "Leave empty to keep current" }}
-        />
+        <div className="flex flex-col gap-2 w-full md:w-1/4">
+          <label className="text-xs text-gray-500">
+            Password {type === "create" && <span className="text-red-500">*</span>}
+          </label>
+          <PasswordInput
+            register={register("password")}
+            error={errors?.password}
+            placeholder={type === "create" ? "Enter password" : "Leave empty to keep current password"}
+            defaultValue=""
+            required={type === "create"}
+          />
+        </div>
       </div>
 
       {/* Position and Branch */}
@@ -424,9 +436,11 @@ const UserForm = ({
           </div>
         )}
 
-        {!noBranchPositions.includes(selectedPosition) && (
+        {!noBranchPositions.includes(selectedPosition) && selectedPosition && (
           <div className="flex flex-col gap-2 w-full md:w-1/4">
-            <label className="text-xs text-gray-500">Branch</label>
+            <label className="text-xs text-gray-500">
+              Branch <span className="text-red-500">*</span>
+            </label>
             <select
               className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900"
               {...register("branchId")}
@@ -490,7 +504,6 @@ const UserForm = ({
           register={register}
           error={errors?.passport?.country}
           inputProps={{ placeholder: "e.g., Uzbekistan, Russia, etc." }}
-          required
         />
 
         <InputField
@@ -500,7 +513,6 @@ const UserForm = ({
           register={register}
           error={errors?.passport?.documentNumber}
           inputProps={{ placeholder: "AA1234567" }}
-          required
         />
         
         <InputField
@@ -510,7 +522,6 @@ const UserForm = ({
           defaultValue={data?.passport?.issueDate?.toISOString().split("T")[0]}
           register={register}
           error={errors?.passport?.issueDate}
-          required
         />
         
         <InputField
@@ -520,7 +531,6 @@ const UserForm = ({
           defaultValue={data?.passport?.expiryDate?.toISOString().split("T")[0]}
           register={register}
           error={errors?.passport?.expiryDate}
-          required
         />
       </div>
 
@@ -536,7 +546,6 @@ const UserForm = ({
           register={register}
           error={errors?.education?.institutionName}
           inputProps={{ placeholder: "Tashkent State University" }}
-          required
         />
         
         <InputField
@@ -546,7 +555,6 @@ const UserForm = ({
           register={register}
           error={errors?.education?.specialization}
           inputProps={{ placeholder: "Computer Science" }}
-          required
         />
         
         <InputField
@@ -556,7 +564,6 @@ const UserForm = ({
           register={register}
           error={errors?.education?.documentSeries}
           inputProps={{ placeholder: "AB123456" }}
-          required
         />
         
         <InputField
@@ -566,7 +573,6 @@ const UserForm = ({
           defaultValue={data?.education?.graduationDate?.toISOString().split("T")[0]}
           register={register}
           error={errors?.education?.graduationDate}
-          required
         />
         
         <InputField

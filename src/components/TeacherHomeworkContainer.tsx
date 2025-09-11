@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
-import TeacherHomeworkCreation from "./TeacherHomeworkCreation";
+import { motion, AnimatePresence } from 'framer-motion';
+import { BookOpen, BarChart3 } from 'lucide-react';
 import TeacherHomeworkList from "./TeacherHomeworkList";
-import TeacherHomeworkSubmissions from "./TeacherHomeworkSubmissions";
-import TeacherHomeworkAnalytics from "./TeacherHomeworkAnalytics";
 import TeacherHomeworkFilters from "./TeacherHomeworkFilters";
+import TeacherHomeworkCreation from "./TeacherHomeworkCreation";
+import TeacherHomeworkGrading from "./TeacherHomeworkGrading";
 
-type ViewType = "list" | "create" | "submissions" | "analytics" | "export";
+type ViewType = "list" | "export" | "edit" | "grading";
 
 interface TeacherHomeworkContainerProps {
   teacherId: string;
@@ -18,10 +18,10 @@ const TeacherHomeworkContainer = ({ teacherId }: TeacherHomeworkContainerProps) 
   const [currentView, setCurrentView] = useState<ViewType>("list");
   const [selectedHomeworkId, setSelectedHomeworkId] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   
   const [filters, setFilters] = useState({
     branchId: "",
-    academicYearId: "",
     classId: "",
     subjectId: "",
     status: "ALL",
@@ -47,14 +47,54 @@ const TeacherHomeworkContainer = ({ teacherId }: TeacherHomeworkContainerProps) 
 
   const handleViewChange = (view: ViewType) => {
     setCurrentView(view);
-    if (view !== "submissions") {
-      setSelectedHomeworkId(null);
-    }
+    setSelectedHomeworkId(null);
   };
 
-  const handleHomeworkSelect = (homeworkId: number) => {
+  const handleHomeworkEdit = (homeworkId: number) => {
     setSelectedHomeworkId(homeworkId);
-    setCurrentView("submissions");
+    setCurrentView("edit");
+  };
+
+  const handleHomeworkGrading = (homeworkId: number) => {
+    setSelectedHomeworkId(homeworkId);
+    setCurrentView("grading");
+  };
+
+
+  const showNotification = (message: string, type: 'success' | 'error') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleHomeworkAction = async (homeworkId: number, action: 'archive' | 'restore' | 'delete') => {
+    try {
+      const response = await fetch(`/api/teacher-homework?id=${homeworkId}&action=${action}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId,
+        },
+      });
+
+      if (response.ok) {
+        // Refresh homework data after successful action
+        await fetchHomeworkData();
+        
+        // Show success message based on action
+        const actionMessages = {
+          archive: '✅ Homework archived successfully!',
+          restore: '✅ Homework restored successfully!', 
+          delete: '✅ Homework deleted successfully!'
+        };
+        
+        showNotification(actionMessages[action], 'success');
+      } else {
+        const errorData = await response.json();
+        showNotification(`❌ Failed to ${action} homework: ${errorData.error || 'Unknown error'}`, 'error');
+      }
+    } catch (error) {
+      showNotification(`❌ Error ${action}ing homework: ${error instanceof Error ? error.message : 'Network error'}`, 'error');
+    }
   };
 
   const handleFilterChange = (newFilters: any) => {
@@ -69,8 +109,10 @@ const TeacherHomeworkContainer = ({ teacherId }: TeacherHomeworkContainerProps) 
 
   const handleHomeworkCreated = () => {
     setCurrentView("list");
+    setSelectedHomeworkId(null);
     // Refresh data
     fetchHomeworkData();
+    showNotification('✅ Homework created successfully!', 'success');
   };
 
   const fetchHomeworkData = async () => {
@@ -81,10 +123,18 @@ const TeacherHomeworkContainer = ({ teacherId }: TeacherHomeworkContainerProps) 
         ...filters,
       });
 
-      const response = await fetch(`/api/teacher-homework?${queryParams}`);
+      console.log('Fetching homework with params:', Object.fromEntries(queryParams));
+      const response = await fetch(`/api/teacher-homework?${queryParams}`, {
+        headers: {
+          'x-user-id': teacherId,
+        },
+      });
       if (response.ok) {
         const data = await response.json();
+        console.log('Received homework data:', data);
         handleDataUpdate(data);
+      } else {
+        console.error('Failed to fetch homework:', response.status, response.statusText);
       }
     } catch (error) {
       console.error("Error fetching homework data:", error);
@@ -103,14 +153,12 @@ const TeacherHomeworkContainer = ({ teacherId }: TeacherHomeworkContainerProps) 
     switch (view) {
       case "list":
         return "📚";
-      case "create":
-        return "📝";
-      case "submissions":
-        return "📋";
-      case "analytics":
-        return "📊";
       case "export":
         return "📁";
+      case "edit":
+        return "✏️";
+      case "grading":
+        return "📝";
       default:
         return "📖";
     }
@@ -120,14 +168,12 @@ const TeacherHomeworkContainer = ({ teacherId }: TeacherHomeworkContainerProps) 
     switch (view) {
       case "list":
         return "My Homework";
-      case "create":
-        return "Create Homework";
-      case "submissions":
-        return "Track Submissions";
-      case "analytics":
-        return "Analytics";
       case "export":
         return "Export Reports";
+      case "edit":
+        return "Edit Homework";
+      case "grading":
+        return "Grade Submissions";
       default:
         return "Homework";
     }
@@ -143,212 +189,232 @@ const TeacherHomeworkContainer = ({ teacherId }: TeacherHomeworkContainerProps) 
   }
 
   return (
-    <div className="bg-white rounded-md p-4">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-4"
+    >
       {/* TEACHER INFO HEADER */}
       {teacherData && (
-        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
-                <Image src="/teacher.png" alt="Teacher" width={24} height={24} className="invert" />
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200/50"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <BookOpen className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-blue-900">
+                <h3 className="text-lg font-bold text-gray-900">
                   {teacherData.teacher.firstName} {teacherData.teacher.lastName}
                 </h3>
-                <div className="text-sm text-blue-700">
-                  ID: {teacherData.teacher.teacherId} | Branch: {teacherData.teacher.branch.shortName}
+                <div className="text-sm text-gray-600">
+                  ID: {teacherData.teacher.teacherId} | Phone: {teacherData.teacher.phone || 'Not provided'}
                 </div>
               </div>
             </div>
             
             {homeworkData.overallStats && (
-              <div className="hidden md:flex items-center gap-6">
+              <div className="grid grid-cols-3 gap-4 sm:gap-6">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{homeworkData.overallStats.totalHomework}</div>
-                  <div className="text-xs text-blue-700">Total Homework</div>
+                  <div className="text-xl font-bold text-blue-600">{homeworkData.overallStats.totalHomework}</div>
+                  <div className="text-xs text-gray-600">Total</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{homeworkData.overallStats.averageSubmissionRate}%</div>
-                  <div className="text-xs text-green-700">Avg. Submission</div>
+                  <div className="text-xl font-bold text-green-600">{homeworkData.overallStats.averageSubmissionRate}%</div>
+                  <div className="text-xs text-gray-600">Submitted</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{homeworkData.overallStats.averageGradingProgress}%</div>
-                  <div className="text-xs text-purple-700">Grading Progress</div>
+                  <div className="text-xl font-bold text-purple-600">{homeworkData.overallStats.averageGradingProgress}%</div>
+                  <div className="text-xs text-gray-600">Graded</div>
                 </div>
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* VIEW SELECTOR */}
-      <div className="flex items-center gap-2 mb-6 overflow-x-auto">
-        <button
-          onClick={() => handleViewChange("list")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-            currentView === "list"
-              ? "bg-blue-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {getViewIcon("list")} {getViewTitle("list")}
-        </button>
-        <button
-          onClick={() => handleViewChange("create")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-            currentView === "create"
-              ? "bg-green-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {getViewIcon("create")} {getViewTitle("create")}
-        </button>
-        <button
-          onClick={() => handleViewChange("submissions")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-            currentView === "submissions"
-              ? "bg-purple-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {getViewIcon("submissions")} {getViewTitle("submissions")}
-        </button>
-        <button
-          onClick={() => handleViewChange("analytics")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-            currentView === "analytics"
-              ? "bg-orange-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {getViewIcon("analytics")} {getViewTitle("analytics")}
-        </button>
-        <button
-          onClick={() => handleViewChange("export")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-            currentView === "export"
-              ? "bg-cyan-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {getViewIcon("export")} {getViewTitle("export")}
-        </button>
-      </div>
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-gray-200/50"
+      >
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => handleViewChange("list")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${
+              currentView === "list"
+                ? "bg-blue-500 text-white shadow-lg"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            <BookOpen size={16} />
+            Homework List
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => handleViewChange("export")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 ${
+              currentView === "export"
+                ? "bg-cyan-500 text-white shadow-lg"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            <BarChart3 size={16} />
+            Reports
+          </motion.button>
+        </div>
+      </motion.div>
 
       {/* FILTERS */}
-      {(currentView === "list" || currentView === "submissions" || currentView === "analytics") && teacherData && (
-        <TeacherHomeworkFilters
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          currentView={currentView}
-          teacherData={teacherData}
-          isMobile={isMobile}
-        />
-      )}
+      <AnimatePresence>
+        {currentView === "list" && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <TeacherHomeworkFilters
+              filters={filters}
+              onFilterChange={handleFilterChange}
+              teacherData={teacherData}
+              currentView={currentView}
+              isMobile={isMobile}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* BACK BUTTON FOR EDIT/GRADING VIEWS */}
+      <AnimatePresence>
+        {(currentView === "edit" || currentView === "grading") && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mb-4"
+          >
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleViewChange("list")}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
+            >
+              ← Back to Homework List
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* CONTENT */}
-      <div className="mt-6">
-        {currentView === "create" && (
-          <TeacherHomeworkCreation
-            teacherId={teacherId}
-            teacherData={teacherData}
-            onHomeworkCreated={handleHomeworkCreated}
-            onCancel={() => handleViewChange("list")}
-          />
-        )}
-        
+      <AnimatePresence mode="wait">
         {currentView === "list" && (
-          <TeacherHomeworkList
-            teacherId={teacherId}
-            homeworkData={homeworkData}
-            loading={loading}
-            onHomeworkSelect={handleHomeworkSelect}
-            onDataUpdate={handleDataUpdate}
-          />
+          <motion.div
+            key="list"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <TeacherHomeworkList
+              teacherId={teacherId}
+              homeworkData={homeworkData}
+              loading={loading}
+              onDataUpdate={handleDataUpdate}
+              onHomeworkEdit={handleHomeworkEdit}
+              onHomeworkAction={handleHomeworkAction}
+              onHomeworkGrading={handleHomeworkGrading}
+            />
+          </motion.div>
         )}
         
-        {currentView === "submissions" && (
-          <TeacherHomeworkSubmissions
-            teacherId={teacherId}
-            selectedHomeworkId={selectedHomeworkId}
-            filters={filters}
-            onDataUpdate={handleDataUpdate}
-            isMobile={isMobile}
-          />
+        {currentView === "edit" && (
+          <motion.div
+            key="edit"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <TeacherHomeworkCreation
+              teacherId={teacherId}
+              onHomeworkCreated={handleHomeworkCreated}
+              teacherData={teacherData}
+              isMobile={isMobile}
+              editHomeworkId={selectedHomeworkId}
+              onCancel={() => handleViewChange("list")}
+            />
+          </motion.div>
         )}
         
-        {currentView === "analytics" && (
-          <TeacherHomeworkAnalytics
-            teacherId={teacherId}
-            filters={filters}
-            onDataUpdate={handleDataUpdate}
-            isMobile={isMobile}
-          />
+        {currentView === "grading" && (
+          <motion.div
+            key="grading"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <TeacherHomeworkGrading
+              teacherId={teacherId}
+              homeworkId={selectedHomeworkId}
+              onBack={() => handleViewChange("list")}
+            />
+          </motion.div>
         )}
         
         {currentView === "export" && (
-          <div className="text-center py-12 bg-gray-50 rounded-lg">
-            <div className="text-6xl mb-4">📁</div>
+          <motion.div
+            key="export"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 text-center shadow-sm border border-gray-200/50"
+          >
+            <div className="text-6xl mb-4">📊</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Export Homework Reports</h3>
             <p className="text-gray-600 mb-4">
               Generate comprehensive reports of your homework assignments and submissions.
             </p>
-            <div className="text-sm text-blue-600 bg-blue-50 p-3 rounded-md max-w-md mx-auto">
+            <div className="text-sm text-blue-600 bg-blue-50 p-4 rounded-xl max-w-md mx-auto border border-blue-200">
               💡 <strong>Coming Soon:</strong> Advanced export functionality with PDF and Excel formats, custom date ranges, and detailed analytics.
             </div>
-          </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
-      {/* TEACHER GUIDANCE */}
-      <div className="mt-8 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-md border border-green-200">
-        <h4 className="text-sm font-medium text-green-900 mb-2 flex items-center gap-2">
-          <span>💡</span>
-          Teacher Homework Management Guide
-        </h4>
-        <div className="text-xs text-green-800 space-y-1">
-          {currentView === "create" && (
-            <>
-              <div>• <strong>Multimedia Support:</strong> Add images, documents, audio, and video to enhance homework</div>
-              <div>• <strong>Clear Instructions:</strong> Provide detailed instructions and grading criteria</div>
-              <div>• <strong>Reasonable Deadlines:</strong> Allow sufficient time for students to complete work</div>
-              <div>• <strong>Late Submissions:</strong> Configure late submission policies and penalties</div>
-            </>
-          )}
-          {currentView === "list" && (
-            <>
-              <div>• <strong>Monitor Progress:</strong> Track submission rates and upcoming deadlines</div>
-              <div>• <strong>Status Management:</strong> Keep homework organized with proper status updates</div>
-              <div>• <strong>Quick Actions:</strong> Edit, view submissions, or archive completed work</div>
-              <div>• <strong>Student Engagement:</strong> Aim for 85%+ submission rates for effective learning</div>
-            </>
-          )}
-          {currentView === "submissions" && (
-            <>
-              <div>• <strong>Timely Feedback:</strong> Grade submissions within 2-3 days for maximum impact</div>
-              <div>• <strong>Constructive Comments:</strong> Provide specific, actionable feedback</div>
-              <div>• <strong>Fair Grading:</strong> Use consistent grading criteria across all students</div>
-              <div>• <strong>Late Policy:</strong> Apply late penalties consistently and fairly</div>
-            </>
-          )}
-          {currentView === "analytics" && (
-            <>
-              <div>• <strong>Track Trends:</strong> Monitor submission patterns and class performance</div>
-              <div>• <strong>Identify Issues:</strong> Look for students or subjects with low engagement</div>
-              <div>• <strong>Adjust Strategies:</strong> Use data to improve homework design and delivery</div>
-              <div>• <strong>Celebrate Success:</strong> Recognize high-performing students and classes</div>
-            </>
-          )}
-          
-          <div className="mt-2 pt-2 border-t border-green-200">
-            <div>🎯 <strong>Best Practice:</strong> Create engaging, meaningful homework that reinforces learning</div>
-            <div>📱 <strong>Technology:</strong> Use multimedia attachments to create rich learning experiences</div>
-            <div>⏰ <strong>Time Management:</strong> Balance homework load across subjects and deadlines</div>
-          </div>
-        </div>
-      </div>
-    </div>
+      {/* Notification Toast */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div 
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 100 }}
+            className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-lg border ${
+              notification.type === 'success' 
+                ? 'bg-green-50 border-green-200 text-green-800' 
+                : 'bg-red-50 border-red-200 text-red-800'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="text-lg">
+                {notification.type === 'success' ? '✅' : '❌'}
+              </div>
+              <div className="font-medium">
+                {notification.message}
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setNotification(null)}
+                className="text-gray-400 hover:text-gray-600 ml-2"
+              >
+                ×
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 };
 

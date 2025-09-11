@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import AdminDashboard from "./AdminDashboard";
+import OptimizedAdminDashboard from "@/components/OptimizedAdminDashboard";
 import EventCalendarContainer from "@/components/EventCalendarContainer";
 import Announcements from "@/components/Announcements";
 import CountChartContainer from "@/components/CountChartContainer";
@@ -16,7 +16,7 @@ const AdminPage = ({
       {/* LEFT */}
       <div className="w-full lg:w-2/3 flex flex-col gap-8">
         {/* DASHBOARD STATS */}
-        <AdminDashboard />
+        <OptimizedAdminDashboard />
 
         {/* MIDDLE CHARTS */}
         <div className="flex gap-4 flex-col lg:flex-row">

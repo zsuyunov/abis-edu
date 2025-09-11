@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { AuthService } from "@/lib/auth";
 import { timetableTopicSchema } from "@/lib/formValidationSchemas";
 
 export async function GET(
@@ -29,11 +29,7 @@ export async function GET(
       include: {
         timetable: {
           include: {
-            class: {
-              include: {
-                supervisor: true,
-              },
-            },
+            class: true,
             subject: true,
           },
         },
@@ -55,10 +51,8 @@ export async function GET(
       return NextResponse.json({ error: "Topic not found" }, { status: 404 });
     }
 
-    // Check permissions - teacher can view their own topics or supervisor can view class topics
-    const canView = 
-      topic.teacherId === session.id ||
-      topic.timetable.class.supervisorId === session.id;
+    // Check permissions - teacher can view their own topics
+    const canView = topic.teacherId === session.id;
 
     if (!canView) {
       return NextResponse.json({ 
@@ -107,11 +101,7 @@ export async function PUT(
       include: {
         timetable: {
           include: {
-            class: {
-              include: {
-                supervisor: true,
-              },
-            },
+            class: true,
           },
         },
       },
@@ -128,23 +118,12 @@ export async function PUT(
       }, { status: 403 });
     }
 
-    // Update completion date if status changed to completed
+    // Update topic data
     const updateData: any = {
       title: data.title,
       description: data.description || null,
-      attachments: data.attachments || [],
       status: data.status,
-      progressPercentage: data.progressPercentage,
     };
-
-    // Handle completion date
-    if (data.status === "COMPLETED" && existingTopic.status !== "COMPLETED") {
-      updateData.completedAt = new Date();
-    } else if (data.status !== "COMPLETED" && existingTopic.status === "COMPLETED") {
-      updateData.completedAt = null;
-    } else if (data.completedAt) {
-      updateData.completedAt = new Date(data.completedAt);
-    }
 
     const topic = await prisma.timetableTopic.update({
       where: { id: topicId },

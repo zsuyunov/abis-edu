@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 
     // Build query conditions
     const where: any = {
-      status: "ACTIVE",
+      isActive: true,
     };
     
     if (branchId) {
@@ -16,13 +16,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Unassigned: no active timetable rows (no current assignments)
+    // Get all timetables and extract teacher IDs from the JSON array
+    const timetables = await prisma.timetable.findMany({
+      where: { isActive: true, ...(branchId ? { branchId: parseInt(branchId) } : {}) },
+      select: { teacherIds: true },
+    });
+
+    // Extract all teacher IDs from the JSON arrays
     const assignedTeacherIds = new Set(
-      (
-        await prisma.timetable.findMany({
-          where: { status: 'ACTIVE', ...(branchId ? { branchId: parseInt(branchId) } : {}) },
-          select: { teacherId: true },
-        })
-      ).map((t) => t.teacherId)
+      timetables.flatMap((t) => {
+        const teacherIds = Array.isArray(t.teacherIds) ? t.teacherIds : [];
+        return teacherIds;
+      })
     );
 
     const unassignedTeachers = await prisma.teacher.findMany({

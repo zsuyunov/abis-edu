@@ -205,7 +205,7 @@ const ClassForm = ({
 
         <div className="flex flex-col gap-2 w-full md:w-1/4">
           <label className="text-xs text-gray-500">
-            Language <span className="text-red-500">*</span>
+            Language
           </label>
           <select
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900"
@@ -228,7 +228,7 @@ const ClassForm = ({
 
         <div className="flex flex-col gap-2 w-full md:w-1/4">
           <label className="text-xs text-gray-500">
-            Education Type <span className="text-red-500">*</span>
+            Education Type
           </label>
           <select
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900"

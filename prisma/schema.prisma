@@ -14,9 +14,9 @@ model Admin {
 }
 
 model Student {
-  id                  String               @id
-  phone               String               @unique
-  createdAt           DateTime             @default(now())
+  id                  String                     @id
+  phone               String
+  createdAt           DateTime                   @default(now())
   classId             Int?
   password            String
   archivedAt          DateTime?
@@ -26,9 +26,9 @@ model Student {
   gender              UserSex
   lastName            String
   restoredAt          DateTime?
-  status              StudentStatus        @default(ACTIVE)
-  studentId           String               @unique
-  updatedAt           DateTime             @updatedAt
+  status              StudentStatus              @default(ACTIVE)
+  studentId           String                     @unique
+  updatedAt           DateTime                   @updatedAt
   archiveComments     ArchiveComment[]
   attendances         Attendance[]
   complaints          Complaint[]
@@ -37,10 +37,11 @@ model Student {
   grades              Grade[]
   homeworkSubmissions HomeworkSubmission[]
   results             Result[]
-  branch              Branch?              @relation(fields: [branchId], references: [id])
-  class               Class?               @relation(fields: [classId], references: [id])
+  branch              Branch?                    @relation(fields: [branchId], references: [id])
+  class               Class?                     @relation(fields: [classId], references: [id])
   attachments         StudentAttachment[]
   studentParents      StudentParent[]
+  electiveSelections  StudentElectiveSelection[]
 
   @@index([branchId, status])
   @@index([classId, status])
@@ -50,11 +51,11 @@ model Student {
 }
 
 model Teacher {
-  id                  String               @id
+  id                  String                     @id
   email               String?
-  phone               String               @unique
+  phone               String                     @unique
   address             String
-  createdAt           DateTime             @default(now())
+  createdAt           DateTime                   @default(now())
   password            String
   archivedAt          DateTime?
   dateOfBirth         DateTime
@@ -62,9 +63,9 @@ model Teacher {
   gender              UserSex
   lastName            String
   restoredAt          DateTime?
-  status              TeacherStatus        @default(ACTIVE)
-  teacherId           String               @unique
-  updatedAt           DateTime             @updatedAt
+  status              TeacherStatus              @default(ACTIVE)
+  teacherId           String                     @unique
+  updatedAt           DateTime                   @updatedAt
   archiveComments     ArchiveComment[]
   attendances         Attendance[]
   complaints          Complaint[]
@@ -77,7 +78,8 @@ model Teacher {
   attachments         TeacherAttachment[]
   education           TeacherEducation?
   passport            TeacherPassport?
-  timetables          Timetable[]
+  electiveSelections  StudentElectiveSelection[]
+  TimetableTemplate   TimetableTemplate[]
   timetableTopics     TimetableTopic[]
 
   @@index([firstName, lastName])
@@ -150,6 +152,7 @@ model Class {
   students          Student[]
   TeacherAssignment TeacherAssignment[]
   timetables        Timetable[]
+  TimetableTemplate TimetableTemplate[]
   timetableTopics   TimetableTopic[]
 
   @@index([branchId, status])
@@ -159,115 +162,121 @@ model Class {
 }
 
 model Subject {
-  id                Int                 @id @default(autoincrement())
-  name              String              @unique
-  archivedAt        DateTime?
-  createdAt         DateTime            @default(now())
-  restoredAt        DateTime?
-  status            SubjectStatus       @default(ACTIVE)
-  updatedAt         DateTime            @updatedAt
-  archiveComments   ArchiveComment[]
-  attendances       Attendance[]
-  complaints        Complaint[]
-  exams             Exam[]
-  grades            Grade[]
-  homework          Homework[]
-  TeacherAssignment TeacherAssignment[]
-  timetables        Timetable[]
-  timetableTopics   TimetableTopic[]
+  id                 Int                        @id @default(autoincrement())
+  name               String                     @unique
+  archivedAt         DateTime?
+  createdAt          DateTime                   @default(now())
+  restoredAt         DateTime?
+  status             SubjectStatus              @default(ACTIVE)
+  updatedAt          DateTime                   @updatedAt
+  archiveComments    ArchiveComment[]
+  attendances        Attendance[]
+  complaints         Complaint[]
+  exams              Exam[]
+  grades             Grade[]
+  homework           Homework[]
+  TeacherAssignment  TeacherAssignment[]
+  timetables         Timetable[]
+  electiveSelections StudentElectiveSelection[]
+  TimetableTemplate  TimetableTemplate[]
+  timetableTopics    TimetableTopic[]
 }
 
 model Timetable {
-  id              Int              @id @default(autoincrement())
-  branchId        Int
-  classId         Int
-  academicYearId  Int
-  subjectId       Int
-  teacherId       String
-  fullDate        DateTime
-  day             Day
-  startTime       DateTime
-  endTime         DateTime
-  roomNumber      String
-  buildingName    String?
-  status          TimetableStatus  @default(ACTIVE)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  archivedAt      DateTime?
-  restoredAt      DateTime?
-  archiveComments ArchiveComment[]
-  attendances     Attendance[]
-  exams           Exam[]
-  grades          Grade[]
-  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
-  branch          Branch           @relation(fields: [branchId], references: [id])
-  class           Class            @relation(fields: [classId], references: [id])
-  subject         Subject          @relation(fields: [subjectId], references: [id])
-  teacher         Teacher          @relation(fields: [teacherId], references: [id])
-  topics          TimetableTopic[]
+  id                        Int                        @id @default(autoincrement())
+  branchId                  Int
+  classId                   Int
+  academicYearId            Int
+  dayOfWeek                 String?
+  subjectId                 Int?
+  teacherIds                Json                       @default("[]")
+  startTime                 DateTime @db.Time
+  endTime                   DateTime @db.Time
+  roomNumber                String?
+  buildingName              String?
+  isElective                Boolean                    @default(false)
+  isActive                  Boolean                    @default(true)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  academicYear              AcademicYear               @relation(fields: [academicYearId], references: [id])
+  branch                    Branch                     @relation(fields: [branchId], references: [id])
+  class                     Class                      @relation(fields: [classId], references: [id])
+  subject                   Subject?                   @relation(fields: [subjectId], references: [id])
+  studentElectiveSelections StudentElectiveSelection[]
+  Exam                      Exam[]
+  Attendance                Attendance[]
+  Grade                     Grade[]
+  ArchiveComment            ArchiveComment[]
+  TimetableTemplate         TimetableTemplate?         @relation(fields: [timetableTemplateId], references: [id])
+  timetableTemplateId       Int?
+  topics                    TimetableTopic[]
 
-  @@index([branchId, academicYearId, classId, subjectId])
-  @@index([teacherId, fullDate])
-  @@index([classId, day, startTime])
-  @@index([fullDate, startTime, endTime])
-  @@index([status, createdAt])
-  @@index([teacherId, status])
+  @@index([branchId, classId, academicYearId])
+  @@index([dayOfWeek, startTime])
+  @@index([classId, dayOfWeek])
+  @@index([isActive])
+  @@index([isElective])
 }
 
-model TimetableTopic {
-  id                 Int          @id @default(autoincrement())
-  title              String
-  description        String?
-  attachments        String[]
-  timetableId        Int
-  teacherId          String
-  subjectId          Int
-  classId            Int
-  branchId           Int
-  academicYearId     Int
-  status             TopicStatus  @default(DRAFT)
-  completedAt        DateTime?
-  progressPercentage Int          @default(0)
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  academicYear       AcademicYear @relation(fields: [academicYearId], references: [id])
-  branch             Branch       @relation(fields: [branchId], references: [id])
-  class              Class        @relation(fields: [classId], references: [id])
-  subject            Subject      @relation(fields: [subjectId], references: [id])
-  teacher            Teacher      @relation(fields: [teacherId], references: [id])
-  timetable          Timetable    @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+model BellTime {
+  id        Int      @id @default(autoincrement())
+  yearRange String
+  eventName String
+  startTime DateTime @db.Time
+  endTime   DateTime @db.Time
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime? @updatedAt
 
-  @@index([timetableId, teacherId])
-  @@index([classId, subjectId, academicYearId])
-  @@index([teacherId, status, createdAt])
+  @@index([yearRange])
+  @@index([startTime, endTime])
+}
+
+model StudentElectiveSelection {
+  id          Int       @id @default(autoincrement())
+  studentId   String
+  timetableId Int
+  subjectId   Int
+  teacherId   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher     Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, timetableId])
+  @@index([studentId])
+  @@index([timetableId])
 }
 
 model Exam {
   id              Int              @id @default(autoincrement())
-  startTime       String
-  endTime         String
+  startTime       DateTime         @db.Time
+  endTime         DateTime         @db.Time
   academicYearId  Int
   archivedAt      DateTime?
   branchId        Int
   classId         Int
   createdAt       DateTime         @default(now())
   date            DateTime
+  examDay         String?
   fullMarks       Int              @default(100)
   name            String
   passingMarks    Int              @default(40)
   restoredAt      DateTime?
   roomNumber      String
   status          ExamStatus       @default(SCHEDULED)
-  subjectId       Int
-  teacherId       String
+  subjectId       Int?
+  teacherId       String?
   timetableId     Int?
   updatedAt       DateTime         @updatedAt
   archiveComments ArchiveComment[]
   academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
   branch          Branch           @relation(fields: [branchId], references: [id])
   class           Class            @relation(fields: [classId], references: [id])
-  subject         Subject          @relation(fields: [subjectId], references: [id])
-  teacher         Teacher          @relation(fields: [teacherId], references: [id])
+  subject         Subject?         @relation(fields: [subjectId], references: [id])
+  teacher         Teacher?         @relation(fields: [teacherId], references: [id])
   timetable       Timetable?       @relation(fields: [timetableId], references: [id])
   examResults     ExamResult[]
   results         Result[]
@@ -636,44 +645,47 @@ model EventParticipation {
 }
 
 model Branch {
-  id                Int                 @id @default(autoincrement())
-  shortName         String              @unique
-  legalName         String
-  stir              String              @unique
-  phone             String
-  region            String
-  address           String
-  status            BranchStatus        @default(ACTIVE)
-  website           String?
-  email             String?
-  district          String
-  longitude         Float
-  latitude          Float
-  directorId        Int?                @unique
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  archivedAt        DateTime?
-  restoredAt        DateTime?
-  archiveComments   ArchiveComment[]
-  attendances       Attendance[]
-  director          Director?           @relation(fields: [directorId], references: [id])
-  classes           Class[]
-  complaints        Complaint[]
-  documents         Document[]
-  exams             Exam[]
-  examResults       ExamResult[]
-  grades            Grade[]
-  homework          Homework[]
-  mealPlans         MealPlan[]
-  messages          Message[]
-  parents           Parent[]
-  students          Student[]
-  TeacherAssignment TeacherAssignment[]
-  timetables        Timetable[]
-  timetableTopics   TimetableTopic[]
-  users             User[]
+  id                  Int                   @id @default(autoincrement())
+  shortName           String                @unique
+  legalName           String
+  stir                String                @unique
+  phone               String
+  region              String
+  address             String
+  status              BranchStatus          @default(ACTIVE)
+  website             String?
+  email               String?
+  district            String
+  longitude           Float
+  latitude            Float
+  // directorId          Int?                  @unique
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  archivedAt          DateTime?
+  restoredAt          DateTime?
+  archiveComments     ArchiveComment[]
+  attendances         Attendance[]
+  // director            Director?             @relation(fields: [directorId], references: [id])
+  classes             Class[]
+  complaints          Complaint[]
+  documents           Document[]
+  exams               Exam[]
+  examResults         ExamResult[]
+  grades              Grade[]
+  homework            Homework[]
+  // mealPlans           MealPlan[]
+  messages            Message[]
+  parents             Parent[]
+  students            Student[]
+  TeacherAssignment   TeacherAssignment[]
+  timetables          Timetable[]
+  users               User[]
+  TimetableTemplate   TimetableTemplate[]
+  TimetableBulkUpload TimetableBulkUpload[]
+  timetableTopics     TimetableTopic[]
 }
 
+/*
 model Director {
   id             Int      @id @default(autoincrement())
   firstName      String
@@ -685,6 +697,7 @@ model Director {
   updatedAt      DateTime @updatedAt
   branch         Branch?
 }
+*/
 
 model User {
   id               String           @id @default(cuid())
@@ -705,14 +718,15 @@ model User {
   archivedAt       DateTime?
   restoredAt       DateTime?
   archiveComments  ArchiveComment[]
-  mealApprovals    MealApproval[]   @relation("MealApprovals")
-  createdMealPlans MealPlan[]       @relation("CreatedMealPlans")
+  // mealApprovals    MealApproval[]   @relation("MealApprovals")
+  // createdMealPlans MealPlan[]       @relation("CreatedMealPlans")
   receivedMessages Message[]        @relation("ReceivedMessages")
   sentMessages     Message[]        @relation("SentMessages")
   branch           Branch?          @relation(fields: [branchId], references: [id])
   attachments      UserAttachment[]
   education        UserEducation?
   passport         UserPassport?
+  // settings         UserSettings?
 }
 
 model UserPassport {
@@ -754,28 +768,46 @@ model UserAttachment {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+/*
+model UserSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  notifications    Json     @default("{\"email\": true, \"sms\": false, \"push\": true}")
+  privacy          Json     @default("{\"profileVisibility\": \"PUBLIC\", \"showEmail\": true, \"showPhone\": false}")
+  preferences      Json     @default("{\"language\": \"en\", \"timezone\": \"Asia/Tashkent\", \"dateFormat\": \"MM/DD/YYYY\", \"theme\": \"LIGHT\"}")
+  security         Json     @default("{\"twoFactorAuth\": false, \"sessionTimeout\": 60, \"loginNotifications\": true}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+*/
+
 model AcademicYear {
-  id                Int                 @id @default(autoincrement())
-  name              String              @unique
-  startDate         DateTime
-  endDate           DateTime
-  isCurrent         Boolean             @default(false)
-  status            AcademicYearStatus  @default(ACTIVE)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  archivedAt        DateTime?
-  restoredAt        DateTime?
-  archiveComments   ArchiveComment[]
-  attendances       Attendance[]
-  classes           Class[]
-  documents         Document[]
-  exams             Exam[]
-  grades            Grade[]
-  homework          Homework[]
-  semesters         Semester[]
-  TeacherAssignment TeacherAssignment[]
-  timetables        Timetable[]
-  timetableTopics   TimetableTopic[]
+  id                  Int                   @id @default(autoincrement())
+  name                String                @unique
+  startDate           DateTime
+  endDate             DateTime
+  isCurrent           Boolean               @default(false)
+  status              AcademicYearStatus    @default(ACTIVE)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  archivedAt          DateTime?
+  restoredAt          DateTime?
+  archiveComments     ArchiveComment[]
+  attendances         Attendance[]
+  classes             Class[]
+  documents           Document[]
+  exams               Exam[]
+  grades              Grade[]
+  homework            Homework[]
+  semesters           Semester[]
+  TeacherAssignment   TeacherAssignment[]
+  timetables          Timetable[]
+  TimetableTemplate   TimetableTemplate[]
+  TimetableBulkUpload TimetableBulkUpload[]
+  timetableTopics     TimetableTopic[]
 }
 
 model Semester {
@@ -792,39 +824,41 @@ model Semester {
 }
 
 model ArchiveComment {
-  id             Int           @id @default(autoincrement())
-  userId         String?
-  branchId       Int?
-  teacherId      String?
-  subjectId      Int?
-  classId        Int?
-  parentId       String?
-  studentId      String?
-  academicYearId Int?
-  timetableId    Int?
-  attendanceId   Int?
-  gradeId        Int?
-  documentId     Int?
-  homeworkId     Int?
-  examId         Int?
-  comment        String
-  action         String
-  createdBy      String
-  createdAt      DateTime      @default(now())
-  academicYear   AcademicYear? @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  attendance     Attendance?   @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  branch         Branch?       @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  class          Class?        @relation(fields: [classId], references: [id], onDelete: Cascade)
-  document       Document?     @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  exam           Exam?         @relation(fields: [examId], references: [id], onDelete: Cascade)
-  grade          Grade?        @relation(fields: [gradeId], references: [id], onDelete: Cascade)
-  homework       Homework?     @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
-  parent         Parent?       @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  student        Student?      @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subject        Subject?      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacher        Teacher?      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  timetable      Timetable?    @relation(fields: [timetableId], references: [id], onDelete: Cascade)
-  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  Int                @id @default(autoincrement())
+  userId              String?
+  branchId            Int?
+  teacherId           String?
+  subjectId           Int?
+  classId             Int?
+  parentId            String?
+  studentId           String?
+  academicYearId      Int?
+  timetableId         Int?
+  attendanceId        Int?
+  gradeId             Int?
+  documentId          Int?
+  homeworkId          Int?
+  examId              Int?
+  comment             String
+  action              String
+  createdBy           String
+  createdAt           DateTime           @default(now())
+  academicYear        AcademicYear?      @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  attendance          Attendance?        @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  branch              Branch?            @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  class               Class?             @relation(fields: [classId], references: [id], onDelete: Cascade)
+  document            Document?          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  exam                Exam?              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  grade               Grade?             @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  homework            Homework?          @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  parent              Parent?            @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student             Student?           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject             Subject?           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher             Teacher?           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  timetable           Timetable?         @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  user                User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  TimetableTemplate   TimetableTemplate? @relation(fields: [timetableTemplateId], references: [id])
+  timetableTemplateId Int?
 }
 
 model Message {
@@ -843,6 +877,10 @@ model Message {
   receiver    User                @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
   sender      User                @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   attachments MessageAttachment[]
+
+  @@index([senderId, receiverId])
+  @@index([branchId, createdAt])
+  @@index([status, createdAt])
 }
 
 model MessageAttachment {
@@ -857,6 +895,8 @@ model MessageAttachment {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
 }
 
 model TeacherPassport {
@@ -948,6 +988,7 @@ model SubmissionAttachment {
   @@index([submissionId, fileType])
 }
 
+/*
 model MealPlan {
   id             Int            @id @default(autoincrement())
   title          String
@@ -967,7 +1008,9 @@ model MealPlan {
   @@index([branchId, status, createdAt])
   @@index([createdById, status])
 }
+*/
 
+/*
 model Meal {
   id              Int      @id @default(autoincrement())
   day             Day
@@ -986,7 +1029,9 @@ model Meal {
 
   @@index([mealPlanId, day, mealType])
 }
+*/
 
+/*
 model MealApproval {
   id           Int            @id @default(autoincrement())
   status       ApprovalStatus
@@ -1003,6 +1048,7 @@ model MealApproval {
   @@unique([mealPlanId, approverType])
   @@index([approverId, status])
 }
+*/
 
 model TeacherAssignment {
   id             Int                   @id @default(autoincrement())
@@ -1029,6 +1075,90 @@ model TeacherAssignment {
   @@index([role, status])
   @@index([subjectId, academicYearId])
   @@index([teacherId, status])
+}
+
+model TimetableTemplate {
+  id                  Int              @id @default(autoincrement())
+  name                String
+  description         String?
+  branchId            Int
+  classId             Int
+  academicYearId      Int
+  subjectId           Int
+  teacherId           String
+  day                 Day
+  startTime           DateTime
+  endTime             DateTime
+  roomNumber          String
+  buildingName        String?
+  recurrenceType      RecurrenceType
+  recurrenceDays      Day[]
+  recurrenceEnd       DateTime?
+  status              TimetableStatus  @default(ACTIVE)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  archivedAt          DateTime?
+  restoredAt          DateTime?
+  archiveComments     ArchiveComment[]
+  academicYear        AcademicYear     @relation(fields: [academicYearId], references: [id])
+  branch              Branch           @relation(fields: [branchId], references: [id])
+  class               Class            @relation(fields: [classId], references: [id])
+  subject             Subject          @relation(fields: [subjectId], references: [id])
+  teacher             Teacher          @relation(fields: [teacherId], references: [id])
+  generatedTimetables Timetable[]
+
+  @@index([branchId, academicYearId, classId, subjectId])
+  @@index([teacherId, day, startTime])
+  @@index([status, createdAt])
+}
+
+model TimetableBulkUpload {
+  id             Int              @id @default(autoincrement())
+  fileName       String
+  filePath       String
+  fileSize       Int
+  totalRows      Int
+  processedRows  Int
+  successRows    Int
+  errorRows      Int
+  status         BulkUploadStatus @default(PENDING)
+  errors         Json?
+  uploadedBy     String
+  branchId       Int
+  academicYearId Int
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  completedAt    DateTime?
+  branch         Branch           @relation(fields: [branchId], references: [id])
+  academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([branchId, academicYearId])
+}
+
+model TimetableTopic {
+  id             Int              @id @default(autoincrement())
+  title          String
+  description    String?
+  timetableId    Int
+  teacherId      String
+  subjectId      Int?
+  classId        Int
+  branchId       Int
+  academicYearId Int
+  status         TopicStatus      @default(IN_PROGRESS)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  timetable      Timetable        @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  teacher        Teacher          @relation(fields: [teacherId], references: [id])
+  subject        Subject?         @relation(fields: [subjectId], references: [id])
+  class          Class            @relation(fields: [classId], references: [id])
+  branch         Branch           @relation(fields: [branchId], references: [id])
+  academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id])
+
+  @@index([timetableId])
+  @@index([teacherId])
+  @@index([branchId, classId, academicYearId])
 }
 
 enum EventAudience {
@@ -1295,4 +1425,19 @@ enum ApproverType {
 enum TeacherAssignmentRole {
   TEACHER
   SUPERVISOR
+}
+
+enum RecurrenceType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum BulkUploadStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  PARTIALLY_COMPLETED
 }

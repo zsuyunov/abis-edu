@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
         name: "asc" 
       }
     });
-    return NextResponse.json({ classes });
+    return NextResponse.json(classes);
   } catch (error) {
     console.error("Failed to fetch classes:", error);
     return NextResponse.json(

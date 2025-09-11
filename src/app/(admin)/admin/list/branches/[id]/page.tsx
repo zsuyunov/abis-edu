@@ -17,9 +17,9 @@ const SingleBranchPage = async ({
     where: {
       id: parseInt(params.id),
     },
-    include: {
-      director: true,
-    },
+    // include: {
+    //   director: true,
+    // },
   });
 
   if (!branch) {
@@ -254,8 +254,8 @@ const SingleBranchPage = async ({
               </div>
             </div>
 
-            {/* Director Information */}
-            <div className="space-y-4">
+            {/* Director Information - COMMENTED OUT */}
+            {/* <div className="space-y-4">
               <h2 className="text-lg font-medium text-gray-700 border-b pb-2">Director Information</h2>
               {branch.director ? (
                 <div className="space-y-2">
@@ -281,7 +281,7 @@ const SingleBranchPage = async ({
               ) : (
                 <p className="text-sm text-gray-500">No director assigned</p>
               )}
-            </div>
+            </div> */}
 
             {/* Statistics */}
             <div className="space-y-4 md:col-span-2">

@@ -4,19 +4,27 @@ import { AuthService } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Try header-based auth first, then fallback to token auth
+    const headerStudentId = request.headers.get('x-user-id');
+    let authenticatedUserId = headerStudentId;
+    let session = null;
+
+    if (!headerStudentId) {
+      const authHeader = request.headers.get('authorization');
+      const token = AuthService.extractTokenFromHeader(authHeader);
+      if (!token) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      
+      session = AuthService.verifyToken(token);
+      if (!session?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      authenticatedUserId = session.id;
     }
 
     const url = new URL(request.url);
-    const studentId = url.searchParams.get("studentId") || session.id;
+    const requestedStudentId = url.searchParams.get("studentId") || authenticatedUserId;
     const subjectId = url.searchParams.get("subjectId");
     const status = url.searchParams.get("status") || "ALL"; // ALL, PENDING, COMPLETED, MISSED
     const view = url.searchParams.get("view") || "list"; // list, timeline, analytics
@@ -25,13 +33,18 @@ export async function GET(request: NextRequest) {
     const endDate = url.searchParams.get("endDate");
 
     // Verify student can only access their own homework
-    if (session.id !== studentId) {
+    if (authenticatedUserId !== requestedStudentId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
+
+    // Ensure we have a valid student ID
+    if (!requestedStudentId) {
+      return NextResponse.json({ error: "Student ID is required" }, { status: 400 });
     }
 
     // Get student information with branch and class details
     const student = await prisma.student.findUnique({
-      where: { id: studentId },
+      where: { id: requestedStudentId },
       include: {
         branch: true,
         class: {
@@ -39,18 +52,16 @@ export async function GET(request: NextRequest) {
             academicYear: true,
           },
         },
-        parent: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
       },
     });
 
     if (!student) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
+    }
+
+    // Validate student has required associations
+    if (!student.branchId || !student.classId || !student.class) {
+      return NextResponse.json({ error: "Student profile incomplete" }, { status: 400 });
     }
 
     // Get student's branch and class for filtering
@@ -65,7 +76,7 @@ export async function GET(request: NextRequest) {
           some: {
             branchId: studentBranchId,
             students: {
-              some: { id: studentId },
+              some: { id: requestedStudentId },
             },
           },
         },
@@ -90,9 +101,17 @@ export async function GET(request: NextRequest) {
     const homeworkWhere: any = {
       branchId: studentBranchId, // Always filter by student's branch
       classId: studentClassId,   // Always filter by student's class
-      academicYearId: academicYearId ? parseInt(academicYearId) : studentAcademicYearId,
       status: "ACTIVE", // Only show active homework to students
     };
+
+    // Only filter by academic year if explicitly requested
+    if (academicYearId && academicYearId !== "undefined" && academicYearId !== "") {
+      homeworkWhere.academicYearId = parseInt(academicYearId);
+      console.log('Filtering by specific academic year:', academicYearId);
+    } else {
+      // Don't filter by academic year if not specified - show all homework for student
+      console.log('No academic year filter specified - showing all homework for student');
+    }
 
     if (subjectId) homeworkWhere.subjectId = parseInt(subjectId);
 
@@ -102,6 +121,35 @@ export async function GET(request: NextRequest) {
         lte: new Date(endDate),
       };
     }
+
+    console.log('Student homework query filters:', homeworkWhere);
+    console.log('Student info:', {
+      id: student.id,
+      branchId: studentBranchId,
+      classId: studentClassId,
+      academicYearId: studentAcademicYearId
+    });
+
+    // Debug: Check all homework for this student's branch and class
+    const allHomeworkForStudent = await prisma.homework.findMany({
+      where: {
+        branchId: studentBranchId,
+        classId: studentClassId,
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+        title: true,
+        branchId: true,
+        classId: true,
+        academicYearId: true,
+        subjectId: true,
+        teacherId: true,
+        status: true,
+      },
+    });
+    console.log('All homework for student branch/class:', allHomeworkForStudent.length);
+    console.log('All homework details:', allHomeworkForStudent);
 
     // Get homework assignments with submission data
     const homework = await prisma.homework.findMany({
@@ -153,7 +201,7 @@ export async function GET(request: NextRequest) {
         },
         submissions: {
           where: {
-            studentId: studentId, // Only get this student's submission
+            studentId: requestedStudentId, // Only get this student's submission
           },
           include: {
             attachments: {
@@ -177,6 +225,17 @@ export async function GET(request: NextRequest) {
       ],
     });
 
+    console.log('Found homework count:', homework.length);
+    console.log('Homework details:', homework.map(hw => ({
+      id: hw.id,
+      title: hw.title,
+      branchId: hw.branchId,
+      classId: hw.classId,
+      academicYearId: hw.academicYearId,
+      subjectId: hw.subjectId,
+      teacherId: hw.teacherId
+    })));
+
     // Calculate submission status for each homework
     const homeworkWithStatus = homework.map(hw => {
       const submission = hw.submissions[0]; // Should be only one submission per student
@@ -186,20 +245,24 @@ export async function GET(request: NextRequest) {
       
       let homeworkStatus: "PENDING" | "COMPLETED" | "MISSED" | "LATE";
       
-      if (submission) {
-        if (submission.status === "GRADED" || submission.status === "SUBMITTED") {
-          homeworkStatus = submission.isLate ? "LATE" : "COMPLETED";
-        } else {
-          homeworkStatus = isOverdue ? "MISSED" : "PENDING";
-        }
+      // Only consider it submitted if there's actual content AND a valid submission date
+      const hasActualSubmission = submission && 
+        submission.status !== "NOT_SUBMITTED" && 
+        submission.submissionDate && 
+        submission.submissionDate.getTime() > 0 && // Not epoch time
+        (submission.content || (submission.attachments && submission.attachments.length > 0));
+      
+      if (hasActualSubmission) {
+        homeworkStatus = submission.isLate ? "LATE" : "COMPLETED";
       } else {
+        // If no real submission, check if overdue
         homeworkStatus = isOverdue ? "MISSED" : "PENDING";
       }
 
       return {
         ...hw,
         submissionStatus: homeworkStatus,
-        submission: submission || null,
+        submission: hasActualSubmission ? submission : null, // Only show submission if it's real
         isOverdue,
         daysUntilDue: Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
       };
@@ -238,7 +301,6 @@ export async function GET(request: NextRequest) {
         studentId: student.studentId,
         branch: student.branch,
         class: student.class,
-        parent: student.parent,
       },
       homework: filteredHomework,
       stats,
@@ -643,7 +705,7 @@ function calculateStreakAnalysis(homework: any[]) {
 }
 
 function calculateStreakHistory(homework: any[]) {
-  const history = [];
+  const history: Array<{ length: number; endDate: string }> = [];
   let currentStreak = 0;
   
   homework.forEach((hw, index) => {

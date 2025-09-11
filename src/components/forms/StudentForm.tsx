@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, FormProvider } from "react-hook-form";
 import InputField from "../InputField";
-import PasswordField from "../PasswordField";
+import PasswordInput from "../PasswordInput";
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import {
   studentSchema,
@@ -163,8 +163,8 @@ const StudentForm = ({
 
   return (
     <FormProvider {...methods}>
-      <form className="flex flex-col gap-8" onSubmit={onSubmit}>
-        <h1 className="text-xl font-semibold">
+      <form className="flex flex-col gap-4 sm:gap-6" onSubmit={onSubmit}>
+        <h1 className="text-base sm:text-lg font-semibold">
           {type === "create" ? "Create a new student" : "Update the student"}
         </h1>
 
@@ -172,7 +172,7 @@ const StudentForm = ({
         <span className="text-xs text-gray-400 font-medium">
           Basic Information
         </span>
-        <div className="flex justify-between flex-wrap gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <InputField
             label="First Name"
             name="firstName"
@@ -208,7 +208,7 @@ const StudentForm = ({
             inputProps={{ placeholder: "+998901234567" }}
             required
           />
-          <div className="flex flex-col gap-2 w-full md:w-1/4">
+          <div className="flex flex-col gap-2">
             <label className="text-xs text-gray-500">
               Student ID <span className="text-red-500">*</span>
             </label>
@@ -236,16 +236,19 @@ const StudentForm = ({
               Format: S##### (e.g., S12345)
             </p>
           </div>
-          <PasswordField
-            label="Password"
-            name="password"
-            defaultValue=""
-            register={register}
-            error={errors.password}
-            required={type === "create"}
-            inputProps={{ placeholder: type === "create" ? "Enter password" : "Leave empty to keep current password" }}
-          />
-          <div className="flex flex-col gap-2 w-full md:w-1/4">
+          <div className="flex flex-col gap-2">
+            <label className="text-xs text-gray-500">
+              Password {type === "create" && <span className="text-red-500">*</span>}
+            </label>
+            <PasswordInput
+              register={register("password")}
+              error={errors.password}
+              placeholder={type === "create" ? "Enter password" : "Leave empty to keep current password"}
+              defaultValue=""
+              required={type === "create"}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
             <label className="text-xs text-gray-500">
               Gender <span className="text-red-500">*</span>
             </label>
@@ -264,7 +267,7 @@ const StudentForm = ({
               </p>
             )}
           </div>
-          <div className="flex flex-col gap-2 w-full md:w-1/4">
+          <div className="flex flex-col gap-2">
             <label className="text-xs text-gray-500">
               Status <span className="text-red-500">*</span>
             </label>
@@ -306,8 +309,8 @@ const StudentForm = ({
         <span className="text-xs text-gray-400 font-medium">
           Document Uploads (Optional)
         </span>
-        <div className="flex justify-between flex-wrap gap-4">
-          <div className="flex flex-col gap-2 w-full md:w-1/4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="flex flex-col gap-2">
             <label className="text-xs text-gray-500">Passport / Document</label>
             <ImageKitUpload
               onSuccess={(result) => {
@@ -370,17 +373,17 @@ const StudentForm = ({
           <span className="text-red-500">Something went wrong!</span>
         )}
         
-        <div className="flex justify-end gap-4">
+        <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+            className="px-3 py-2 text-sm bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
           >
             Cancel
           </button>
           <button 
             type="submit" 
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
             {type === "create" ? "Create" : "Update"} Student
           </button>

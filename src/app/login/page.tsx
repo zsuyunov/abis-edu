@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 
@@ -76,10 +75,6 @@ const LoginPage = () => {
   return (
     <div className="h-screen flex items-center justify-center bg-lamaSkyLight">
       <div className="bg-white p-12 rounded-md shadow-2xl flex flex-col gap-2">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Image src="/logo.png" alt="" width={24} height={24} />
-          SchooLama
-        </h1>
         <h2 className="text-gray-400">Sign in to your account</h2>
         
         {error && (
@@ -144,13 +139,6 @@ const LoginPage = () => {
             {isLoading ? "Signing In..." : "Sign In"}
           </button>
         </form>
-        
-        <div className="text-xs text-gray-500 mt-4 p-2 bg-gray-50 rounded">
-          <strong>Demo Credentials:</strong><br />
-          Admin: +998901234567 / admin123<br />
-          Main Admission: +998901234594 / 123456<br />
-          Support Admission: +998901234595 / 123456
-        </div>
       </div>
     </div>
   );

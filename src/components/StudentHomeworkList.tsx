@@ -30,6 +30,10 @@ const StudentHomeworkList = ({
   }
 
   const homework = homeworkData.homework || [];
+  
+  console.log('StudentHomeworkList - homeworkData:', homeworkData);
+  console.log('StudentHomeworkList - homework array:', homework);
+  console.log('StudentHomeworkList - homework length:', homework.length);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -58,6 +62,98 @@ const StudentHomeworkList = ({
         return "📝";
       default:
         return "📚";
+    }
+  };
+
+  // Progress calculation functions (similar to teacher view)
+  const calculateTimeLeft = (submissionDate: string) => {
+    const now = new Date();
+    const deadline = new Date(submissionDate);
+    const timeDiff = deadline.getTime() - now.getTime();
+    
+    const days = Math.floor(timeDiff / (1000 * 3600 * 24));
+    const hours = Math.floor((timeDiff % (1000 * 3600 * 24)) / (1000 * 3600));
+    const minutes = Math.floor((timeDiff % (1000 * 3600)) / (1000 * 60));
+    
+    return { days, hours, minutes, totalMs: timeDiff };
+  };
+
+  const getProgressStatus = (submissionDate: string, status: string) => {
+    const timeLeft = calculateTimeLeft(submissionDate);
+    
+    if (status === 'MISSED' || timeLeft.totalMs < 0) {
+      return { 
+        status: 'expired', 
+        timeLeft: { days: Math.abs(timeLeft.days), hours: Math.abs(timeLeft.hours), minutes: Math.abs(timeLeft.minutes) }, 
+        color: 'text-red-600', 
+        bgColor: 'bg-red-100' 
+      };
+    } else if (timeLeft.days === 0 && timeLeft.hours <= 24) {
+      return { 
+        status: 'due_today', 
+        timeLeft, 
+        color: 'text-orange-600', 
+        bgColor: 'bg-orange-100' 
+      };
+    } else if (timeLeft.days <= 3) {
+      return { 
+        status: 'urgent', 
+        timeLeft, 
+        color: 'text-yellow-600', 
+        bgColor: 'bg-yellow-100' 
+      };
+    } else if (timeLeft.days <= 7) {
+      return { 
+        status: 'soon', 
+        timeLeft, 
+        color: 'text-blue-600', 
+        bgColor: 'bg-blue-100' 
+      };
+    } else {
+      return { 
+        status: 'normal', 
+        timeLeft, 
+        color: 'text-green-600', 
+        bgColor: 'bg-green-100' 
+      };
+    }
+  };
+
+  const getProgressText = (progressInfo: any) => {
+    const { status, timeLeft } = progressInfo;
+    
+    switch (status) {
+      case 'expired':
+        if (timeLeft.days > 0) {
+          return `Overdue by ${timeLeft.days} day${timeLeft.days !== 1 ? 's' : ''}`;
+        } else {
+          return `Overdue by ${timeLeft.hours}h ${timeLeft.minutes}m`;
+        }
+      case 'due_today':
+        return `Due in ${timeLeft.hours}h ${timeLeft.minutes}m`;
+      case 'urgent':
+        if (timeLeft.days > 0) {
+          return `${timeLeft.days} day${timeLeft.days !== 1 ? 's' : ''} ${timeLeft.hours}h left`;
+        } else {
+          return `${timeLeft.hours}h ${timeLeft.minutes}m left`;
+        }
+      case 'soon':
+        return `${timeLeft.days} day${timeLeft.days !== 1 ? 's' : ''} ${timeLeft.hours}h left`;
+      case 'normal':
+        return `${timeLeft.days} day${timeLeft.days !== 1 ? 's' : ''} left`;
+      default:
+        return '';
+    }
+  };
+
+  const getProgressIcon = (status: string) => {
+    switch (status) {
+      case 'expired': return '⏰';
+      case 'due_today': return '🚨';
+      case 'urgent': return '⚠️';
+      case 'soon': return '📅';
+      case 'normal': return '✅';
+      default: return '📋';
     }
   };
 
@@ -133,7 +229,7 @@ const StudentHomeworkList = ({
           filteredHomework.map((hw: any) => (
             <div
               key={hw.id}
-              className={`bg-white border-l-4 ${getPriorityColor(hw.daysUntilDue, hw.submissionStatus)} rounded-lg p-6 hover:shadow-md transition-shadow`}
+              className={`bg-white border-l-4 ${getPriorityColor(hw.daysUntilDue, hw.submissionStatus)} rounded-xl p-6 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
@@ -187,6 +283,40 @@ const StudentHomeworkList = ({
                     <p className="text-sm text-gray-600 mb-3">{hw.description}</p>
                   )}
 
+                  {/* Progress Indicator */}
+                  {hw.dueDate && hw.submissionStatus === 'PENDING' && (
+                    <div className="mb-4">
+                      {(() => {
+                        const progressInfo = getProgressStatus(hw.dueDate, hw.submissionStatus);
+                        return (
+                          <div className={`${progressInfo.bgColor} rounded-lg p-3 border-l-4 ${progressInfo.color.replace('text-', 'border-')}`}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">{getProgressIcon(progressInfo.status)}</span>
+                              <div className="flex-1">
+                                <div className={`font-medium ${progressInfo.color}`}>
+                                  {getProgressText(progressInfo)}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-1">
+                                  Due: {new Date(hw.dueDate).toLocaleDateString()} at {new Date(hw.dueDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </div>
+                              </div>
+                              {progressInfo.status !== 'expired' && progressInfo.timeLeft.days <= 7 && (
+                                <div className="text-right">
+                                  <div className={`text-sm font-bold ${progressInfo.color}`}>
+                                    {progressInfo.timeLeft.days}d {progressInfo.timeLeft.hours}h
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    remaining
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   {hw.instructions && (
                     <div className="bg-blue-50 p-3 rounded-md mb-3">
                       <h4 className="text-sm font-medium text-blue-900 mb-1">Instructions:</h4>
@@ -196,31 +326,58 @@ const StudentHomeworkList = ({
 
                   {/* ATTACHMENTS */}
                   {hw.attachments && hw.attachments.length > 0 && (
-                    <div className="bg-gray-50 p-3 rounded-md mb-3">
-                      <h4 className="text-sm font-medium text-gray-900 mb-2">Teacher Attachments:</h4>
-                      <div className="space-y-2">
-                        {hw.attachments.map((attachment: any) => (
-                          <div key={attachment.id} className="flex items-center gap-2 text-sm">
-                            <span className="text-blue-600">
-                              {attachment.fileType === "IMAGE" ? "🖼️" :
-                               attachment.fileType === "DOCUMENT" ? "📄" :
-                               attachment.fileType === "AUDIO" ? "🎵" :
-                               attachment.fileType === "VIDEO" ? "🎬" :
-                               attachment.fileType === "LINK" ? "🔗" : "📎"}
-                            </span>
-                            <a
-                              href={attachment.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 underline"
-                            >
-                              {attachment.originalName}
-                            </a>
-                            <span className="text-gray-500">
-                              ({(attachment.fileSize / 1024).toFixed(1)} KB)
-                            </span>
-                          </div>
-                        ))}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-3">
+                      <h4 className="text-sm font-medium text-blue-900 mb-3 flex items-center gap-2">
+                        📎 Teacher Attachments ({hw.attachments.length})
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {hw.attachments.map((attachment: any) => {
+                          // Construct proper file URL using the file serving API
+                          let fileUrl = attachment.fileUrl || attachment.url || attachment.filePath || '';
+                          if (fileUrl && !fileUrl.startsWith('http') && !fileUrl.startsWith('blob:') && !fileUrl.startsWith('data:') && !fileUrl.startsWith('/api/files/')) {
+                            const cleanPath = fileUrl.replace(/^\/+/, '').replace(/^uploads\//, '');
+                            fileUrl = `/api/files/${cleanPath}`;
+                          }
+                          
+                          return (
+                            <div key={attachment.id} className="flex items-center gap-3 p-3 bg-white border border-blue-200 rounded-lg hover:shadow-md transition-shadow">
+                              <div className="text-2xl">
+                                {attachment.fileType === "IMAGE" ? "🖼️" :
+                                 attachment.fileType === "DOCUMENT" ? "📄" :
+                                 attachment.fileType === "AUDIO" ? "🎵" :
+                                 attachment.fileType === "VIDEO" ? "🎬" :
+                                 attachment.fileType === "LINK" ? "🔗" : "📎"}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {attachment.originalName || attachment.fileName}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {attachment.fileType || 'File'} • {(attachment.fileSize / 1024).toFixed(1)} KB
+                                </p>
+                              </div>
+                              <div className="flex gap-1">
+                                <a
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                                  title="View file"
+                                >
+                                  👁️
+                                </a>
+                                <a
+                                  href={fileUrl}
+                                  download={attachment.originalName || attachment.fileName}
+                                  className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                                  title="Download file"
+                                >
+                                  📥
+                                </a>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -280,23 +437,12 @@ const StudentHomeworkList = ({
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  {(hw.submissionStatus === "PENDING" || (hw.submission && hw.submission.status !== "GRADED")) && (
-                    <button
-                      onClick={() => onHomeworkSelect(hw.id)}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm"
-                    >
-                      {hw.submission ? "Update Submission" : "Submit Work"}
-                    </button>
-                  )}
-                  
-                  {hw.submissionStatus === "COMPLETED" || hw.submissionStatus === "LATE" ? (
-                    <button
-                      onClick={() => onHomeworkSelect(hw.id)}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
-                    >
-                      View Submission
-                    </button>
-                  ) : null}
+                  <button
+                    onClick={() => onHomeworkSelect(hw.id)}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 hover:shadow-md text-sm font-medium"
+                  >
+                    {hw.submission ? "✏️ Update Submission" : "📝 Submit Work"}
+                  </button>
                 </div>
               </div>
             </div>

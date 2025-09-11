@@ -13,7 +13,7 @@ interface ExamFormProps {
 }
 
 interface FilterData {
-  branches: { id: number; shortName: string }[];
+  branches: { id: number; shortName: string; district: string }[];
   academicYears: { id: number; name: string }[];
   classes: { id: number; name: string; branchId: number; academicYearId: number }[];
   subjects: { id: number; name: string }[];
@@ -41,6 +41,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
   const [formData, setFormData] = useState({
     name: data?.name || "",
     date: data?.date ? new Date(data.date).toISOString().split('T')[0] : "",
+    examDay: data?.examDay || "",
     startTime: data?.startTime || "",
     endTime: data?.endTime || "",
     roomNumber: data?.roomNumber || "",
@@ -54,6 +55,20 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
     teacherId: data?.teacherId || "",
   });
 
+  // Filtered teachers based on selected subject
+  const [filteredTeachers, setFilteredTeachers] = useState<FilterData['teachers']>([]);
+
+  // Day options
+  const dayOptions = [
+    { value: "Monday", label: "Monday" },
+    { value: "Tuesday", label: "Tuesday" },
+    { value: "Wednesday", label: "Wednesday" },
+    { value: "Thursday", label: "Thursday" },
+    { value: "Friday", label: "Friday" },
+    { value: "Saturday", label: "Saturday" },
+    { value: "Sunday", label: "Sunday" },
+  ];
+
   // Time options
   const timeSlots = [];
   for (let hour = 7; hour <= 18; hour++) {
@@ -65,16 +80,79 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
     }
   }
 
+  // Fetch data on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [branchesRes, academicYearsRes, subjectsRes, teachersRes] = await Promise.all([
+          fetch('/api/branches'),
+          fetch('/api/academic-years'),
+          fetch('/api/subjects'),
+          fetch('/api/teachers')
+        ]);
+
+        const [branchesData, academicYearsData, subjectsData, teachersData] = await Promise.all([
+          branchesRes.json(),
+          academicYearsRes.json(),
+          subjectsRes.json(),
+          teachersRes.json()
+        ]);
+
+        setFilterData({
+          branches: branchesData.branches || [],
+          academicYears: academicYearsData.academicYears || [],
+          classes: [],
+          subjects: subjectsData.subjects || [],
+          teachers: teachersData.teachers || [],
+        });
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Fetch classes when branch and academic year are selected
+  useEffect(() => {
+    if (formData.branchId && formData.academicYearId) {
+      const fetchClasses = async () => {
+        try {
+          const response = await fetch(`/api/classes?branchId=${formData.branchId}&academicYearId=${formData.academicYearId}`);
+          const data = await response.json();
+          setFilterData(prev => ({ ...prev, classes: data.classes || [] }));
+        } catch (error) {
+          console.error('Failed to fetch classes:', error);
+        }
+      };
+      fetchClasses();
+    }
+  }, [formData.branchId, formData.academicYearId]);
+
+  // Filter teachers based on selected subject
+  useEffect(() => {
+    if (formData.subjectId) {
+      const teachersForSubject = filterData.teachers.filter(teacher => 
+        teacher.subjects.some(subject => subject.id === parseInt(formData.subjectId))
+      );
+      setFilteredTeachers(teachersForSubject);
+    } else {
+      setFilteredTeachers(filterData.teachers);
+    }
+  }, [formData.subjectId, filterData.teachers]);
+
   const handleSubmit = (formDataObj: FormData) => {
     Object.entries(formData).forEach(([key, value]) => {
-      formDataObj.append(key, value.toString());
+      if (value !== "") {
+        formDataObj.append(key, value.toString());
+      }
     });
 
     if (type === "update" && data?.id) {
       formDataObj.append("id", data.id.toString());
     }
 
-    formAction(formDataObj);
+    formAction(formDataObj as any);
   };
 
   // Handle form submission
@@ -103,7 +181,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Exam Name *
+                  Exam Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -117,7 +195,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Exam Date *
+                  Exam Date <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
@@ -131,21 +209,26 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Room Number *
+                  Exam Day <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={formData.roomNumber}
-                  onChange={(e) => setFormData(prev => ({ ...prev, roomNumber: e.target.value }))}
+                <select
+                  value={formData.examDay}
+                  onChange={(e) => setFormData(prev => ({ ...prev, examDay: e.target.value }))}
                   className="w-full p-2 border border-gray-300 rounded-md"
-                  placeholder="e.g., Room 101"
                   required
-                />
+                >
+                  <option value="">Select Day</option>
+                  {dayOptions.map((day) => (
+                    <option key={day.value} value={day.value}>
+                      {day.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Start Time *
+                  Start Time <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.startTime}
@@ -164,7 +247,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  End Time *
+                  End Time <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.endTime}
@@ -185,7 +268,21 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Marks *
+                  Room Number/Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.roomNumber}
+                  onChange={(e) => setFormData(prev => ({ ...prev, roomNumber: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  placeholder="e.g., Room 101 or Conference Hall"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Marks <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -200,7 +297,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Passing Marks *
+                  Passing Marks <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -211,6 +308,105 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
                   max={formData.fullMarks}
                   required
                 />
+              </div>
+            </div>
+
+            {/* Academic Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Branch <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.branchId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, branchId: e.target.value, academicYearId: "", classId: "" }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  required
+                >
+                  <option value="">Select Branch</option>
+                  {filterData.branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.shortName} - {branch.district}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Academic Year <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.academicYearId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, academicYearId: e.target.value, classId: "" }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  disabled={!formData.branchId}
+                  required
+                >
+                  <option value="">Select Academic Year</option>
+                  {filterData.academicYears.map((year) => (
+                    <option key={year.id} value={year.id}>
+                      {year.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Class <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.classId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, classId: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  disabled={!formData.academicYearId}
+                  required
+                >
+                  <option value="">Select Class</option>
+                  {filterData.classes.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Subject
+                </label>
+                <select
+                  value={formData.subjectId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, subjectId: e.target.value, teacherId: "" }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">Select Subject (Optional)</option>
+                  {filterData.subjects.map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Teacher
+                </label>
+                <select
+                  value={formData.teacherId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, teacherId: e.target.value }))}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  disabled={!formData.subjectId}
+                >
+                  <option value="">Select Teacher (Optional)</option>
+                  {filteredTeachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.firstName} {teacher.lastName} ({teacher.teacherId})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 

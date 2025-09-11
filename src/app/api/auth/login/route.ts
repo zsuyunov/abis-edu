@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     // Check Student
     if (!user) {
-      const student = await prisma.student.findUnique({ where: { phone } });
+      const student = await prisma.student.findFirst({ where: { phone } });
       if (student) {
         user = student;
         userRole = "student";

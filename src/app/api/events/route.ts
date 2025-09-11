@@ -186,8 +186,15 @@ async function createParticipationEntries(eventId: number, targeting: any) {
           const branchStudents = await prisma.student.findMany({ 
             where: { status: "ACTIVE", branchId: { in: targeting.branchIds } } 
           });
-          const branchTeachers = await prisma.teacher.findMany({ 
-            where: { status: "ACTIVE", branchId: { in: targeting.branchIds } } 
+          const branchTeachers = await prisma.teacher.findMany({
+            where: { 
+              status: "ACTIVE", 
+              TeacherAssignment: { 
+                some: { 
+                  branchId: { in: targeting.branchIds } 
+                } 
+              } 
+            }
           });
           
           participations.push(

@@ -1,391 +1,433 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
-import LessonTopicViewer from "./LessonTopicViewer";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Users, 
+  Calendar, 
+  Clock, 
+  BookOpen, 
+  User, 
+  MapPin,
+  TrendingUp,
+  Eye,
+  ChevronRight,
+  AlertCircle,
+  CheckCircle,
+  BarChart3
+} from "lucide-react";
 
-interface ParentMultiChildDashboardProps {
-  parentId: string;
-  filters: any;
-  timeFilter: "current" | "past";
-  dateRange: { start: Date; end: Date };
-  onParentDataUpdate: (data: any) => void;
+interface ChildInfo {
+  id: string;
+  firstName: string;
+  lastName: string;
+  classId: number;
+  className: string;
+  branchId: number;
+  branchName: string;
+  avatar?: string;
 }
 
-const ParentMultiChildDashboard = ({ 
-  parentId, 
-  filters, 
-  timeFilter,
-  dateRange,
-  onParentDataUpdate 
-}: ParentMultiChildDashboardProps) => {
-  const [allChildTimetables, setAllChildTimetables] = useState([]);
-  const [combinedTimetables, setCombinedTimetables] = useState([]);
+interface TimetableSlot {
+  id: number;
+  slotDate: string;
+  startTime: string;
+  endTime: string;
+  roomNumber: string;
+  buildingName?: string;
+  status: string;
+  subject: { name: string; id: number };
+  teacher: { firstName: string; lastName: string; id: string };
+  topics: TimetableSlotTopic[];
+}
+
+interface TimetableSlotTopic {
+  id: number;
+  topicTitle: string;
+  topicDescription?: string;
+  attachments: string[];
+  status: string;
+  progressPercentage: number;
+  completedAt?: string;
+  createdAt: string;
+}
+
+interface ParentMultiChildDashboardProps {
+  children: ChildInfo[];
+  academicYearId: number;
+  isCurrent: boolean;
+}
+
+const ParentMultiChildDashboard = ({ children, academicYearId, isCurrent }: ParentMultiChildDashboardProps) => {
+  const [allSlots, setAllSlots] = useState<{ [childId: string]: TimetableSlot[] }>({});
   const [loading, setLoading] = useState(true);
-  const [selectedTimetable, setSelectedTimetable] = useState(null);
-  const [showTopicViewer, setShowTopicViewer] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedChild, setSelectedChild] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchMultiChildData();
-  }, [parentId, filters, dateRange, timeFilter]);
+    fetchAllChildrenSlots();
+  }, [children, academicYearId]);
 
-  const fetchMultiChildData = async () => {
+  const fetchAllChildrenSlots = async () => {
     try {
-      setLoading(true);
-      const queryParams = new URLSearchParams({
-        parentId,
-        ...filters,
-        startDate: dateRange.start.toISOString().split('T')[0],
-        endDate: dateRange.end.toISOString().split('T')[0],
-        view: "multi-child",
-        timeFilter,
-      });
-
-      const response = await fetch(`/api/parent-timetables?${queryParams}`);
-      if (response.ok) {
+      const slotsData: { [childId: string]: TimetableSlot[] } = {};
+      
+      for (const child of children) {
+        const response = await fetch(`/api/parent/timetable-slots?childId=${child.id}&academicYearId=${academicYearId}`, {
+          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+        });
         const data = await response.json();
-        setAllChildTimetables(data.allChildTimetables || []);
-        setCombinedTimetables(data.timetables || []);
-        onParentDataUpdate(data);
+        slotsData[child.id] = data;
+      }
+      
+      setAllSlots(slotsData);
+      if (children.length > 0) {
+        setSelectedChild(children[0].id);
       }
     } catch (error) {
-      console.error("Error fetching multi-child data:", error);
+      console.error("Failed to fetch children slots:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatTime = (dateTime: string) => {
-    return new Date(dateTime).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+  const getTodaySlots = (childId: string) => {
+    const today = new Date();
+    return allSlots[childId]?.filter(slot => {
+      const slotDate = new Date(slot.slotDate);
+      return slotDate.toDateString() === today.toDateString();
+    }) || [];
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const isToday = (date: string) => {
-    const today = new Date().toDateString();
-    const timetableDate = new Date(date).toDateString();
-    return today === timetableDate;
-  };
-
-  const isPastClass = (timetable: any) => {
-    const classDateTime = new Date(timetable.fullDate + 'T' + new Date(timetable.endTime).toTimeString().split(' ')[0]);
-    return classDateTime < new Date();
-  };
-
-  const isUpcomingClass = (timetable: any) => {
-    const classDateTime = new Date(timetable.fullDate + 'T' + new Date(timetable.startTime).toTimeString().split(' ')[0]);
+  const getUpcomingSlots = (childId: string) => {
     const now = new Date();
-    const in2Hours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    return classDateTime >= now && classDateTime <= in2Hours;
+    return allSlots[childId]?.filter(slot => {
+      const slotDate = new Date(slot.slotDate);
+      const slotTime = new Date(slot.startTime);
+      const combinedDateTime = new Date(slotDate);
+      combinedDateTime.setHours(slotTime.getHours(), slotTime.getMinutes(), 0, 0);
+      
+      return combinedDateTime > now;
+    }).slice(0, 3) || [];
   };
 
-  const getChildColor = (childId: string) => {
-    const colors = [
-      "bg-blue-500", "bg-green-500", "bg-purple-500", "bg-orange-500",
-      "bg-pink-500", "bg-indigo-500", "bg-teal-500", "bg-red-500"
-    ];
-    const index = childId.length % colors.length;
-    return colors[index];
-  };
-
-  const groupTimetablesByDate = () => {
-    const grouped: Record<string, any[]> = {};
+  const getThisWeekSlots = (childId: string) => {
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
     
-    combinedTimetables.forEach((timetable: any) => {
-      const date = timetable.fullDate.split('T')[0];
-      if (!grouped[date]) {
-        grouped[date] = [];
-      }
-      grouped[date].push(timetable);
-    });
+    return allSlots[childId]?.filter(slot => {
+      const slotDate = new Date(slot.slotDate);
+      return slotDate >= weekStart && slotDate <= weekEnd;
+    }) || [];
+  };
 
-    // Sort dates and timetables within each date
-    Object.keys(grouped).forEach(date => {
-      grouped[date].sort((a, b) => 
-        new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-      );
-    });
+  const getTotalTopics = (childId: string) => {
+    return allSlots[childId]?.reduce((total, slot) => total + slot.topics.length, 0) || 0;
+  };
 
-    return Object.entries(grouped).sort(([a], [b]) => 
-      new Date(a).getTime() - new Date(b).getTime()
+  const getCompletedTopics = (childId: string) => {
+    return allSlots[childId]?.reduce((total, slot) => 
+      total + slot.topics.filter(topic => topic.status === "COMPLETED").length, 0) || 0;
+  };
+
+  const getProgressPercentage = (childId: string) => {
+    const total = getTotalTopics(childId);
+    const completed = getCompletedTopics(childId);
+    return total > 0 ? Math.round((completed / total) * 100) : 0;
+  };
+
+  const getCombinedTodaySlots = () => {
+    const combined: Array<{ child: ChildInfo; slot: TimetableSlot }> = [];
+    
+    children.forEach(child => {
+      const todaySlots = getTodaySlots(child.id);
+      todaySlots.forEach(slot => {
+        combined.push({ child, slot });
+      });
+    });
+    
+    return combined.sort((a, b) => 
+      new Date(a.slot.startTime).getTime() - new Date(b.slot.startTime).getTime()
     );
   };
 
-  const getChildSummary = () => {
-    return allChildTimetables.map(({ child, timetables }) => {
-      const todayTimetables = timetables.filter((t: any) => isToday(t.fullDate));
-      const upcomingTimetables = timetables.filter((t: any) => isUpcomingClass(t));
-      const totalTopics = timetables.reduce((sum: number, t: any) => sum + t.topics.length, 0);
-      const completedTopics = timetables.reduce((sum: number, t: any) => 
-        sum + t.topics.filter((topic: any) => topic.status === "COMPLETED").length, 0
-      );
-
-      return {
-        child,
-        totalClasses: timetables.length,
-        todayClasses: todayTimetables.length,
-        upcomingClasses: upcomingTimetables.length,
-        totalTopics,
-        completedTopics,
-        completionRate: totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0,
-        nextClass: todayTimetables.find((t: any) => new Date(t.startTime) > new Date()),
-      };
+  const getCombinedUpcomingSlots = () => {
+    const combined: Array<{ child: ChildInfo; slot: TimetableSlot }> = [];
+    
+    children.forEach(child => {
+      const upcomingSlots = getUpcomingSlots(child.id);
+      upcomingSlots.forEach(slot => {
+        combined.push({ child, slot });
+      });
     });
+    
+    return combined.sort((a, b) => 
+      new Date(a.slot.startTime).getTime() - new Date(b.slot.startTime).getTime()
+    );
   };
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-gray-200 h-32 rounded-lg animate-pulse"></div>
-          ))}
-        </div>
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="bg-gray-200 h-16 rounded-lg animate-pulse"></div>
-          ))}
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
-  const groupedTimetables = groupTimetablesByDate();
-  const childSummaries = getChildSummary();
+  const combinedTodaySlots = getCombinedTodaySlots();
+  const combinedUpcomingSlots = getCombinedUpcomingSlots();
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
-      <div className="text-center">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">
-          This Week's Overview - All Children
-        </h2>
-        <p className="text-gray-600">
-          Combined schedule for all your children from {formatDate(dateRange.start.toISOString())} to {formatDate(dateRange.end.toISOString())}
-        </p>
-        {timeFilter === "past" && (
-          <span className="inline-block mt-2 text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
-            📚 Archived Data
-          </span>
-        )}
-      </div>
-
-      {/* CHILDREN SUMMARY CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {childSummaries.map(({ child, totalClasses, todayClasses, upcomingClasses, totalTopics, completedTopics, completionRate, nextClass }) => (
-          <div key={child.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`w-12 h-12 ${getChildColor(child.id)} rounded-full flex items-center justify-center text-white font-bold text-lg`}>
-                {child.firstName.charAt(0)}
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">
-                  {child.firstName} {child.lastName}
-                </h3>
-                <p className="text-sm text-gray-600">
-                  {child.class.name} • {child.studentId}
-                </p>
-              </div>
+      {/* Header }
+      <Card className="shadow-2xl border-0 bg-gradient-to-r from-purple-500 to-pink-600 text-white">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Users className="w-6 h-6" />
+                Family Overview
+              </h2>
+              <p className="text-purple-100 mt-1">
+                Combined view of all your children's timetables
+              </p>
             </div>
-
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="text-center p-2 bg-blue-50 rounded">
-                <div className="font-bold text-blue-600">{totalClasses}</div>
-                <div className="text-gray-600">Total Classes</div>
-              </div>
-              <div className="text-center p-2 bg-green-50 rounded">
-                <div className="font-bold text-green-600">{todayClasses}</div>
-                <div className="text-gray-600">Today</div>
-              </div>
-              <div className="text-center p-2 bg-purple-50 rounded">
-                <div className="font-bold text-purple-600">{totalTopics}</div>
-                <div className="text-gray-600">Topics</div>
-              </div>
-              <div className="text-center p-2 bg-orange-50 rounded">
-                <div className="font-bold text-orange-600">{completionRate}%</div>
-                <div className="text-gray-600">Complete</div>
-              </div>
+            <div className="text-right">
+              <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
+                {children.length} child{children.length > 1 ? 'ren' : ''}
+              </Badge>
             </div>
-
-            {nextClass && timeFilter === "current" && (
-              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                <div className="text-sm font-medium text-yellow-800">Next Class:</div>
-                <div className="text-sm text-yellow-700">
-                  {nextClass.subject.name} at {formatTime(nextClass.startTime)}
-                </div>
-              </div>
-            )}
-
-            {upcomingClasses > 0 && timeFilter === "current" && (
-              <div className="mt-2 text-center">
-                <span className="inline-block text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                  {upcomingClasses} upcoming class{upcomingClasses > 1 ? 'es' : ''}
-                </span>
-              </div>
-            )}
           </div>
-        ))}
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* COMBINED WEEKLY SCHEDULE */}
-      <div className="bg-white border border-gray-200 rounded-lg">
-        <div className="p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Combined Weekly Schedule</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            All classes for all children sorted by date and time
-          </p>
-        </div>
-
-        {groupedTimetables.length === 0 ? (
-          <div className="text-center py-12">
-            <Image
-              src="/calendar.png"
-              alt="No classes"
-              width={64}
-              height={64}
-              className="mx-auto mb-4 opacity-50"
-            />
-            <h4 className="text-lg font-medium text-gray-900 mb-2">No Classes This Week</h4>
-            <p className="text-gray-600">
-              {timeFilter === "current" ? "Enjoy the free time!" : "No archived classes for this period."}
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200">
-            {groupedTimetables.map(([date, dayTimetables]) => (
-              <div key={date} className="p-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <h4 className={`font-semibold ${isToday(date) && timeFilter === "current" ? "text-blue-600" : "text-gray-900"}`}>
-                    {formatDate(date)}
-                  </h4>
-                  {isToday(date) && timeFilter === "current" && (
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                      Today
-                    </span>
-                  )}
-                  <span className="text-sm text-gray-500">
-                    {dayTimetables.length} class{dayTimetables.length > 1 ? 'es' : ''}
-                  </span>
+      {/* Combined Today's Overview }
+      <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Calendar className="w-5 h-5 text-blue-600" />
+            Today's Family Schedule
+          </CardTitle>
+          <CardDescription>
+            All children's classes scheduled for today
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {combinedTodaySlots.length > 0 ? (
+            <div className="space-y-4">
+              {combinedTodaySlots.map(({ child, slot }) => (
+                <div
+                  key={`${child.id}-${slot.id}`}
+                  className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex items-center gap-4">
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={child.avatar} />
+                      <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">
+                        {child.firstName[0]}{child.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold text-sm text-gray-900">
+                        {child.firstName} {child.lastName} • {child.className}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {new Date(slot.startTime).toLocaleTimeString()} - {new Date(slot.endTime).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-sm text-blue-700">{slot.subject.name}</p>
+                    <p className="text-xs text-gray-600">{slot.roomNumber}</p>
+                    {slot.topics.length > 0 && (
+                      <Badge variant="outline" className="text-xs bg-blue-100 text-blue-700 border-blue-300 mt-1">
+                        {slot.topics.length} topic{slot.topics.length > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 text-sm">No classes scheduled for today</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {dayTimetables.map((timetable: any) => (
-                    <div
-                      key={timetable.id}
-                      onClick={() => {
-                        setSelectedTimetable(timetable);
-                        setShowTopicViewer(true);
-                      }}
-                      className={`p-3 rounded-md border cursor-pointer transition-colors ${
-                        timeFilter === "current" && isUpcomingClass(timetable)
-                          ? "bg-blue-50 border-blue-300 hover:bg-blue-100"
-                          : timeFilter === "current" && isPastClass(timetable)
-                          ? "bg-gray-50 border-gray-200 opacity-75 hover:bg-gray-100"
-                          : "bg-white border-gray-200 hover:bg-gray-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className={`w-8 h-8 ${getChildColor(timetable.childInfo.id)} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                          {timetable.childInfo.firstName.charAt(0)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">
-                            {timetable.subject.name}
-                          </div>
-                          <div className="text-xs text-gray-600">
-                            {timetable.childInfo.firstName} • {timetable.childInfo.class.name}
-                          </div>
-                        </div>
-                        {timeFilter === "current" && isUpcomingClass(timetable) && (
-                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                            Soon
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                        <div className="flex items-center gap-1">
-                          <Image src="/lesson.png" alt="Time" width={12} height={12} />
-                          {formatTime(timetable.startTime)} - {formatTime(timetable.endTime)}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Image src="/teacher.png" alt="Teacher" width={12} height={12} />
-                          {timetable.teacher.firstName} {timetable.teacher.lastName}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Image src="/singleClass.png" alt="Room" width={12} height={12} />
-                          Room {timetable.roomNumber}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Image src="/create.png" alt="Topics" width={12} height={12} />
-                          {timetable.topics.length > 0 
-                            ? `${timetable.topics.length} topic${timetable.topics.length > 1 ? 's' : ''}`
-                            : "No topics"
-                          }
-                        </div>
+      {/* Individual Child Progress }
+      <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <BarChart3 className="w-5 h-5 text-green-600" />
+            Individual Progress
+          </CardTitle>
+          <CardDescription>
+            Progress overview for each child
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {children.map((child) => {
+              const progress = getProgressPercentage(child.id);
+              const totalTopics = getTotalTopics(child.id);
+              const completedTopics = getCompletedTopics(child.id);
+              const thisWeekSlots = getThisWeekSlots(child.id);
+              
+              return (
+                <Card key={child.id} className="shadow-md border-0 bg-gradient-to-br from-white to-gray-50 hover:shadow-lg transition-all duration-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={child.avatar} />
+                        <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">
+                          {child.firstName[0]}{child.lastName[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{child.firstName} {child.lastName}</h3>
+                        <p className="text-sm text-gray-600">{child.className}</p>
                       </div>
                     </div>
-                  ))}
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Progress</span>
+                        <span className="text-sm font-bold text-blue-600">{progress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="text-center p-2 bg-green-50 rounded">
+                          <p className="font-semibold text-green-600">{completedTopics}</p>
+                          <p className="text-gray-600">Completed</p>
+                        </div>
+                        <div className="text-center p-2 bg-blue-50 rounded">
+                          <p className="font-semibold text-blue-600">{totalTopics}</p>
+                          <p className="text-gray-600">Total</p>
+                        </div>
+                      </div>
+                      
+                      <div className="text-center p-2 bg-gray-50 rounded">
+                        <p className="text-xs text-gray-600">
+                          {thisWeekSlots.length} class{thisWeekSlots.length !== 1 ? 'es' : ''} this week
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Upcoming Classes }
+      <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Clock className="w-5 h-5 text-orange-600" />
+            Upcoming Classes
+          </CardTitle>
+          <CardDescription>
+            Next classes for all children
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {combinedUpcomingSlots.length > 0 ? (
+            <div className="space-y-3">
+              {combinedUpcomingSlots.map(({ child, slot }) => (
+                <div
+                  key={`${child.id}-${slot.id}`}
+                  className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl border border-orange-200 hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex items-center gap-4">
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={child.avatar} />
+                      <AvatarFallback className="bg-orange-100 text-orange-600 font-semibold">
+                        {child.firstName[0]}{child.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold text-sm text-gray-900">
+                        {child.firstName} {child.lastName} • {slot.subject.name}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {new Date(slot.slotDate).toLocaleDateString()} at {new Date(slot.startTime).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">{slot.roomNumber}</p>
+                    <p className="text-xs text-gray-500">{slot.teacher.firstName} {slot.teacher.lastName}</p>
+                  </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 text-sm">No upcoming classes</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Quick Actions }
+      <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Eye className="w-5 h-5 text-purple-600" />
+            Quick Actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {children.map((child) => (
+              <Button
+                key={child.id}
+                variant="outline"
+                className="h-auto p-4 justify-start hover:bg-blue-50 hover:border-blue-300 transition-all duration-200"
+                onClick={() => setSelectedChild(child.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={child.avatar} />
+                    <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold text-xs">
+                      {child.firstName[0]}{child.lastName[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="text-left">
+                    <p className="font-medium text-sm">{child.firstName} {child.lastName}</p>
+                    <p className="text-xs text-gray-600">View detailed timetable</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 ml-auto text-gray-400" />
+                </div>
+              </Button>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* WEEKLY SUMMARY */}
-      {combinedTimetables.length > 0 && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
-          <h3 className="text-lg font-semibold text-blue-900 mb-4">Weekly Summary</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-3 bg-white rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{combinedTimetables.length}</div>
-              <div className="text-sm text-gray-600">Total Classes</div>
-            </div>
-            <div className="text-center p-3 bg-white rounded-lg">
-              <div className="text-2xl font-bold text-green-600">
-                {combinedTimetables.filter((t: any) => t.topics.length > 0).length}
-              </div>
-              <div className="text-sm text-gray-600">With Topics</div>
-            </div>
-            <div className="text-center p-3 bg-white rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">
-                {combinedTimetables.reduce((sum: number, t: any) => sum + t.topics.length, 0)}
-              </div>
-              <div className="text-sm text-gray-600">Total Topics</div>
-            </div>
-            <div className="text-center p-3 bg-white rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">{allChildTimetables.length}</div>
-              <div className="text-sm text-gray-600">Children</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* LESSON TOPIC VIEWER MODAL */}
-      {showTopicViewer && selectedTimetable && (
-        <LessonTopicViewer
-          timetable={selectedTimetable}
-          isReadOnly={true} // Parents always have read-only access
-          onClose={() => {
-            setShowTopicViewer(false);
-            setSelectedTimetable(null);
-          }}
-        />
-      )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
 
 export default ParentMultiChildDashboard;
+
+*/

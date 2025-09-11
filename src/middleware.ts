@@ -7,7 +7,8 @@ const publicRoutes = ["/login", "/admin-direct", "/logout", "/force-logout", "/t
 const roleRoutes = {
   admin: "/admin",
   teacher: "/teacher",
-  student: "/student", 
+  student: "/student"
+  /*
   parent: "/parent",
   main_director: "/main-director",
   support_director: "/support-director",
@@ -17,6 +18,7 @@ const roleRoutes = {
   support_admission: "/support-admission",
   doctor: "/doctor",
   chief: "/chief"
+  */
 };
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
@@ -93,6 +95,13 @@ export async function middleware(request: NextRequest) {
         if ((user as any).branchId !== undefined && (user as any).branchId !== null) {
           response.headers.set("x-branch-id", String((user as any).branchId));
         }
+        // Set cookie for client-side access
+        response.cookies.set('userId', user.id, {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 60 * 60 * 24 * 7 // 7 days
+        });
         return response;
       }
     }
@@ -155,6 +164,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/student") && user.role !== "student") {
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
+  /*
   if (pathname.startsWith("/parent") && user.role !== "parent") {
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
@@ -182,6 +192,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/chief") && user.role !== "chief") {
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
+  */
 
   // Add user info to request headers for use in pages
   const response = NextResponse.next();
@@ -193,7 +204,15 @@ export async function middleware(request: NextRequest) {
   if ((user as any).branchId !== undefined && (user as any).branchId !== null) {
     response.headers.set("x-branch-id", String((user as any).branchId));
   }
-  
+
+  // Set cookie for client-side access
+  response.cookies.set('userId', user.id, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7 // 7 days
+  });
+
   return response;
 }
 

@@ -1,3 +1,4 @@
+/*
 'use client';
 
 import React from 'react';
@@ -120,7 +121,7 @@ const ParentHomeworkOverview: React.FC<ParentHomeworkOverviewProps> = ({ homewor
         <CardTitle className="text-xl">Homework Overview</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Key Statistics */}
+        {/* Key Statistics }
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center p-4 border rounded-md bg-blue-50">
             <div className="flex items-center justify-center mb-2">
@@ -152,7 +153,7 @@ const ParentHomeworkOverview: React.FC<ParentHomeworkOverviewProps> = ({ homewor
           </div>
         </div>
 
-        {/* Progress Bars */}
+        {/* Progress Bars }
         <div className="space-y-4">
           <div>
             <div className="flex justify-between items-center mb-2">
@@ -171,7 +172,7 @@ const ParentHomeworkOverview: React.FC<ParentHomeworkOverviewProps> = ({ homewor
           </div>
         </div>
 
-        {/* Class Comparison */}
+        {/* Class Comparison }
         {classStats && (
           <div className="p-4 border rounded-md bg-gray-50">
             <h3 className="font-semibold mb-3">Class Performance Comparison</h3>
@@ -199,7 +200,7 @@ const ParentHomeworkOverview: React.FC<ParentHomeworkOverviewProps> = ({ homewor
           </div>
         )}
 
-        {/* Average Grade */}
+        {/* Average Grade }
         {averageGrade !== null && (
           <div className="p-4 border rounded-md bg-purple-50">
             <h3 className="font-semibold mb-2">Academic Performance</h3>
@@ -216,7 +217,7 @@ const ParentHomeworkOverview: React.FC<ParentHomeworkOverviewProps> = ({ homewor
           </div>
         )}
 
-        {/* Subject-wise Breakdown */}
+        {/* Subject-wise Breakdown }
         <div>
           <h3 className="font-semibold mb-3">Subject-wise Progress</h3>
           <div className="space-y-3">
@@ -240,7 +241,7 @@ const ParentHomeworkOverview: React.FC<ParentHomeworkOverviewProps> = ({ homewor
           </div>
         </div>
 
-        {/* Pending Assignments Alert */}
+        {/* Pending Assignments Alert }
         {pendingCount > 0 && (
           <div className="p-4 border border-orange-200 rounded-md bg-orange-50">
             <p className="text-sm text-orange-700">
@@ -255,3 +256,6 @@ const ParentHomeworkOverview: React.FC<ParentHomeworkOverviewProps> = ({ homewor
 };
 
 export default ParentHomeworkOverview;
+
+
+*/

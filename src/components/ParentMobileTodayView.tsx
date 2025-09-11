@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -197,7 +198,7 @@ const ParentMobileTodayView = ({
           </div>
         </div>
 
-        {/* Topics Summary */}
+        {/* Topics Summary }
         <div className="border-t border-gray-100 pt-3">
           {timetable.topics && timetable.topics.length > 0 ? (
             <div className="flex items-center justify-between">
@@ -224,7 +225,7 @@ const ParentMobileTodayView = ({
           )}
         </div>
 
-        {/* Quick Actions */}
+        {/* Quick Actions }
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
           <div className="text-xs text-gray-500">
             Tap to view lesson details
@@ -254,7 +255,7 @@ const ParentMobileTodayView = ({
 
   return (
     <div className="space-y-6">
-      {/* DATE NAVIGATION */}
+      {/* DATE NAVIGATION }
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-4">
           <button
@@ -294,7 +295,7 @@ const ParentMobileTodayView = ({
         )}
       </div>
 
-      {/* CHILD INFO */}
+      {/* CHILD INFO }
       {selectedChild && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center gap-3">
@@ -313,7 +314,7 @@ const ParentMobileTodayView = ({
         </div>
       )}
 
-      {/* CURRENT/NEXT CLASS STATUS */}
+      {/* CURRENT/NEXT CLASS STATUS }
       {timeFilter === "current" && isToday(selectedDate) && (
         <div className="space-y-3">
           {currentClass && (
@@ -370,7 +371,7 @@ const ParentMobileTodayView = ({
         </div>
       )}
 
-      {/* TODAY'S SCHEDULE */}
+      {/* TODAY'S SCHEDULE }
       <div className="bg-white rounded-lg border border-gray-200">
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -412,7 +413,7 @@ const ParentMobileTodayView = ({
         )}
       </div>
 
-      {/* DAY SUMMARY */}
+      {/* DAY SUMMARY }
       {timetables.length > 0 && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
           <h4 className="text-sm font-medium text-blue-900 mb-3 flex items-center gap-2">
@@ -448,7 +449,7 @@ const ParentMobileTodayView = ({
         </div>
       )}
 
-      {/* PARENT TIP */}
+      {/* PARENT TIP }
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <h4 className="text-sm font-medium text-yellow-900 mb-2 flex items-center gap-2">
           <Image src="/parent.png" alt="Tip" width={16} height={16} />
@@ -467,7 +468,7 @@ const ParentMobileTodayView = ({
         </p>
       </div>
 
-      {/* LESSON TOPIC VIEWER MODAL */}
+      {/* LESSON TOPIC VIEWER MODAL }
       {showTopicViewer && selectedTimetable && (
         <LessonTopicViewer
           timetable={selectedTimetable}
@@ -483,3 +484,7 @@ const ParentMobileTodayView = ({
 };
 
 export default ParentMobileTodayView;
+
+
+
+*/

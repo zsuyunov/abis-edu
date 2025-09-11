@@ -1,3 +1,4 @@
+
 /* eslint-disable no-console */
 import { PrismaClient, UserGender, UserPosition, UserStatus, ParentStatus, StudentStatus, TeacherStatus } from '@prisma/client';
 import { AuthService } from '../src/lib/auth';
@@ -155,7 +156,7 @@ async function upsertStudent(phone: string, password: string, branchId: number) 
 
   const hashed = await AuthService.hashPassword(password);
   const student = await prisma.student.upsert({
-    where: { phone },
+    where: { studentId: 'S-001' },
     update: { password: hashed, branchId, classId: klass.id },
     create: {
       id: 'student-1',
@@ -210,6 +211,56 @@ async function main() {
   await upsertTeacher('+998901234507', '123456', branch.id);
   await upsertParent('+998901234508', '123456', branch.id);
   await upsertStudent('+998901234509', '123456', branch.id);
+
+  // Create additional classes and students for testing
+  const academicYear = await prisma.academicYear.findFirst();
+  if (academicYear) {
+    // Create class 2 (9-A)
+    const class2 = await prisma.class.upsert({
+      where: { id: 2 },
+      update: {},
+      create: {
+        id: 2,
+        name: '9-A',
+        capacity: 25,
+        branchId: branch.id,
+        academicYearId: academicYear.id,
+        language: 'ENGLISH',
+        educationType: 'SECONDARY',
+        status: 'ACTIVE',
+      },
+    });
+
+    // Create students for class 2
+    const studentsData = [
+      { id: 'student-2', firstName: 'Alice', lastName: 'Johnson', studentId: 'S-002', phone: '+998901234510' },
+      { id: 'student-3', firstName: 'Bob', lastName: 'Smith', studentId: 'S-003', phone: '+998901234511' },
+      { id: 'student-4', firstName: 'Carol', lastName: 'Davis', studentId: 'S-004', phone: '+998901234512' },
+      { id: 'student-5', firstName: 'David', lastName: 'Wilson', studentId: 'S-005', phone: '+998901234513' },
+      { id: 'student-6', firstName: 'Emma', lastName: 'Brown', studentId: 'S-006', phone: '+998901234514' },
+    ];
+
+    for (const studentData of studentsData) {
+      const hashed = await AuthService.hashPassword('123456');
+      await prisma.student.upsert({
+        where: { studentId: studentData.studentId },
+        update: { classId: class2.id },
+        create: {
+          id: studentData.id,
+          firstName: studentData.firstName,
+          lastName: studentData.lastName,
+          dateOfBirth: new Date('2010-01-01'),
+          phone: studentData.phone,
+          studentId: studentData.studentId,
+          password: hashed,
+          gender: 'MALE',
+          status: 'ACTIVE',
+          branchId: branch.id,
+          classId: class2.id,
+        },
+      });
+    }
+  }
 
   console.log('Seed completed.');
 }

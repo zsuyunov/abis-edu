@@ -1,3 +1,4 @@
+/*
 "use client";
 
 interface MDPaginationProps {
@@ -63,3 +64,5 @@ const MDPagination = ({ currentPage, totalPages, onPageChange }: MDPaginationPro
 };
 
 export default MDPagination;
+
+*/

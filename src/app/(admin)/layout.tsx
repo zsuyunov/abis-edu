@@ -24,8 +24,8 @@ export default function AdminLayout({
                 href="/admin"
                 className="flex items-center justify-center lg:justify-start gap-2"
               >
-                <Image src="/logo.png" alt="logo" width={32} height={32} />
-                <span className="hidden lg:block font-bold text-blue-600">SchooLama Admin</span>
+                <Image src="/logo.png" alt="logo" width={32} height={32} className="rounded-lg" />
+                <span className="hidden lg:block font-bold text-blue-600">ABIS Admin</span>
               </Link>
               <AdminMenu />
             </div>

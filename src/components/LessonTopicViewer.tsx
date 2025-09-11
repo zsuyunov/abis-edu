@@ -1,7 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
+import { 
+  BookOpen, 
+  Clock, 
+  User, 
+  MapPin, 
+  Calendar, 
+  CheckCircle, 
+  AlertCircle, 
+  FileText, 
+  X, 
+  Eye, 
+  Download,
+  Sparkles,
+  TrendingUp,
+  Award,
+  Target
+} from "lucide-react";
 
 interface LessonTopicViewerProps {
   timetable: any;
@@ -65,15 +81,19 @@ const LessonTopicViewer = ({ timetable, isReadOnly, onClose }: LessonTopicViewer
     if (!attachments || attachments.length === 0) return null;
 
     return (
-      <div className="mt-3">
-        <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
+      <div className="mt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <FileText className="w-4 h-4 text-blue-500" />
+          <h5 className="text-sm font-semibold text-gray-700">Attachments:</h5>
+        </div>
         <div className="space-y-2">
           {attachments.map((attachment, index) => (
-            <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
-              <Image src="/upload.png" alt="Attachment" width={16} height={16} />
-              <span className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer">
+            <div key={index} className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 hover:shadow-md transition-all duration-200">
+              <FileText className="w-4 h-4 text-blue-500" />
+              <span className="text-sm text-blue-700 hover:text-blue-900 cursor-pointer font-medium flex-1">
                 {attachment.split('/').pop() || `Attachment ${index + 1}`}
               </span>
+              <Download className="w-4 h-4 text-blue-500 hover:text-blue-700 cursor-pointer" />
             </div>
           ))}
         </div>
@@ -94,63 +114,81 @@ const LessonTopicViewer = ({ timetable, isReadOnly, onClose }: LessonTopicViewer
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white/95 backdrop-blur-md border border-white/20 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* HEADER */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {timetable.subject.name} - Lesson Details
-              </h2>
-              <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                <span className="flex items-center gap-1">
-                  <Image src="/teacher.png" alt="Teacher" width={16} height={16} />
-                  {timetable.teacher.firstName} {timetable.teacher.lastName}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Image src="/class.png" alt="Class" width={16} height={16} />
-                  {timetable.class.name}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Image src="/singleClass.png" alt="Room" width={16} height={16} />
-                  Room {timetable.roomNumber}
-                </span>
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                <BookOpen className="w-6 h-6 text-white" />
               </div>
-              <div className="flex items-center gap-4 mt-2 text-sm">
-                <span className="flex items-center gap-1 text-gray-600">
-                  <Image src="/calendar.png" alt="Date" width={16} height={16} />
-                  {formatDate(timetable.fullDate)}
-                </span>
-                <span className="flex items-center gap-1 text-gray-600">
-                  <Image src="/lesson.png" alt="Time" width={16} height={16} />
-                  {formatTime(timetable.startTime)} - {formatTime(timetable.endTime)}
-                </span>
-                {isUpcomingLesson() && !isReadOnly && (
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                    Upcoming!
-                  </span>
-                )}
-                {isPastLesson() && (
-                  <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                    Past Lesson
-                  </span>
-                )}
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-700 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  {timetable.subject.name}
+                </h2>
+                <p className="text-blue-600 font-medium">Lesson Details & Topics</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-2"
+              className="p-2 bg-white/80 hover:bg-white rounded-xl text-gray-500 hover:text-gray-700 transition-all duration-200 shadow-md hover:shadow-lg"
             >
-              <Image src="/close.png" alt="Close" width={24} height={24} />
+              <X className="w-5 h-5" />
             </button>
+          </div>
+          
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="flex items-center gap-3 bg-white/60 rounded-xl p-3">
+              <User className="w-5 h-5 text-blue-500" />
+              <div>
+                <p className="text-xs text-gray-600">Teacher</p>
+                <p className="font-medium text-gray-900">{timetable.teacher.firstName} {timetable.teacher.lastName}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 bg-white/60 rounded-xl p-3">
+              <MapPin className="w-5 h-5 text-green-500" />
+              <div>
+                <p className="text-xs text-gray-600">Class & Room</p>
+                <p className="font-medium text-gray-900">{timetable.class.name} - Room {timetable.roomNumber}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 bg-white/60 rounded-xl p-3">
+              <Calendar className="w-5 h-5 text-purple-500" />
+              <div>
+                <p className="text-xs text-gray-600">Date</p>
+                <p className="font-medium text-gray-900">{formatDate(timetable.fullDate).split(',')[0]}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 bg-white/60 rounded-xl p-3">
+              <Clock className="w-5 h-5 text-orange-500" />
+              <div>
+                <p className="text-xs text-gray-600">Time</p>
+                <p className="font-medium text-gray-900">{formatTime(timetable.startTime)} - {formatTime(timetable.endTime)}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-4 flex flex-wrap gap-2">
+            {isUpcomingLesson() && !isReadOnly && (
+              <span className="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-medium rounded-full">
+                <Sparkles className="w-3 h-3" />
+                Upcoming!
+              </span>
+            )}
+            {isPastLesson() && (
+              <span className="flex items-center gap-1 px-3 py-1 bg-gray-200 text-gray-600 text-xs font-medium rounded-full">
+                <CheckCircle className="w-3 h-3" />
+                Past Lesson
+              </span>
+            )}
           </div>
 
           {isReadOnly && (
-            <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
-              <div className="flex items-center gap-2 text-orange-800">
-                <Image src="/view.png" alt="Read Only" width={16} height={16} />
-                <span className="text-sm font-medium">Read-only archived timetable</span>
+            <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl">
+              <div className="flex items-center gap-3 text-orange-800">
+                <Eye className="w-5 h-5" />
+                <span className="font-medium">Read-only archived timetable</span>
               </div>
             </div>
           )}
@@ -169,16 +207,12 @@ const LessonTopicViewer = ({ timetable, isReadOnly, onClose }: LessonTopicViewer
               ))}
             </div>
           ) : topics.length === 0 ? (
-            <div className="text-center py-12">
-              <Image
-                src="/nodata.png"
-                alt="No topics"
-                width={64}
-                height={64}
-                className="mx-auto mb-4 opacity-50"
-              />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Topics Yet</h3>
-              <p className="text-gray-600 max-w-md mx-auto">
+            <div className="text-center py-16">
+              <div className="p-6 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+                <BookOpen className="w-12 h-12 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">No Topics Yet</h3>
+              <p className="text-gray-600 max-w-md mx-auto leading-relaxed">
                 {isReadOnly 
                   ? "No topics were added for this lesson."
                   : "Your teacher hasn't added any topics for this lesson yet. Check back later!"}
@@ -188,13 +222,18 @@ const LessonTopicViewer = ({ timetable, isReadOnly, onClose }: LessonTopicViewer
             <div className="space-y-6">
               {/* TOPICS LIST */}
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Lesson Topics ({topics.length})
-                </h3>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg">
+                    <Target className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    Lesson Topics ({topics.length})
+                  </h3>
+                </div>
                 
                 <div className="space-y-4">
                   {topics.map((topic: any, index: number) => (
-                    <div key={topic.id} className="border border-gray-200 rounded-lg p-4">
+                    <div key={topic.id} className="bg-white/60 backdrop-blur-sm border border-white/40 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300">
                       {/* TOPIC HEADER */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
@@ -251,30 +290,33 @@ const LessonTopicViewer = ({ timetable, isReadOnly, onClose }: LessonTopicViewer
 
               {/* LESSON SUMMARY */}
               {topics.length > 0 && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-3">Lesson Summary</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{topics.length}</div>
-                      <div className="text-gray-600">Total Topics</div>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Award className="w-5 h-5 text-blue-600" />
+                    <h4 className="font-bold text-blue-900">Lesson Summary</h4>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center bg-white/60 rounded-xl p-4">
+                      <div className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">{topics.length}</div>
+                      <div className="text-gray-600 font-medium">Total Topics</div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">
-                        {topics.filter(t => t.status === "COMPLETED").length}
+                    <div className="text-center bg-white/60 rounded-xl p-4">
+                      <div className="text-3xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                        {topics.filter((t: any) => t.status === "COMPLETED").length}
                       </div>
-                      <div className="text-gray-600">Completed</div>
+                      <div className="text-gray-600 font-medium">Completed</div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-500">
-                        {topics.filter(t => t.status === "IN_PROGRESS").length}
+                    <div className="text-center bg-white/60 rounded-xl p-4">
+                      <div className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
+                        {topics.filter((t: any) => t.status === "IN_PROGRESS").length}
                       </div>
-                      <div className="text-gray-600">In Progress</div>
+                      <div className="text-gray-600 font-medium">In Progress</div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-gray-600">
-                        {Math.round(topics.reduce((sum, t) => sum + t.progressPercentage, 0) / topics.length) || 0}%
+                    <div className="text-center bg-white/60 rounded-xl p-4">
+                      <div className="text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-600 bg-clip-text text-transparent">
+                        {Math.round(topics.reduce((sum: number, t: any) => sum + t.progressPercentage, 0) / topics.length) || 0}%
                       </div>
-                      <div className="text-gray-600">Avg Progress</div>
+                      <div className="text-gray-600 font-medium">Avg Progress</div>
                     </div>
                   </div>
                 </div>
@@ -284,15 +326,15 @@ const LessonTopicViewer = ({ timetable, isReadOnly, onClose }: LessonTopicViewer
         </div>
 
         {/* FOOTER */}
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              {!isReadOnly && "This lesson content is prepared by your teacher for your learning."}
-              {isReadOnly && "This is archived lesson content for reference."}
+        <div className="sticky bottom-0 bg-gradient-to-r from-gray-50 to-blue-50 border-t border-blue-200 p-6 rounded-b-2xl">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-sm text-gray-600 font-medium">
+              {!isReadOnly && "📚 This lesson content is prepared by your teacher for your learning."}
+              {isReadOnly && "📋 This is archived lesson content for reference."}
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-lamaSky text-white rounded-md hover:bg-blue-600"
+              className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl font-medium"
             >
               Close
             </button>

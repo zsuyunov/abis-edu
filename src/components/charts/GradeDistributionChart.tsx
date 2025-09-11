@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 interface GradeDistributionChartProps {
   data: {
@@ -15,41 +15,39 @@ interface GradeDistributionChartProps {
 const GradeDistributionChart = ({ data, totalStudents }: GradeDistributionChartProps) => {
   const chartData = [
     {
-      name: 'Excellent',
+      name: 'Excellent (90%+)',
       value: data.excellent,
-      percentage: totalStudents > 0 ? Math.round((data.excellent / totalStudents) * 100) : 0,
-      range: '90-100%',
+      color: '#10B981', // green-500
+      percentage: totalStudents > 0 ? Math.round((data.excellent / totalStudents) * 100) : 0
     },
     {
-      name: 'Good',
+      name: 'Good (80-89%)',
       value: data.good,
-      percentage: totalStudents > 0 ? Math.round((data.good / totalStudents) * 100) : 0,
-      range: '80-89%',
+      color: '#3B82F6', // blue-500
+      percentage: totalStudents > 0 ? Math.round((data.good / totalStudents) * 100) : 0
     },
     {
-      name: 'Satisfactory',
+      name: 'Satisfactory (70-79%)',
       value: data.satisfactory,
-      percentage: totalStudents > 0 ? Math.round((data.satisfactory / totalStudents) * 100) : 0,
-      range: '70-79%',
+      color: '#F59E0B', // yellow-500
+      percentage: totalStudents > 0 ? Math.round((data.satisfactory / totalStudents) * 100) : 0
     },
     {
-      name: 'Needs Improvement',
+      name: 'Needs Improvement (0-69%)',
       value: data.needsImprovement,
-      percentage: totalStudents > 0 ? Math.round((data.needsImprovement / totalStudents) * 100) : 0,
-      range: 'Below 70%',
+      color: '#EF4444', // red-500
+      percentage: totalStudents > 0 ? Math.round((data.needsImprovement / totalStudents) * 100) : 0
     },
   ];
 
-  const colors = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444'];
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
+      const data = payload[0];
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-semibold text-gray-900">{label}</p>
-          <p className="text-sm text-gray-600 mb-1">{payload[0].payload.range}</p>
-          <p className="text-sm text-blue-600">
-            <span className="font-semibold">{payload[0].value}</span> students ({payload[0].payload.percentage}%)
+          <p className="font-medium text-gray-900">{data.payload.name}</p>
+          <p className="text-sm text-gray-600">
+            Students: {data.value} ({data.payload.percentage}%)
           </p>
         </div>
       );
@@ -58,50 +56,58 @@ const GradeDistributionChart = ({ data, totalStudents }: GradeDistributionChartP
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg border border-gray-200">
-      <h3 className="text-lg font-semibold mb-4 text-gray-900">Grade Distribution</h3>
-      
-      {totalStudents === 0 ? (
-        <div className="h-64 flex items-center justify-center text-gray-500">
-          No grade data available
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis 
-              dataKey="name" 
-              tick={{ fontSize: 12 }}
-              interval={0}
-              angle={-45}
-              textAnchor="end"
-              height={60}
-            />
-            <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={colors[index]} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      )}
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
+        Grade Distribution
+      </h3>
 
-      {/* Legend */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
-        {chartData.map((item, index) => (
-          <div key={item.name} className="flex items-center gap-2">
-            <div 
-              className="w-3 h-3 rounded"
-              style={{ backgroundColor: colors[index] }}
-            ></div>
-            <div className="text-xs">
-              <div className="font-medium text-gray-900">{item.name}</div>
-              <div className="text-gray-600">{item.value} ({item.percentage}%)</div>
-            </div>
-          </div>
-        ))}
+      <div className="h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={100}
+              paddingAngle={2}
+              dataKey="value"
+            >
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+            <Legend
+              verticalAlign="bottom"
+              height={36}
+              formatter={(value, entry: any) => (
+                <span style={{ color: entry.color }}>
+                  {value} ({entry.payload.percentage}%)
+                </span>
+              )}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <span>Excellent: {data.excellent}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+          <span>Good: {data.good}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+          <span>Satisfactory: {data.satisfactory}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-red-500"></div>
+          <span>Needs Improvement: {data.needsImprovement}</span>
+        </div>
       </div>
     </div>
   );

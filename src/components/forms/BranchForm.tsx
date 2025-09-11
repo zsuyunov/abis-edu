@@ -290,7 +290,7 @@ const BranchForm = ({
 
       {state.error && (
         <span className="text-red-500">
-          {state.message || "Something went wrong!"}
+          {(state as any).message || "Something went wrong!"}
         </span>
       )}
       <button type="submit" className="bg-blue-400 text-white p-2 rounded-md">

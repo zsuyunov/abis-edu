@@ -12,14 +12,14 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 type StudentWithDetails = Student & {
-  class: Class & { 
+  class: (Class & { 
     _count: { timetables: number };
     branch: Branch;
-  };
+  }) | null;
   studentParents: {
     parent: Parent;
   }[];
-  branch: Branch;
+  branch: Branch | null;
   attachments: StudentAttachment[];
 };
 
@@ -105,7 +105,7 @@ const SingleStudentPage = async ({
                 <div className="w-full md:w-1/3 lg:w-full 2xl:w-1/3 flex items-center gap-2">
                   <Image src="/date.png" alt="" width={14} height={14} />
                   <span>
-                    {new Intl.DateTimeFormat("en-GB").format(student.dateOfBirth)}
+                    {student.dateOfBirth ? new Intl.DateTimeFormat("en-GB").format(student.dateOfBirth) : 'Not provided'}
                   </span>
                 </div>
                 <div className="w-full md:w-1/3 lg:w-full 2xl:w-1/3 flex items-center gap-2">
@@ -157,7 +157,7 @@ const SingleStudentPage = async ({
               />
               <div className="">
                 <h1 className="text-xl font-semibold">
-                  {student.class._count.timetables}
+                  {student.class?._count.timetables || 0}
                 </h1>
                 <span className="text-sm text-gray-400">Lessons</span>
               </div>
@@ -172,7 +172,7 @@ const SingleStudentPage = async ({
                 className="w-6 h-6"
               />
               <div className="">
-                <h1 className="text-xl font-semibold">{student.class.name}</h1>
+                <h1 className="text-xl font-semibold">{student.class?.name || 'Not assigned'}</h1>
                 <span className="text-sm text-gray-400">Class</span>
               </div>
             </div>
@@ -246,11 +246,11 @@ const SingleStudentPage = async ({
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Academic Year ID:</span>
-                <span className="text-sm text-gray-600">{student.class.academicYearId}</span>
+                <span className="text-sm text-gray-600">{student.class?.academicYearId || 'Not assigned'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Language:</span>
-                <span className="text-sm text-gray-600">{student.class.language}</span>
+                <span className="text-sm text-gray-600">{student.class?.language || 'Not assigned'}</span>
               </div>
             </div>
           </div>
@@ -290,7 +290,11 @@ const SingleStudentPage = async ({
         {/* SCHEDULE */}
         <div className="mt-4 bg-white rounded-md p-4 h-[800px]">
           <h1>Student&apos;s Schedule</h1>
-          <BigCalendarContainer type="classId" id={student.class.id} />
+          {student.class ? (
+            <BigCalendarContainer type="classId" id={student.class.id} />
+          ) : (
+            <p className="text-gray-500">No class assigned</p>
+          )}
         </div>
       </div>
       
@@ -302,7 +306,6 @@ const SingleStudentPage = async ({
             <h1 className="text-lg font-semibold mb-4">Quick Actions</h1>
             <div className="flex flex-col gap-2">
               <FormContainer table="student" type="update" data={student} />
-              <FormContainer table="student" type="transfer" data={student} />
               <FormContainer table="student" type="resetPassword" data={student} />
               <FormContainer table="student" type="sendMessage" data={student} />
               {student.status === "ACTIVE" ? (
@@ -319,30 +322,34 @@ const SingleStudentPage = async ({
         <div className="bg-white p-4 rounded-md">
           <h1 className="text-xl font-semibold">Shortcuts</h1>
           <div className="mt-4 flex gap-4 flex-wrap text-xs text-gray-500">
-            <Link
-              className="p-3 rounded-md bg-lamaSkyLight"
-              href={`/admin/list/lessons?classId=${student.class.id}`}
-            >
-              Student&apos;s Lessons
-            </Link>
-            <Link
-              className="p-3 rounded-md bg-lamaPurpleLight"
-              href={`/admin/list/teachers?classId=${student.class.id}`}
-            >
-              Student&apos;s Teachers
-            </Link>
-            <Link
-              className="p-3 rounded-md bg-pink-50"
-              href={`/admin/list/exams?classId=${student.class.id}`}
-            >
-              Student&apos;s Exams
-            </Link>
-            <Link
-              className="p-3 rounded-md bg-lamaSkyLight"
-              href={`/admin/list/assignments?classId=${student.class.id}`}
-            >
-              Student&apos;s Assignments
-            </Link>
+            {student.class && (
+              <>
+                <Link
+                  className="p-3 rounded-md bg-lamaSkyLight"
+                  href={`/admin/list/lessons?classId=${student.class.id}`}
+                >
+                  Student&apos;s Lessons
+                </Link>
+                <Link
+                  className="p-3 rounded-md bg-lamaPurpleLight"
+                  href={`/admin/list/teachers?classId=${student.class.id}`}
+                >
+                  Student&apos;s Teachers
+                </Link>
+                <Link
+                  className="p-3 rounded-md bg-pink-50"
+                  href={`/admin/list/exams?classId=${student.class.id}`}
+                >
+                  Student&apos;s Exams
+                </Link>
+                <Link
+                  className="p-3 rounded-md bg-lamaSkyLight"
+                  href={`/admin/list/assignments?classId=${student.class.id}`}
+                >
+                  Student&apos;s Assignments
+                </Link>
+              </>
+            )}
             <Link
               className="p-3 rounded-md bg-lamaYellowLight"
               href={`/admin/list/results?studentId=${student.id}`}

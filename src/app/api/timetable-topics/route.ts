@@ -1,105 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { AuthService } from "@/lib/auth";
-import { timetableTopicSchema } from "@/lib/formValidationSchemas";
+import { headers } from "next/headers";
 
-// Remove the local AuthService class since we're importing it
-
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const headersList = headers();
+    const teacherId = headersList.get("x-user-id");
     
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
+    if (!teacherId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const url = new URL(request.url);
-    const teacherId = url.searchParams.get("teacherId") || session.id;
-    const timetableId = url.searchParams.get("timetableId");
-    const classId = url.searchParams.get("classId");
-    const subjectId = url.searchParams.get("subjectId");
-    const status = url.searchParams.get("status");
-    const search = url.searchParams.get("search");
+    const body = await request.json();
+    const { timetableId, title, description } = body;
 
-    // Build filter conditions
-    const where: any = {};
-
-    // Teachers can only see their own topics
-    where.teacherId = teacherId;
-
-    if (timetableId) where.timetableId = parseInt(timetableId);
-    if (subjectId) where.subjectId = parseInt(subjectId);
-    if (status) where.status = status;
-
-    // Search functionality
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ];
+    if (!timetableId || !title) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
-    const topics = await prisma.timetableTopic.findMany({
-      where,
+    // Get timetable data to populate required fields
+    const timetable = await prisma.timetable.findUnique({
+      where: { id: timetableId },
       include: {
-        timetable: {
-          include: {
-            class: true,
-            subject: true,
-          },
-        },
-        teacher: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
         class: true,
         subject: true,
         branch: true,
         academicYear: true,
       },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    return NextResponse.json({ topics });
-
-  } catch (error) {
-    console.error("Error fetching timetable topics:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch timetable topics" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const data = timetableTopicSchema.parse(body);
-
-    // Verify teacher has permission to create topic for this timetable
-    const timetable = await prisma.timetable.findUnique({
-      where: { id: data.timetableId },
     });
 
     if (!timetable) {
@@ -107,74 +37,84 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if teacher is assigned to this timetable
-    const canCreateTopic = timetable.teacherId === session.id;
-
-    if (!canCreateTopic) {
-      return NextResponse.json({ 
-        error: "You don't have permission to create topics for this timetable" 
-      }, { status: 403 });
+    const teacherIds = Array.isArray(timetable.teacherIds) ? timetable.teacherIds : [];
+    if (!teacherIds.includes(teacherId)) {
+      return NextResponse.json({ error: "Access denied to this timetable" }, { status: 403 });
     }
 
-    // Set teacher ID to current user
-    data.teacherId = session.id;
-
-    // Auto-complete required fields from timetable
-    data.classId = timetable.classId;
-    data.subjectId = timetable.subjectId;
-    data.branchId = timetable.branchId;
-    data.academicYearId = timetable.academicYearId;
-
-    // Set completion date if status is completed
-    if (data.status === "COMPLETED" && !data.completedAt) {
-      data.completedAt = new Date();
-    }
-
-    const topic = await prisma.timetableTopic.create({
-      data: {
-        title: data.title,
-        description: data.description || null,
-        attachments: data.attachments || [],
-        timetableId: data.timetableId,
-        teacherId: data.teacherId,
-        subjectId: data.subjectId,
-        classId: data.classId,
-        branchId: data.branchId,
-        academicYearId: data.academicYearId,
-        status: data.status,
-        progressPercentage: data.progressPercentage,
-        completedAt: data.completedAt ? new Date(data.completedAt) : null,
-      },
-      include: {
-        timetable: {
-          include: {
-            class: true,
-            subject: true,
-          },
-        },
-        teacher: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        class: true,
-        subject: true,
+    // First, try to find existing topic for this timetable
+    const existingTopic = await prisma.timetableTopic.findFirst({
+      where: {
+        timetableId: parseInt(timetableId),
       },
     });
 
-    return NextResponse.json({ topic }, { status: 201 });
+    let topic;
+    if (existingTopic) {
+      // Update existing topic
+      topic = await prisma.timetableTopic.update({
+        where: {
+          id: existingTopic.id,
+        },
+        data: {
+          title,
+          description,
+          teacherId,
+        },
+      });
+    } else {
+      // Create new topic
+      topic = await prisma.timetableTopic.create({
+        data: {
+          title,
+          description,
+          timetableId: parseInt(timetableId),
+          teacherId: teacherId,
+          subjectId: timetable.subjectId,
+          classId: timetable.classId,
+          branchId: timetable.branchId,
+          academicYearId: timetable.academicYearId,
+          status: "IN_PROGRESS",
+        },
+      });
+    }
 
+    return NextResponse.json({ success: true, topic });
   } catch (error) {
-    console.error("Error creating timetable topic:", error);
-    if (error instanceof Error) {
+    console.error("Error creating/updating timetable topic:", error);
+    return NextResponse.json(
+      { error: "Failed to save topic" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const timetableId = searchParams.get("timetableId");
+
+    if (!timetableId) {
       return NextResponse.json(
-        { error: error.message },
+        { error: "Timetable ID is required" },
         { status: 400 }
       );
     }
+
+    const topics = await prisma.timetableTopic.findMany({
+      where: {
+        timetableId: parseInt(timetableId),
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return NextResponse.json({ topics });
+  } catch (error) {
+    console.error("Error fetching timetable topics:", error);
     return NextResponse.json(
-      { error: "Failed to create timetable topic" },
+      { error: "Failed to fetch topics" },
       { status: 500 }
     );
   }

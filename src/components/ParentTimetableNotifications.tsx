@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -146,7 +147,7 @@ const ParentTimetableNotifications = ({
 
   return (
     <div className="relative">
-      {/* Notification Bell */}
+      {/* Notification Bell }
       <button
         onClick={() => setShowNotifications(!showNotifications)}
         className="relative p-3 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-all duration-200 group"
@@ -166,7 +167,7 @@ const ParentTimetableNotifications = ({
         )}
       </button>
 
-      {/* Notifications Dropdown */}
+      {/* Notifications Dropdown }
       {showNotifications && (
         <div className="absolute right-0 top-full mt-3 w-96 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 max-h-[32rem] overflow-hidden">
           <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
@@ -318,3 +319,5 @@ const ParentTimetableNotifications = ({
 };
 
 export default ParentTimetableNotifications;
+
+*/

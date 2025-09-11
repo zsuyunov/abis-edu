@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState } from "react";
@@ -39,3 +40,5 @@ const MDSearch = ({ onSearch, placeholder = "Search..." }: MDSearchProps) => {
 };
 
 export default MDSearch;
+
+*/

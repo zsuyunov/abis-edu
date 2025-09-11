@@ -4,29 +4,28 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const AssignmentStatusFilter = () => {
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const { replace } = useRouter();
   const pathname = usePathname();
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const params = new URLSearchParams(searchParams);
-    params.set("page", "1");
     if (e.target.value) {
       params.set("assignmentStatus", e.target.value);
     } else {
       params.delete("assignmentStatus");
     }
-    router.replace(`${pathname}?${params.toString()}`);
+    replace(`${pathname}?${params}`);
   };
 
   return (
     <select
       name="assignmentStatus"
       id="assignmentStatus"
-      className="p-2 border rounded"
+      className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm bg-white text-gray-900"
       onChange={handleFilterChange}
       defaultValue={searchParams.get("assignmentStatus") || ""}
     >
-      <option value="">All Assignments</option>
+      <option value="">Filter by Assignment</option>
       <option value="assigned">Assigned</option>
       <option value="unassigned">Unassigned</option>
     </select>

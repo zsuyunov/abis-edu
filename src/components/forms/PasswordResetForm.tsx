@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import InputField from "../InputField";
-import PasswordField from "../PasswordField";
+import PasswordInput from "../PasswordInput";
 import { Dispatch, SetStateAction, useEffect } from "react";
 import {
   passwordResetSchema,
@@ -81,27 +81,31 @@ const PasswordResetForm = ({
         hidden
       />
 
-      <PasswordField
-        label="New Password"
-        name="newPassword"
-        register={register}
-        error={errors?.newPassword}
-        inputProps={{ 
-          placeholder: "Enter new password (min 8 characters)",
-          autoComplete: "new-password"
-        }}
-      />
+      <div className="flex flex-col gap-2">
+        <label className="text-xs text-gray-500">
+          New Password <span className="text-red-500">*</span>
+        </label>
+        <PasswordInput
+          register={register("newPassword")}
+          error={errors?.newPassword}
+          placeholder="Enter new password (min 8 characters)"
+          defaultValue=""
+          required
+        />
+      </div>
 
-      <PasswordField
-        label="Confirm New Password"
-        name="confirmPassword"
-        register={register}
-        error={errors?.confirmPassword}
-        inputProps={{ 
-          placeholder: "Confirm the new password",
-          autoComplete: "new-password"
-        }}
-      />
+      <div className="flex flex-col gap-2">
+        <label className="text-xs text-gray-500">
+          Confirm New Password <span className="text-red-500">*</span>
+        </label>
+        <PasswordInput
+          register={register("confirmPassword")}
+          error={errors?.confirmPassword}
+          placeholder="Confirm the new password"
+          defaultValue=""
+          required
+        />
+      </div>
 
       {/* Password strength indicator */}
       {newPassword && (

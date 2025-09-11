@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import Image from "next/image";
@@ -92,3 +93,6 @@ const SupportAdmissionMenu = () => {
 };
 
 export default SupportAdmissionMenu;
+
+
+*/

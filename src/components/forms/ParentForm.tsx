@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, FormProvider } from "react-hook-form";
 import InputField from "../InputField";
-import PasswordField from "../PasswordField";
+import PasswordInput from "../PasswordInput";
 import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
 import {
   parentSchema,
@@ -365,14 +365,18 @@ const ParentForm = ({
               Format: P##### (e.g., P12345)
             </p>
           </div>
-          <PasswordField
-            label="Password"
-            name="password"
-            register={register}
-            error={errors?.password}
-            inputProps={{ placeholder: type === "create" ? "Enter password" : "Leave empty to keep current password" }}
-            required={type === "create"}
-          />
+          <div className="flex flex-col gap-2 w-full md:w-1/4">
+            <label className="text-xs text-gray-500">
+              Password {type === "create" && <span className="text-red-500">*</span>}
+            </label>
+            <PasswordInput
+              register={register("password")}
+              error={errors?.password}
+              placeholder={type === "create" ? "Enter password" : "Leave empty to keep current password"}
+              defaultValue=""
+              required={type === "create"}
+            />
+          </div>
           <div className="flex flex-col gap-2 w-full md:w-1/4">
             <label className="text-xs text-gray-500">
               Status <span className="text-red-500">*</span>

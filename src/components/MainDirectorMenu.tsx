@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import Image from "next/image";
@@ -162,3 +163,5 @@ const MainDirectorMenu = () => {
 };
 
 export default MainDirectorMenu;
+
+*/

@@ -89,7 +89,7 @@ const AcademicYearForm = ({
       router.refresh();
     }
     if (state.error) {
-      const errorMessage = state.message || `Failed to ${type === "create" ? "create" : "update"} academic year!`;
+      const errorMessage = (state as any).message || `Failed to ${type === "create" ? "create" : "update"} academic year!`;
       toast.error(errorMessage);
     }
   }, [state, router, type, setOpen, watch]);

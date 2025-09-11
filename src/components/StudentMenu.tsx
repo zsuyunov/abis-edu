@@ -3,72 +3,54 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const studentMenuItems = [
-  {
-    title: "STUDENT MENU",
-    items: [
-      {
-        icon: "/home.png",
-        label: "Dashboard",
-        href: "/student",
-      },
-      {
-        icon: "/lesson.png",
-        label: "My Schedule",
-        href: "/student/timetables",
-      },
-      {
-        icon: "/homework.png",
-        label: "Homework",
-        href: "/student/homework",
-      },
-      {
-        icon: "/grade.png",
-        label: "My Grades",
-        href: "/student/gradebook",
-      },
-      {
-        icon: "/attendance.png",
-        label: "Attendance",
-        href: "/student/attendance",
-      },
-      {
-        icon: "/exam.png",
-        label: "Exams",
-        href: "/student/exams",
-      },
-      {
-        icon: "/result.png",
-        label: "Results",
-        href: "/student/results",
-      },
-      {
-        icon: "/announcement.png",
-        label: "Announcements",
-        href: "/list/announcements",
-      },
-    ],
-  },
-  {
-    title: "OTHER",
-    items: [
-      {
-        icon: "/profile.png",
-        label: "Profile",
-        href: "/profile",
-      },
-      {
-        icon: "/setting.png",
-        label: "Settings",
-        href: "/settings",
-      },
-    ],
-  },
-];
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const StudentMenu = () => {
   const pathname = usePathname();
+  const { t } = useLanguage();
+
+  const studentMenuItems = [
+    {
+      title: "STUDENT MENU",
+      items: [
+        {
+          icon: "/home.png",
+          label: t('nav.dashboard'),
+          href: "/student",
+        },
+        {
+          icon: "/homework.png",
+          label: t('nav.homework'),
+          href: "/student/homework",
+        },
+        {
+          icon: "/grade.png",
+          label: t('student.myGrades'),
+          href: "/student/gradebook",
+        },
+        {
+          icon: "/attendance.png",
+          label: t('nav.attendance'),
+          href: "/student/attendance",
+        },
+      ],
+    },
+    {
+      title: "OTHER",
+      items: [
+        {
+          icon: "/profile.png",
+          label: t('nav.profile'),
+          href: "/profile",
+        },
+        {
+          icon: "/setting.png",
+          label: t('nav.settings'),
+          href: "/settings",
+        },
+      ],
+    },
+  ];
 
   return (
     <div className="mt-4 text-sm">

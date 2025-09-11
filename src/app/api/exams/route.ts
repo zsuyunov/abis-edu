@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         },
         subject: { select: { name: true } },
         class: { select: { name: true } },
-        branch: { select: { shortName: true } },
+        branch: { select: { shortName: true, district: true } },
         academicYear: { select: { name: true } },
         examResults: {
           include: {

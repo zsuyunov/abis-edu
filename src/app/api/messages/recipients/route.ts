@@ -17,27 +17,42 @@ export async function GET(request: NextRequest) {
     let recipients: any[] = [];
 
     if (role === "TEACHER") {
-      // Get teachers from Teacher model
+      // Get teachers through TeacherAssignment model
       const whereClause: any = {
         status: "ACTIVE",
       };
 
+      let assignmentWhere: any = {
+        status: "ACTIVE",
+      };
+
       if (branchId && branchId !== "all") {
-        whereClause.branchId = parseInt(branchId);
+        assignmentWhere.branchId = parseInt(branchId);
       }
 
       recipients = await prisma.teacher.findMany({
-        where: whereClause,
+        where: {
+          ...whereClause,
+          TeacherAssignment: {
+            some: assignmentWhere,
+          },
+        },
         select: {
           id: true,
           firstName: true,
           lastName: true,
           teacherId: true,
-          branchId: true,
-          branch: {
+          TeacherAssignment: {
+            where: assignmentWhere,
             select: {
-              shortName: true,
+              branchId: true,
+              Branch: {
+                select: {
+                  shortName: true,
+                },
+              },
             },
+            take: 1,
           },
         },
         orderBy: [
@@ -53,8 +68,8 @@ export async function GET(request: NextRequest) {
         lastName: teacher.lastName,
         userId: teacher.teacherId,
         position: "TEACHER",
-        branchId: teacher.branchId,
-        branch: teacher.branch,
+        branchId: teacher.TeacherAssignment[0]?.branchId,
+        branch: teacher.TeacherAssignment[0]?.Branch,
       }));
     } else {
       // Get users from User model for other roles

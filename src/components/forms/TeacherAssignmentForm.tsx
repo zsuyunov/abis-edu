@@ -375,7 +375,7 @@ const TeacherAssignmentForm = ({
             Teacher
           </label>
           <div className="ring-[1.5px] ring-gray-200 bg-gray-50 p-2 rounded-md text-sm w-full text-gray-900">
-            {type === 'create' ? `${data.firstName} ${data.lastName}` : `${data.teacher.firstName} ${data.teacher.lastName}`}
+            {type === 'create' ? `${data?.firstName || ''} ${data?.lastName || ''}` : `${data?.teacher?.firstName || ''} ${data?.teacher?.lastName || ''}`}
           </div>
         </div>
       </div>

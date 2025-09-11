@@ -32,29 +32,28 @@ const SmallSendMessageModal = ({
     },
   });
 
-  const [state, formAction] = useFormState(sendMessage, {
+  const [state, formAction] = useFormState(sendMessage as any, {
     success: false,
     error: false,
-    message: '',
   });
 
   const router = useRouter();
 
   useEffect(() => {
     if (state.success) {
-      toast.success(state.message || `Message sent to ${studentName}!`);
+      toast.success((state as any).message || `Message sent to ${studentName}!`);
       setOpen(false);
       reset();
       router.refresh();
     }
-    if (state.error && state.message) {
-      toast.error(state.message);
+    if (state.error && (state as any).message) {
+      toast.error((state as any).message);
     }
   }, [state, router, studentName, reset]);
 
   const onSubmit = handleSubmit((data) => {
     const messageData = { ...data, senderId: currentUserId };
-    formAction(messageData);
+    formAction();
   });
 
   return (
@@ -114,7 +113,7 @@ const SmallSendMessageModal = ({
                 )}
               </div>
 
-              {state.error && !state.message && (
+              {state.error && !(state as any).message && (
                 <span className="text-red-500">Failed to send message. Please try again.</span>
               )}
               

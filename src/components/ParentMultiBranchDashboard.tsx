@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -99,7 +100,7 @@ const ParentMultiBranchDashboard = ({
         </div>
       </div>
 
-      {/* Branch Selector */}
+      {/* Branch Selector }
       <div className="mb-4">
         <BranchSelector
           userRole="parent"
@@ -111,7 +112,7 @@ const ParentMultiBranchDashboard = ({
         />
       </div>
 
-      {/* Children in Selected Branch */}
+      {/* Children in Selected Branch }
       {selectedBranchId && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-3">
@@ -171,7 +172,7 @@ const ParentMultiBranchDashboard = ({
         </div>
       )}
 
-      {/* Branch Summary */}
+      {/* Branch Summary }
       <div className="mt-4 pt-3 border-t border-blue-200">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
           <div className="bg-white/50 p-3 rounded border">
@@ -191,7 +192,7 @@ const ParentMultiBranchDashboard = ({
         </div>
       </div>
 
-      {/* Branch Details */}
+      {/* Branch Details }
       {getSelectedBranch() && (
         <div className="mt-4 p-3 bg-white/30 rounded border">
           <div className="text-xs text-blue-800">
@@ -207,3 +208,6 @@ const ParentMultiBranchDashboard = ({
 };
 
 export default ParentMultiBranchDashboard;
+
+
+*/

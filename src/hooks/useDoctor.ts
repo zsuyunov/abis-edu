@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+/*import { useQuery } from "@tanstack/react-query";
 
 // Doctor Events Hook
 export const useDoctorEvents = (page: number = 1, search: string = "") => {
@@ -59,3 +59,6 @@ export const useDoctorMealApprovals = (page: number = 1, search: string = "") =>
     },
   });
 };
+
+
+*/

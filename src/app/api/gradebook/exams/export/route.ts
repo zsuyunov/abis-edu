@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
           csvContent += [
             `"${exam.name}"`,
             `"${new Date(exam.date).toLocaleDateString()}"`,
-            `"${exam.teacher.firstName} ${exam.teacher.lastName}"`,
+            `"${exam.teacher?.firstName || 'N/A'} ${exam.teacher?.lastName || 'N/A'}"`,
             `"${exam.roomNumber}"`,
             exam.fullMarks,
             exam.passingMarks,
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
               exam.fullMarks,
               percentage,
               `"${result.status}"`,
-              `"${exam.teacher.firstName} ${exam.teacher.lastName}"`,
+              `"${exam.teacher?.firstName || 'N/A'} ${exam.teacher?.lastName || 'N/A'}"`,
               `"${exam.roomNumber}"`
             ].join(",") + "\n";
           });

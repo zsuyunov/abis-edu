@@ -1,23 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { AuthService } from "@/lib/auth";
 import { homeworkFeedbackSchema, bulkHomeworkFeedbackSchema } from "@/lib/formValidationSchemas";
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Try header-based auth first, then fallback to token auth
+    const teacherId = request.headers.get('x-user-id');
+    let authenticatedUserId = teacherId;
+
+    if (!teacherId) {
+      const authHeader = request.headers.get('authorization');
+      const token = AuthService.extractTokenFromHeader(authHeader);
+      if (!token) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      
+      const session = AuthService.verifyToken(token);
+      if (!session?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      authenticatedUserId = session.id;
     }
 
     const url = new URL(request.url);
-    const teacherId = url.searchParams.get("teacherId") || session.id;
+    const requestedTeacherId = url.searchParams.get("teacherId") || authenticatedUserId;
     const homeworkId = url.searchParams.get("homeworkId");
     const classId = url.searchParams.get("classId");
     const subjectId = url.searchParams.get("subjectId");
@@ -25,27 +32,38 @@ export async function GET(request: NextRequest) {
     const view = url.searchParams.get("view") || "list"; // list, individual, analytics
 
     // Verify teacher can only access their own homework submissions
-    if (session.id !== teacherId) {
+    if (authenticatedUserId !== requestedTeacherId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Get teacher information with branch details
+    // Get teacher information
     const teacher = await prisma.teacher.findUnique({
-      where: { id: teacherId },
-      include: {
-        branch: true,
-      },
+      where: { id: requestedTeacherId || undefined },
     });
 
     if (!teacher) {
       return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
     }
 
+    // Get teacher assignments to determine branch access
+    const teacherAssignments = await prisma.teacherAssignment.findMany({
+      where: {
+        teacherId: requestedTeacherId || undefined,
+        status: "ACTIVE",
+      },
+    });
+
+    if (teacherAssignments.length === 0) {
+      return NextResponse.json({ error: "No assignments found for teacher" }, { status: 404 });
+    }
+
+    const teacherBranchIds = Array.from(new Set(teacherAssignments.map(a => a.branchId)));
+
     // Build filter conditions with branch restriction
     const submissionWhere: any = {
       homework: {
-        teacherId,
-        branchId: teacher.branchId, // Always filter by teacher's branch
+        teacherId: requestedTeacherId,
+        branchId: { in: teacherBranchIds },
       },
     };
 
@@ -116,8 +134,8 @@ export async function GET(request: NextRequest) {
     // Calculate submission statistics
     const stats = calculateSubmissionStats(submissions);
 
-    if (view === "individual" && homeworkId) {
-      return getIndividualHomeworkSubmissions(parseInt(homeworkId), teacherId, teacher.branchId);
+    if (view === "individual" && homeworkId && requestedTeacherId) {
+      return getIndividualHomeworkSubmissions(parseInt(homeworkId), requestedTeacherId, teacherBranchIds[0]);
     }
 
     if (view === "analytics") {
@@ -135,7 +153,7 @@ export async function GET(request: NextRequest) {
         firstName: teacher.firstName,
         lastName: teacher.lastName,
         teacherId: teacher.teacherId,
-        branch: teacher.branch,
+        email: teacher.email,
       },
       submissions,
       stats,
@@ -354,6 +372,15 @@ async function getIndividualHomeworkSubmissions(homeworkId: number, teacherId: s
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
+    // Get actual student count from class
+    const actualStudentCount = await prisma.student.count({
+      where: {
+        classId: homework.classId,
+        branchId: branchId,
+        status: "ACTIVE",
+      },
+    });
+
     // Get all submissions for this homework
     const submissions = await prisma.homeworkSubmission.findMany({
       where: { 
@@ -407,12 +434,13 @@ async function getIndividualHomeworkSubmissions(homeworkId: number, teacherId: s
       };
     });
 
-    // Calculate detailed statistics
+    // Calculate detailed statistics with actual student count
     const stats = calculateSubmissionStats(submissions);
     const detailedStats = {
       ...stats,
-      totalStudents: homework.class.students.length,
-      missingSubmissions: homework.class.students.length - submissions.length,
+      totalStudents: actualStudentCount,
+      missingSubmissions: actualStudentCount - submissions.length,
+      submissionRate: actualStudentCount > 0 ? Math.round((submissions.filter(s => s.status === "SUBMITTED" || s.status === "GRADED").length / actualStudentCount) * 100) : 0,
     };
 
     return NextResponse.json({

@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -61,7 +62,7 @@ const SupportAdmissionDashboard = () => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
+      {/* Header }
       <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-purple-500">
         <h1 className="text-2xl font-bold text-gray-800 mb-2">Support Admission Dashboard</h1>
         <p className="text-gray-600">
@@ -69,7 +70,7 @@ const SupportAdmissionDashboard = () => {
         </p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards }
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white rounded-lg shadow-sm p-6 border border-purple-100">
           <div className="flex items-center justify-between">
@@ -121,7 +122,7 @@ const SupportAdmissionDashboard = () => {
         </div>
       </div>
 
-      {/* Admission Progress */}
+      {/* Admission Progress }
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Admission Progress This Year</h3>
@@ -149,7 +150,7 @@ const SupportAdmissionDashboard = () => {
           </div>
         </div>
 
-        {/* Recent Admissions */}
+        {/* Recent Admissions }
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Admissions</h3>
           <div className="space-y-4">
@@ -178,7 +179,7 @@ const SupportAdmissionDashboard = () => {
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions }
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -208,7 +209,7 @@ const SupportAdmissionDashboard = () => {
         </div>
       </div>
 
-      {/* Branch Information */}
+      {/* Branch Information }
       <div className="bg-gradient-to-r from-purple-100 to-indigo-100 rounded-lg p-6">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-white rounded-full">
@@ -226,3 +227,5 @@ const SupportAdmissionDashboard = () => {
 };
 
 export default SupportAdmissionDashboard;
+
+*/

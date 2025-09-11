@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState } from "react";
@@ -90,7 +91,7 @@ const ParentCalendarSync = ({ parentId, children, selectedChildId, timetableData
         </div>
       </div>
 
-      {/* Sync Mode Selection */}
+      {/* Sync Mode Selection }
       {children.length > 1 && (
         <div className="mb-8 p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
           <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -133,7 +134,7 @@ const ParentCalendarSync = ({ parentId, children, selectedChildId, timetableData
         </div>
       )}
 
-      {/* Quick Sync Options */}
+      {/* Quick Sync Options }
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <button
           onClick={() => generateCalendarFile("google")}
@@ -181,7 +182,7 @@ const ParentCalendarSync = ({ parentId, children, selectedChildId, timetableData
         </button>
       </div>
 
-      {/* Status Messages */}
+      {/* Status Messages }
       {syncStatus === "generating" && (
         <div className="flex items-center gap-3 p-6 bg-blue-50 border border-blue-200 rounded-xl mb-6">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
@@ -205,7 +206,7 @@ const ParentCalendarSync = ({ parentId, children, selectedChildId, timetableData
         </div>
       )}
 
-      {/* Subscription URL */}
+      {/* Subscription URL }
       {calendarUrl && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
           <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -233,7 +234,7 @@ const ParentCalendarSync = ({ parentId, children, selectedChildId, timetableData
         </div>
       )}
 
-      {/* Instructions */}
+      {/* Instructions }
       <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 p-6">
         <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <Smartphone className="w-5 h-5 text-blue-600" />
@@ -278,7 +279,7 @@ const ParentCalendarSync = ({ parentId, children, selectedChildId, timetableData
         </div>
       </div>
 
-      {/* Statistics */}
+      {/* Statistics }
       {timetableData && (
         <div className="mt-8 pt-6 border-t border-gray-200">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
@@ -328,3 +329,5 @@ const ParentCalendarSync = ({ parentId, children, selectedChildId, timetableData
 };
 
 export default ParentCalendarSync;
+
+*/

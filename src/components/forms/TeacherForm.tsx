@@ -3,11 +3,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import InputField from "../InputField";
-import PasswordField from "../PasswordField";
+import PasswordInput from "../PasswordInput";
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import {
   teacherSchema,
+  teacherUpdateSchema,
   TeacherSchema,
+  TeacherUpdateSchema,
 } from "@/lib/formValidationSchemas";
 import { useFormState } from "react-dom";
 import {
@@ -35,8 +37,8 @@ const TeacherForm = ({
     handleSubmit,
     formState: { errors, isValid, isDirty },
     watch,
-  } = useForm<TeacherSchema>({
-    resolver: zodResolver(teacherSchema),
+  } = useForm<TeacherSchema | TeacherUpdateSchema>({
+    resolver: zodResolver(type === "update" ? teacherUpdateSchema : teacherSchema),
     mode: "onSubmit", // Only validate on submit
   });
 
@@ -64,9 +66,11 @@ const TeacherForm = ({
     const formDataWithAttachments = {
       ...data,
       attachments: attachments,
+      // For updates, only include password if it's a non-empty string
+      ...(type === "update" ? (data.password && data.password.trim() !== '' ? { password: data.password } : {}) : {}),
     };
     console.log("Final form data:", formDataWithAttachments);
-    formAction(formDataWithAttachments);
+    formAction(formDataWithAttachments as any);
   });
 
   const router = useRouter();
@@ -267,15 +271,18 @@ const TeacherForm = ({
           )}
         </div>
 
-        <PasswordField
-          label="Password"
-          name="password"
-          defaultValue={data?.password || ""}
-          register={register}
-          error={errors.password}
-          required={true}
-          inputProps={{ placeholder: "Enter password" }}
-        />
+        <div className="flex flex-col gap-2 w-full md:w-1/4">
+          <label className="text-xs text-gray-500">
+            Password {type === "create" && <span className="text-red-500">*</span>}
+          </label>
+          <PasswordInput
+            register={register("password")}
+            error={errors?.password}
+            placeholder={type === "create" ? "Enter password" : "Leave empty to keep current password"}
+            defaultValue=""
+            required={type === "create"}
+          />
+        </div>
 
         <InputField
           label="Email"

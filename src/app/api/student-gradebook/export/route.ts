@@ -41,11 +41,15 @@ export async function GET(request: NextRequest) {
           },
         },
         branch: true,
-        parent: {
-          select: {
-            firstName: true,
-            lastName: true,
-            phone: true,
+        studentParents: {
+          include: {
+            parent: {
+              select: {
+                firstName: true,
+                lastName: true,
+                phone: true,
+              },
+            },
           },
         },
       },
@@ -93,7 +97,7 @@ export async function GET(request: NextRequest) {
     if (academicYearId) {
       targetAcademicYearId = parseInt(academicYearId);
     } else if (timeFilter === "current") {
-      targetAcademicYearId = availableAcademicYears[0]?.id || student.class.academicYearId;
+      targetAcademicYearId = availableAcademicYears[0]?.id || student.class?.academicYearId;
     } else {
       targetAcademicYearId = availableAcademicYears[0]?.id;
     }
@@ -284,7 +288,7 @@ async function generateStudentPDF(data: any) {
     <body>
       <div class="header">
         <h1>${student.firstName} ${student.lastName}'s Academic Report</h1>
-        <p>Student ID: ${student.studentId} | Class: ${student.class.name}</p>
+        <p>Student ID: ${student.studentId} | Class: ${student.class?.name || 'N/A'}</p>
         <p>${timeFilter === "current" ? "Current" : "Archived"} Academic Year: ${academicYear?.name || "N/A"}</p>
         ${startDate && endDate ? `<p>Report Period: ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}</p>` : ""}
       </div>
@@ -295,7 +299,7 @@ async function generateStudentPDF(data: any) {
           <div class="info-value">
             Name: ${student.firstName} ${student.lastName}<br>
             Student ID: ${student.studentId}<br>
-            Class: ${student.class.name}<br>
+            Class: ${student.class?.name || 'N/A'}<br>
             Branch: ${student.branch.name}
           </div>
         </div>
@@ -434,7 +438,7 @@ async function generateStudentExcel(data: any) {
     // Header information
     [`${student.firstName} ${student.lastName}'s Academic Report`],
     [`Student ID: ${student.studentId}`],
-    [`Class: ${student.class.name}`],
+    [`Class: ${student.class?.name || 'N/A'}`],
     [`Academic Year: ${academicYear?.name || "N/A"}`],
     [`Period: ${startDate ? new Date(startDate).toLocaleDateString() : "All"} - ${endDate ? new Date(endDate).toLocaleDateString() : "All"}`],
     [`Generated: ${new Date().toLocaleString()}`],
@@ -488,7 +492,7 @@ async function generateStudentExcel(data: any) {
   // Convert to CSV format
   const csvContent = csvRows
     .map(row => 
-      row.map(cell => 
+      row.map((cell: any) => 
         typeof cell === "string" && (cell.includes(",") || cell.includes('"')) 
           ? `"${cell.replace(/"/g, '""')}"` 
           : cell

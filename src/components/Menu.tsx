@@ -105,12 +105,6 @@ const menuItems = [
         href: "/list/timetables",
         visible: ["admin"],
       },
-                      {
-      icon: "/lesson.png",
-      label: "My Timetables",
-      href: "/teacher/timetables",
-      visible: ["teacher"],
-    },
                 {
               icon: "/attendance.png",
               label: "Attendance",

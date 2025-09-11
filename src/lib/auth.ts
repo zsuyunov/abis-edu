@@ -56,3 +56,6 @@ export class AuthService {
     return this.generateToken(payload);
   }
 }
+
+// Named export for compatibility
+export const auth = AuthService;

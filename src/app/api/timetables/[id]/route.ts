@@ -13,21 +13,11 @@ export async function GET(
         class: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
         subject: { select: { id: true, name: true } },
-        teacher: { 
-          select: { 
-                        id: true,
-            firstName: true, 
-            lastName: true
-          } 
+        Exam: {
+          select: { id: true, name: true, startTime: true, endTime: true }
         },
-        exams: {
-          select: { id: true, title: true, startTime: true, endTime: true }
-        },
-        assignments: {
-          select: { id: true, title: true, startDate: true, dueDate: true }
-        },
-        attendances: {
-          select: { id: true, date: true, present: true, student: { select: { firstName: true, lastName: true } } }
+        Attendance: {
+          select: { id: true, date: true, status: true, student: { select: { firstName: true, lastName: true } } }
         }
       },
     });
@@ -63,27 +53,19 @@ export async function PUT(
         classId: body.classId,
         academicYearId: body.academicYearId,
         subjectId: body.subjectId,
-        teacherId: body.teacherId,
-        fullDate: new Date(body.fullDate),
-        day: body.day,
+        teacherIds: body.teacherIds || [],
+        dayOfWeek: body.dayOfWeek,
         startTime: new Date(body.startTime),
         endTime: new Date(body.endTime),
         roomNumber: body.roomNumber,
         buildingName: body.buildingName || null,
-        status: body.status,
+        isActive: body.isActive !== undefined ? body.isActive : true,
       },
       include: {
         branch: { select: { id: true, shortName: true } },
         class: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
         subject: { select: { id: true, name: true } },
-        teacher: { 
-          select: { 
-                        id: true,
-            firstName: true, 
-            lastName: true
-          } 
-        },
       },
     });
     
@@ -108,9 +90,8 @@ export async function DELETE(
       include: {
         _count: {
           select: {
-            exams: true,
-            assignments: true,
-            attendances: true,
+            Exam: true,
+            Attendance: true,
           }
         }
       }
@@ -124,9 +105,9 @@ export async function DELETE(
     }
 
     const { _count } = relatedRecords;
-    if (_count.exams > 0 || _count.assignments > 0 || _count.attendances > 0) {
+    if (_count.Exam > 0 || _count.Attendance > 0) {
       return NextResponse.json(
-        { error: "Cannot delete timetable with associated exams, assignments, or attendances" },
+        { error: "Cannot delete timetable with associated exams or attendances" },
         { status: 400 }
       );
     }

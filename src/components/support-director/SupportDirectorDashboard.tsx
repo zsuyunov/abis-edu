@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
@@ -41,7 +42,7 @@ export default function SupportDirectorDashboard() {
 
   return (
     <>
-      {/* USER CARDS */}
+      {/* USER CARDS }
       <div className="flex gap-4 justify-between flex-wrap">
         {isLoading ? (
           <>
@@ -60,7 +61,7 @@ export default function SupportDirectorDashboard() {
         )}
       </div>
 
-      {/* QUICK STATS */}
+      {/* QUICK STATS }
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
         <div className="bg-white p-4 rounded-lg shadow-sm border">
           <h3 className="text-sm font-medium text-gray-500 mb-2">Total Subjects</h3>
@@ -80,3 +81,5 @@ export default function SupportDirectorDashboard() {
 }
 
 
+
+*/

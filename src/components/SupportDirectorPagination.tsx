@@ -1,4 +1,4 @@
-"use client";
+/*"use client";
 
 import { ITEM_PER_PAGE } from "@/lib/settings";
 
@@ -55,3 +55,6 @@ const SupportDirectorPagination = ({
 };
 
 export default SupportDirectorPagination;
+
+
+*/

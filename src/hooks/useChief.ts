@@ -1,3 +1,4 @@
+/*
 import { useQuery } from "@tanstack/react-query";
 
 // Chief Events Hook
@@ -59,3 +60,5 @@ export const useChiefMealPlans = (page: number = 1, search: string = "") => {
     },
   });
 };
+
+*/

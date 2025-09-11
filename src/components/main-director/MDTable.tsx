@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { ReactNode } from "react";
@@ -56,3 +57,5 @@ const MDTable = ({ columns, data, renderRow, loading }: MDTableProps) => {
 };
 
 export default MDTable;
+
+*/

@@ -1,33 +1,100 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Image from "next/image";
-import TimetableTopicModal from "./TimetableTopicModal";
+import React, { useState, useEffect } from "react";
+import { 
+  Clock, 
+  MapPin, 
+  Users, 
+  BookOpen, 
+  Calendar,
+  User,
+  GraduationCap,
+  Building,
+  ChevronRight,
+  Plus,
+  FileText,
+  MoreVertical,
+  Check,
+  X,
+  AlertCircle,
+  Timer,
+  UserCheck,
+  GraduationCap as GradeIcon,
+  BookMarked
+} from "lucide-react";
+import ClassworkTopicsModal from "./ClassworkTopicsModal";
+import AttendanceForm from "./AttendanceForm";
+import GradeModal from "./GradeModal";
+import HomeworkModal from "./HomeworkModal";
+// Remove any potential import conflicts
+// import HomeworkAssignmentModal from "./HomeworkAssignmentModal";
+
+interface TimetableEntry {
+  id: number;
+  fullDate: string;
+  day: string;
+  startTime: string;
+  endTime: string;
+  roomNumber: string;
+  buildingName?: string;
+  status: string;
+  subject: { id: number; name: string };
+  class: { id: number; name: string };
+  teacher: { id: string; firstName: string; lastName: string };
+  branch: { id: number; shortName: string };
+  academicYear?: { id: number; name: string };
+  topics?: Array<{
+    id: number;
+    title: string;
+    description?: string;
+    status: 'draft' | 'in_progress' | 'completed' | 'cancelled';
+  }>;
+}
 
 interface TeacherWeeklyTimetableProps {
   teacherId: string;
+  teacherData: any;
+  relatedData: {
+    branches: any[];
+    classes: any[];
+    subjects: any[];
+    supervisedClasses: any[];
+  };
   filters: any;
   dateRange: { start: Date; end: Date };
 }
 
-const TeacherWeeklyTimetable = ({ teacherId, filters, dateRange }: TeacherWeeklyTimetableProps) => {
-  const [timetables, setTimetables] = useState([]);
-  const [supervisedTimetables, setSupervisedTimetables] = useState([]);
-  const [supervisedClasses, setSupervisedClasses] = useState([]);
+const TeacherWeeklyTimetable = ({ 
+  teacherId, 
+  teacherData, 
+  relatedData, 
+  filters, 
+  dateRange 
+}: TeacherWeeklyTimetableProps) => {
+  const [timetables, setTimetables] = useState<TimetableEntry[]>([]);
+  const [supervisedTimetables, setSupervisedTimetables] = useState<TimetableEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTimetable, setSelectedTimetable] = useState(null);
+  const [selectedTimetable, setSelectedTimetable] = useState<TimetableEntry | null>(null);
   const [showTopicModal, setShowTopicModal] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [showGradeModal, setShowGradeModal] = useState(false);
+  const [showHomeworkModal, setShowHomeworkModal] = useState(false);
+  const [selectedAttendanceSlot, setSelectedAttendanceSlot] = useState<any>(null);
+  const [selectedGradeSlot, setSelectedGradeSlot] = useState<any>(null);
+  const [selectedHomeworkSlot, setSelectedHomeworkSlot] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"own" | "supervised">("own");
+  const [selectedSupervisedClass, setSelectedSupervisedClass] = useState("");
 
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const timeSlots = [
-    "08:00", "09:00", "10:00", "11:00", "12:00", 
-    "13:00", "14:00", "15:00", "16:00", "17:00"
+    "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", 
+    "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
+    "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00"
   ];
 
   useEffect(() => {
     fetchTimetables();
-  }, [teacherId, filters, dateRange]);
+  }, [teacherId, filters, dateRange, viewMode, selectedSupervisedClass]);
 
   const fetchTimetables = async () => {
     try {
@@ -38,263 +105,517 @@ const TeacherWeeklyTimetable = ({ teacherId, filters, dateRange }: TeacherWeekly
         startDate: dateRange.start.toISOString().split('T')[0],
         endDate: dateRange.end.toISOString().split('T')[0],
         view: "weekly",
+        mode: viewMode,
+        ...(selectedSupervisedClass && { supervisedClassId: selectedSupervisedClass })
       });
 
-      const response = await fetch(`/api/teacher-timetables?${queryParams}`);
+      const response = await fetch(`/api/teacher-timetables?${queryParams}`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      
       if (response.ok) {
         const data = await response.json();
+        if (viewMode === "own") {
         setTimetables(data.timetables || []);
+        } else {
         setSupervisedTimetables(data.supervisedTimetables || []);
-        setSupervisedClasses(data.supervisedClasses || []);
+        }
       }
     } catch (error) {
-      console.error("Error fetching timetables:", error);
+      console.error("Failed to fetch timetables:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatTime = (dateTime: string) => {
-    return new Date(dateTime).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  };
-
-  const getDayFromDate = (date: string) => {
-    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    const dayIndex = new Date(date).getDay();
-    return dayNames[dayIndex];
-  };
-
   const getTimetableForSlot = (day: string, timeSlot: string) => {
     const currentTimetables = viewMode === "own" ? timetables : supervisedTimetables;
     
-    return currentTimetables.find((timetable: any) => {
-      const timetableDay = getDayFromDate(timetable.fullDate);
-      const timetableTime = formatTime(timetable.startTime);
-      return timetableDay === day.toLowerCase() && timetableTime === timeSlot;
+    const result = currentTimetables.find(entry => {
+      const entryDay = new Date(entry.fullDate).toLocaleDateString('en-US', { weekday: 'long' });
+      const entryStartTime = new Date(entry.startTime);
+      const entryEndTime = new Date(entry.endTime);
+      
+      // Convert time slot to date for comparison
+      const today = new Date();
+      const [slotHours, slotMinutes] = timeSlot.split(':').map(Number);
+      const slotDateTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), slotHours, slotMinutes);
+      
+      // Set entry times to same date for comparison
+      const startDateTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 
+        entryStartTime.getHours(), entryStartTime.getMinutes());
+      const endDateTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 
+        entryEndTime.getHours(), entryEndTime.getMinutes());
+      
+      // Check if day matches and if time slot falls within class time
+      const dayMatches = entryDay === day;
+      const timeOverlaps = slotDateTime >= startDateTime && slotDateTime < endDateTime;
+      
+      return dayMatches && timeOverlaps;
     });
+    
+    return result;
   };
 
-  const isToday = (day: string) => {
-    const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
-    return day === today;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "ACTIVE":
-        return "bg-green-100 text-green-800";
-      case "INACTIVE":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-blue-100 text-blue-800";
-    }
-  };
-
-  const getTopicStatusColor = (status: string) => {
-    switch (status) {
-      case "COMPLETED":
-        return "text-green-600";
-      case "IN_PROGRESS":
-        return "text-blue-600";
-      case "DRAFT":
-        return "text-gray-600";
-      case "CANCELLED":
-        return "text-red-600";
-      default:
-        return "text-gray-400";
-    }
-  };
-
-  const handleAddTopic = (timetable: any) => {
+  const handleTopicClick = (timetable: TimetableEntry) => {
     setSelectedTimetable(timetable);
     setShowTopicModal(true);
   };
 
-  const handleTopicCreated = () => {
-    fetchTimetables();
-    setShowTopicModal(false);
-    setSelectedTimetable(null);
+  const handleAttendanceClick = (timetable: TimetableEntry) => {
+    const lessonData = {
+      id: timetable.id.toString(),
+      classId: timetable.class.id.toString(),
+      subjectId: timetable.subject.id.toString(),
+      academicYearId: timetable.academicYear?.id.toString() || "1",
+      branchId: timetable.branch.id.toString(),
+      className: timetable.class.name,
+      subjectName: timetable.subject.name,
+      date: timetable.fullDate,
+      startTime: timetable.startTime,
+      endTime: timetable.endTime
+    };
+    console.log('Attendance lesson data:', lessonData);
+    setSelectedAttendanceSlot(lessonData);
+    setShowAttendanceModal(true);
+  };
+
+  const handleGradeClick = (timetable: TimetableEntry) => {
+    const lessonData = {
+      id: timetable.id.toString(),
+      classId: timetable.class.id.toString(),
+      subjectId: timetable.subject.id.toString(),
+      academicYearId: timetable.academicYear?.id.toString() || "1",
+      branchId: timetable.branch.id.toString(),
+      className: timetable.class.name,
+      subjectName: timetable.subject.name,
+      date: timetable.fullDate,
+      startTime: timetable.startTime,
+      endTime: timetable.endTime
+    };
+    console.log('Grade lesson data:', lessonData);
+    setSelectedGradeSlot(lessonData);
+    setShowGradeModal(true);
+  };
+
+  const handleHomeworkClick = (timetable: TimetableEntry) => {
+    const lessonData = {
+      id: timetable.id.toString(),
+      classId: timetable.class.id.toString(),
+      subjectId: timetable.subject.id.toString(),
+      academicYearId: timetable.academicYear?.id.toString() || "1",
+      branchId: timetable.branch.id.toString(),
+      className: timetable.class.name,
+      subjectName: timetable.subject.name,
+      date: timetable.fullDate,
+      startTime: timetable.startTime,
+      endTime: timetable.endTime
+    };
+    console.log('Homework lesson data:', lessonData);
+    setSelectedHomeworkSlot(lessonData);
+    setShowHomeworkModal(true);
+  };
+
+  const getTopicStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'bg-green-100 text-green-700 border-green-200';
+      case 'in_progress': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'draft': return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200';
+      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return <Check className="w-3 h-3" />;
+      case 'in_progress': return <Timer className="w-3 h-3" />;
+      case 'cancelled': return <X className="w-3 h-3" />;
+      default: return <AlertCircle className="w-3 h-3" />;
+    }
+  };
+
+  const isToday = (day: string) => {
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    return day === today;
+  };
+
+  const getCurrentTime = () => {
+    const now = new Date();
+    return now.toTimeString().substring(0, 5);
+  };
+
+  const isCurrentSlot = (day: string, timeSlot: string) => {
+    return isToday(day) && getCurrentTime() >= timeSlot && getCurrentTime() < getNextTimeSlot(timeSlot);
+  };
+
+  const getNextTimeSlot = (currentSlot: string) => {
+    const currentIndex = timeSlots.indexOf(currentSlot);
+    return currentIndex < timeSlots.length - 1 ? timeSlots[currentIndex + 1] : "23:59";
   };
 
   if (loading) {
     return (
-      <div className="animate-pulse">
-        <div className="h-8 bg-gray-200 rounded mb-4"></div>
-        <div className="grid grid-cols-6 gap-2">
-          {Array.from({ length: 60 }).map((_, i) => (
-            <div key={i} className="h-20 bg-gray-200 rounded"></div>
-          ))}
+      <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 p-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading your weekly schedule...</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
+    <div className="space-y-6">
+      {/* View Mode Selector & Supervised Class Selector */}
+      <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
     <div>
-      {/* VIEW MODE SELECTOR */}
-      {supervisedClasses.length > 0 && (
-        <div className="mb-4 flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">View Mode:</span>
-          <div className="flex rounded-md border border-gray-300 overflow-hidden">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Weekly Schedule</h3>
+            <p className="text-sm text-gray-600">
+              {dateRange.start.toLocaleDateString()} - {dateRange.end.toLocaleDateString()}
+            </p>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex rounded-xl border-2 border-gray-200 bg-white overflow-hidden">
             <button
               onClick={() => setViewMode("own")}
-              className={`px-4 py-2 text-sm font-medium ${
+                className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 viewMode === "own"
-                  ? "bg-lamaSky text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
+                    ? "bg-blue-500 text-white shadow-md"
+                    : "text-gray-600 hover:bg-gray-50"
               }`}
             >
+                <User className="w-4 h-4 mr-2 inline" />
               My Classes
             </button>
+              {relatedData.supervisedClasses.length > 0 && (
             <button
               onClick={() => setViewMode("supervised")}
-              className={`px-4 py-2 text-sm font-medium ${
+                  className={`px-4 py-2 text-sm font-medium transition-all duration-200 ${
                 viewMode === "supervised"
-                  ? "bg-lamaSky text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
+                      ? "bg-indigo-500 text-white shadow-md"
+                      : "text-gray-600 hover:bg-gray-50"
               }`}
             >
+                  <GraduationCap className="w-4 h-4 mr-2 inline" />
               Supervised Classes
             </button>
+              )}
+            </div>
+            
+            {/* Supervised Class Selector */}
+            {viewMode === "supervised" && relatedData.supervisedClasses.length > 0 && (
+              <select
+                value={selectedSupervisedClass}
+                onChange={(e) => setSelectedSupervisedClass(e.target.value)}
+                className="px-4 py-2 border-2 border-gray-200 rounded-xl bg-white text-sm font-medium focus:border-indigo-500 transition-colors"
+              >
+                <option value="">All Supervised Classes</option>
+                {relatedData.supervisedClasses.map((cls: any) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name} - {cls.branch.shortName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
           </div>
         </div>
-      )}
 
-      {/* TIMETABLE GRID */}
+      {/* Weekly Grid */}
+      <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200/50 overflow-hidden">
       <div className="overflow-x-auto">
-        <div className="min-w-[800px]">
-          {/* HEADER */}
-          <div className="grid grid-cols-6 gap-2 mb-4">
-            <div className="p-3 bg-gray-100 rounded-md font-medium text-center">
+          <div className="grid grid-cols-7 gap-0 min-w-[900px]">
+            {/* Header Row */}
+            <div className="bg-gradient-to-r from-slate-100 to-gray-100 p-4 font-medium text-gray-700 border-b border-gray-200">
               Time
             </div>
             {days.map((day) => (
-              <div
-                key={day}
-                className={`p-3 rounded-md font-medium text-center ${
+              <div key={day} className={`p-4 font-medium text-center border-b border-gray-200 ${
                   isToday(day)
-                    ? "bg-lamaSky text-white"
-                    : "bg-gray-100 text-gray-700"
-                }`}
-              >
+                  ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-200" 
+                  : "bg-gradient-to-r from-slate-100 to-gray-100 text-gray-700"
+              }`}>
                 {day}
+                {isToday(day) && (
+                  <span className="block text-xs font-normal text-blue-600">Today</span>
+                )}
               </div>
             ))}
-          </div>
 
-          {/* TIME SLOTS */}
+            {/* Time Slots */}
           {timeSlots.map((timeSlot) => (
-            <div key={timeSlot} className="grid grid-cols-6 gap-2 mb-2">
-              {/* TIME COLUMN */}
-              <div className="p-3 bg-gray-50 rounded-md text-sm font-medium text-center text-gray-600">
+              <React.Fragment key={timeSlot}>
+                <div className="p-3 text-sm font-medium text-gray-600 bg-gray-50/80 border-b border-gray-200 flex items-center justify-center">
                 {timeSlot}
               </div>
-
-              {/* DAY COLUMNS */}
               {days.map((day) => {
                 const timetable = getTimetableForSlot(day, timeSlot);
+                  const isCurrentTime = isCurrentSlot(day, timeSlot);
                 
                 return (
-                  <div
-                    key={`${day}-${timeSlot}`}
-                    className={`p-3 rounded-md border min-h-[80px] ${
-                      timetable
-                        ? "bg-white border-gray-200 hover:shadow-md transition-shadow"
-                        : "bg-gray-50 border-gray-100"
-                    }`}
-                  >
-                    {timetable ? (
-                      <div className="h-full flex flex-col justify-between">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 mb-1">
+                    <div key={`${day}-${timeSlot}`} className={`min-h-[100px] border-b border-r border-gray-200 p-2 transition-all duration-200 ${
+                      isCurrentTime 
+                        ? "bg-gradient-to-br from-blue-100 to-blue-200 border-blue-300" 
+                        : "bg-white hover:bg-gray-50"
+                    }`}>
+                      {timetable && (
+                        <div className={`h-full rounded-lg p-3 transition-all duration-200 hover:shadow-md cursor-pointer ${
+                          timetable.status === "ACTIVE" 
+                            ? "bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200" 
+                            : "bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200"
+                        }`}>
+                          {/* Subject and Class */}
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <BookOpen className="w-4 h-4 text-blue-600" />
+                              <span className="font-semibold text-sm text-blue-800">
                             {timetable.subject.name}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-indigo-600" />
+                              <span className="text-sm text-indigo-700">
+                                {timetable.class.name}
+                              </span>
                           </div>
-                          <div className="text-xs text-gray-600 mb-1">
-                            {timetable.class.name} • {timetable.roomNumber}
+
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-orange-600" />
+                              <span className="text-sm text-orange-700">
+                                {timetable.roomNumber}
+                                {timetable.buildingName && ` (${timetable.buildingName})`}
+                              </span>
                           </div>
-                          <div className={`text-xs px-2 py-1 rounded-full inline-block ${getStatusColor(timetable.status)}`}>
-                            {timetable.status}
+
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-gray-600" />
+                              <span className="text-xs text-gray-600">
+                                {new Date(timetable.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
+                                {new Date(timetable.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </span>
                           </div>
                         </div>
 
-                        <div className="mt-2">
-                          {/* TOPICS INDICATOR */}
-                          {timetable.topics && timetable.topics.length > 0 ? (
+                          {/* Topics Summary */}
+                          {timetable.topics && timetable.topics.length > 0 && (
+                            <div className="mt-3 pt-2 border-t border-gray-200">
                             <div className="flex items-center justify-between">
-                              <span className={`text-xs ${getTopicStatusColor(timetable.topics[0].status)}`}>
-                                ● {timetable.topics.length} topic{timetable.topics.length > 1 ? 's' : ''}
+                                <span className="text-xs text-gray-600">
+                                  {timetable.topics.length} topic{timetable.topics.length !== 1 ? 's' : ''}
                               </span>
-                              <button
-                                onClick={() => handleAddTopic(timetable)}
-                                className="text-xs text-blue-600 hover:text-blue-800"
-                              >
-                                View
-                              </button>
+                                <div className="flex gap-1">
+                                  {timetable.topics.slice(0, 3).map((topic) => (
+                                    <div 
+                                      key={topic.id}
+                                      className={`w-2 h-2 rounded-full border ${getTopicStatusColor(topic.status)}`}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => handleAddTopic(timetable)}
-                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-lamaSky"
-                            >
-                              <Image src="/create.png" alt="Add" width={12} height={12} />
-                              Add Topic
-                            </button>
                           )}
+
+                          {/* Action Buttons */}
+                          <div className="mt-3 flex justify-between items-center">
+                            <span className={`px-2 py-1 rounded-md text-xs font-medium ${
+                              timetable.status === "ACTIVE" 
+                                ? "bg-green-100 text-green-700" 
+                                : "bg-gray-100 text-gray-700"
+                            }`}>
+                              {timetable.status}
+                            </span>
+                            
+                            {/* Action buttons for own classes or if supervisor can edit */}
+                            {(viewMode === "own" || (viewMode === "supervised" && timetable.teacher.id === teacherId)) && (
+                              <div className="flex gap-1 flex-wrap">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAttendanceClick(timetable);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 bg-green-500 text-white rounded-md text-xs font-medium hover:bg-green-600 transition-colors"
+                                >
+                                  <UserCheck className="w-3 h-3" />
+                                  Attendance
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleGradeClick(timetable);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 bg-purple-500 text-white rounded-md text-xs font-medium hover:bg-purple-600 transition-colors"
+                                >
+                                  <GradeIcon className="w-3 h-3" />
+                                  Grades
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleHomeworkClick(timetable);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600 transition-colors"
+                                >
+                                  <BookMarked className="w-3 h-3" />
+                                  Homework
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTopicClick(timetable);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 bg-blue-500 text-white rounded-md text-xs font-medium hover:bg-blue-600 transition-colors"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  Topics
+                                </button>
+                              </div>
+                            )}
                         </div>
-                      </div>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-xs text-gray-400">
-                        No class
                       </div>
                     )}
                   </div>
                 );
               })}
-            </div>
+              </React.Fragment>
           ))}
         </div>
-      </div>
-
-      {/* LEGEND */}
-      <div className="mt-6 p-4 bg-gray-50 rounded-md">
-        <h4 className="text-sm font-medium text-gray-900 mb-2">Legend</h4>
-        <div className="flex flex-wrap gap-4 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div>
-            <span>Active Class</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-gray-100 border border-gray-200 rounded"></div>
-            <span>Inactive Class</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 text-green-600">●</span>
-            <span>Completed Topic</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 text-blue-600">●</span>
-            <span>In Progress Topic</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 text-gray-600">●</span>
-            <span>Draft Topic</span>
-          </div>
         </div>
       </div>
 
-      {/* TOPIC MODAL */}
+      {/* Daily Summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {days.map((day) => {
+          const dayTimetables = (viewMode === "own" ? timetables : supervisedTimetables).filter(t => 
+            new Date(t.fullDate).toLocaleDateString('en-US', { weekday: 'long' }) === day
+          );
+          
+          return (
+            <div key={day} className={`bg-white/70 backdrop-blur-sm rounded-xl border border-gray-200/50 p-4 ${
+              isToday(day) ? "ring-2 ring-blue-200 bg-blue-50/70" : ""
+            }`}>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className={`font-semibold ${isToday(day) ? "text-blue-700" : "text-gray-700"}`}>
+                  {day}
+                </h4>
+                <span className={`text-xs px-2 py-1 rounded-md ${
+                  dayTimetables.length > 0 
+                    ? "bg-green-100 text-green-700" 
+                    : "bg-gray-100 text-gray-600"
+                }`}>
+                  {dayTimetables.length} classes
+                </span>
+      </div>
+
+              <div className="space-y-2">
+                {dayTimetables.slice(0, 3).map((timetable) => (
+                  <div key={timetable.id} className="bg-white/50 rounded-lg p-2 border border-gray-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-blue-600">
+                        {new Date(timetable.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </span>
+                      <span className="text-xs text-gray-600">•</span>
+                      <span className="text-xs text-gray-700 truncate">
+                        {timetable.subject.name}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-600 truncate">
+                      {timetable.class.name} • {timetable.roomNumber}
+          </div>
+          </div>
+                ))}
+                
+                {dayTimetables.length > 3 && (
+                  <div className="text-xs text-gray-500 text-center pt-1">
+                    +{dayTimetables.length - 3} more
+          </div>
+                )}
+                
+                {dayTimetables.length === 0 && (
+                  <div className="text-xs text-gray-500 text-center py-2">
+                    No classes scheduled
+          </div>
+                )}
+          </div>
+        </div>
+          );
+        })}
+      </div>
+
+      {/* Topics Modal */}
       {showTopicModal && selectedTimetable && (
-        <TimetableTopicModal
-          timetable={selectedTimetable}
+        <ClassworkTopicsModal
+          timetableSlot={{
+            id: selectedTimetable.id.toString(),
+            className: selectedTimetable.class.name,
+            subjectName: selectedTimetable.subject.name,
+            startTime: selectedTimetable.startTime,
+            endTime: selectedTimetable.endTime,
+            date: selectedTimetable.fullDate,
+            room: selectedTimetable.roomNumber
+          }}
+          existingTopics={(selectedTimetable.topics || []).map(topic => ({
+            id: topic.id.toString(),
+            topicTitle: topic.title,
+            topicDescription: topic.description || "",
+            attachments: [],
+            status: topic.status.toUpperCase() as "DRAFT" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED",
+            progressPercentage: 0
+          }))}
           onClose={() => {
             setShowTopicModal(false);
             setSelectedTimetable(null);
           }}
-          onSuccess={handleTopicCreated}
+          onSave={(topics) => {
+            // Handle saving topics
+            console.log('Topics saved:', topics);
+            fetchTimetables();
+          }}
+        />
+      )}
+
+      {/* Attendance Form */}
+      {showAttendanceModal && selectedAttendanceSlot && (
+        <AttendanceForm
+          isOpen={showAttendanceModal}
+          onClose={() => {
+            setShowAttendanceModal(false);
+            setSelectedAttendanceSlot(null);
+          }}
+          lessonData={selectedAttendanceSlot}
+          teacherId={teacherId}
+        />
+      )}
+
+      {/* Grade Modal */}
+      {showGradeModal && selectedGradeSlot && (
+        <GradeModal
+          isOpen={showGradeModal}
+          onClose={() => {
+            setShowGradeModal(false);
+            setSelectedGradeSlot(null);
+          }}
+          lessonData={selectedGradeSlot}
+          teacherId={teacherId}
+        />
+      )}
+
+      {/* Homework Modal */}
+      {showHomeworkModal && selectedHomeworkSlot && (
+        <HomeworkModal
+          isOpen={showHomeworkModal}
+          onClose={() => {
+            setShowHomeworkModal(false);
+            setSelectedHomeworkSlot(null);
+          }}
+          lessonData={selectedHomeworkSlot}
+          teacherId={teacherId}
         />
       )}
     </div>

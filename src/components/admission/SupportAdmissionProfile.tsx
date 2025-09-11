@@ -1,10 +1,10 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { toast } from "@/components/ui/Toast";
 import { InlineGifLoader } from "@/components/ui/CustomGifLoader";
-import ControlledPasswordField from "../ControlledPasswordField";
 
 interface UserProfile {
   id: string;
@@ -134,16 +134,16 @@ const SupportAdmissionProfile = () => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
+      {/* Header }
       <div className="bg-gradient-to-r from-purple-100 to-indigo-100 p-6 rounded-lg">
         <h1 className="text-2xl font-bold text-purple-800 mb-2">Support Admission Profile</h1>
         <p className="text-purple-600">Manage your personal information and account settings</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Information */}
+        {/* Profile Information }
         <div className="lg:col-span-2 space-y-6">
-          {/* Personal Information */}
+          {/* Personal Information }
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Personal Information</h3>
@@ -234,39 +234,54 @@ const SupportAdmissionProfile = () => {
             )}
           </div>
 
-          {/* Change Password */}
+          {/* Change Password }
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Change Password</h3>
             <div className="space-y-4">
-              <ControlledPasswordField
-                label="Current Password"
-                name="currentPassword"
-                value={formData.currentPassword}
-                onChange={handleInputChange}
-                placeholder="Enter current password"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              <ControlledPasswordField
-                label="New Password"
-                name="newPassword"
-                value={formData.newPassword}
-                onChange={handleInputChange}
-                placeholder="Enter new password"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-              <ControlledPasswordField
-                label="Confirm New Password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                placeholder="Confirm new password"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  name="currentPassword"
+                  value={formData.currentPassword}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Enter current password"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={formData.newPassword}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Enter new password"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="Confirm new password"
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Account Information */}
+        {/* Account Information }
         <div className="space-y-6">
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Account Information</h3>
@@ -301,7 +316,7 @@ const SupportAdmissionProfile = () => {
             </div>
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions }
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
             <div className="space-y-3">
@@ -323,3 +338,6 @@ const SupportAdmissionProfile = () => {
 };
 
 export default SupportAdmissionProfile;
+
+
+*/

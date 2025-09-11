@@ -6,13 +6,15 @@ import BranchActionModal from "@/components/BranchActionModal";
 
 import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
-import { Branch, BranchStatus, Director, Prisma } from "@prisma/client";
+// import { Branch, BranchStatus, Director, Prisma } from "@prisma/client";
+import { Branch, BranchStatus, Prisma } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
 
 import { headers } from "next/headers";
 
-type BranchList = Branch & { director: Director | null };
+// type BranchList = Branch & { director: Director | null };
+type BranchList = Branch;
 
 const BranchListPage = async ({
   searchParams,
@@ -24,6 +26,11 @@ const BranchListPage = async ({
   const currentUserId = headersList.get("x-user-id") || "";
 
   const columns = [
+    {
+      header: "ID",
+      accessor: "id",
+      className: "hidden sm:table-cell",
+    },
     {
       header: "Info",
       accessor: "info",
@@ -48,11 +55,11 @@ const BranchListPage = async ({
       accessor: "region",
       className: "hidden lg:table-cell",
     },
-    {
-      header: "Director",
-      accessor: "director",
-      className: "hidden lg:table-cell",
-    },
+    // {
+    //   header: "Director",
+    //   accessor: "director",
+    //   className: "hidden lg:table-cell",
+    // },
     ...(role === "admin"
       ? [
           {
@@ -79,6 +86,9 @@ const BranchListPage = async ({
       key={item.id}
       className="border-b border-gray-200 even:bg-slate-50 text-sm hover:bg-lamaPurpleLight"
     >
+      <td className="hidden sm:table-cell p-4 font-mono text-sm text-gray-600">
+        #{item.id}
+      </td>
       <td className="flex items-center gap-4 p-4">
         <Image
           src="/singleBranch.png"
@@ -104,9 +114,9 @@ const BranchListPage = async ({
       </td>
       <td className="hidden lg:table-cell">{item.phone}</td>
       <td className="hidden lg:table-cell">{item.region}</td>
-      <td className="hidden lg:table-cell">
+      {/* <td className="hidden lg:table-cell">
         {item.director ? `${item.director.firstName} ${item.director.lastName}` : "No Director"}
-      </td>
+      </td> */}
       <td>
         <div className="flex items-center gap-2">
           <Link href={`/admin/list/branches/${item.id}`}>
@@ -179,9 +189,9 @@ const BranchListPage = async ({
   const [data, count] = await prisma.$transaction([
     prisma.branch.findMany({
       where: query,
-      include: {
-        director: true,
-      },
+      // include: {
+      //   director: true,
+      // },
       take: ITEM_PER_PAGE,
       skip: ITEM_PER_PAGE * (p - 1),
       orderBy: {

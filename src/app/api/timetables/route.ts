@@ -33,10 +33,12 @@ export async function GET(request: NextRequest) {
       where.subjectId = parseInt(subjectId);
     }
     if (teacherId && teacherId !== "all") {
-      where.teacherId = teacherId;
+      where.teacherIds = {
+        has: teacherId
+      };
     }
     if (status && status !== "all") {
-      where.status = status;
+      where.isActive = status === "ACTIVE";
     }
     
     // Apply date filtering
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
           const endOfDay = new Date(filterDate);
           endOfDay.setHours(23, 59, 59, 999);
           
-          where.fullDate = {
+          where.startTime = {
             gte: startOfDay,
             lte: endOfDay,
           };
@@ -69,7 +71,7 @@ export async function GET(request: NextRequest) {
           endOfWeek.setDate(endOfWeek.getDate() + 6);
           endOfWeek.setHours(23, 59, 59, 999);
           
-          where.fullDate = {
+          where.startTime = {
             gte: startOfWeek,
             lte: endOfWeek,
           };
@@ -80,7 +82,7 @@ export async function GET(request: NextRequest) {
           const startOfMonth = new Date(filterDate.getFullYear(), filterDate.getMonth(), 1);
           const endOfMonth = new Date(filterDate.getFullYear(), filterDate.getMonth() + 1, 0, 23, 59, 59, 999);
           
-          where.fullDate = {
+          where.startTime = {
             gte: startOfMonth,
             lte: endOfMonth,
           };
@@ -91,7 +93,7 @@ export async function GET(request: NextRequest) {
           const startOfYear = new Date(filterDate.getFullYear(), 0, 1);
           const endOfYear = new Date(filterDate.getFullYear(), 11, 31, 23, 59, 59, 999);
           
-          where.fullDate = {
+          where.startTime = {
             gte: startOfYear,
             lte: endOfYear,
           };
@@ -106,21 +108,21 @@ export async function GET(request: NextRequest) {
         class: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
         subject: { select: { id: true, name: true } },
-        teacher: { 
-          select: { 
-                        id: true,
-            firstName: true, 
-            lastName: true
-          } 
-        },
       },
       orderBy: [
-        { fullDate: "asc" },
         { startTime: "asc" },
       ],
     });
     
-    return NextResponse.json(timetables);
+    // Transform timetables to include fullDate field
+    const transformedTimetables = timetables.map(timetable => ({
+      ...timetable,
+      fullDate: new Date().toISOString().split('T')[0], // Use current date as fallback
+      startTime: timetable.startTime?.toISOString() || timetable.startTime,
+      endTime: timetable.endTime?.toISOString() || timetable.endTime,
+    }));
+
+    return NextResponse.json(transformedTimetables);
   } catch (error) {
     console.error("Error fetching timetables:", error);
     return NextResponse.json(
@@ -140,27 +142,19 @@ export async function POST(request: NextRequest) {
         classId: body.classId,
         academicYearId: body.academicYearId,
         subjectId: body.subjectId,
-        teacherId: body.teacherId,
-        fullDate: new Date(body.fullDate),
-        day: body.day,
+        teacherIds: body.teacherIds || [],
+        dayOfWeek: body.dayOfWeek,
         startTime: new Date(body.startTime),
         endTime: new Date(body.endTime),
         roomNumber: body.roomNumber,
         buildingName: body.buildingName || null,
-        status: body.status || "ACTIVE",
+        isActive: body.isActive !== undefined ? body.isActive : true,
       },
       include: {
         branch: { select: { id: true, shortName: true } },
         class: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
         subject: { select: { id: true, name: true } },
-        teacher: { 
-          select: { 
-                        id: true,
-            firstName: true, 
-            lastName: true
-          } 
-        },
       },
     });
     

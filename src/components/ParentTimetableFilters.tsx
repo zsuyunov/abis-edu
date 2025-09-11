@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -106,7 +107,7 @@ const ParentTimetableFilters = ({
 
   return (
     <div className="space-y-4">
-      {/* ACADEMIC YEAR FILTER (ONLY FOR PAST) */}
+      {/* ACADEMIC YEAR FILTER (ONLY FOR PAST) }
       {timeFilter === "past" && (
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
@@ -129,9 +130,9 @@ const ParentTimetableFilters = ({
         </div>
       )}
 
-      {/* FILTERS ROW */}
+      {/* FILTERS ROW }
       <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2 lg:grid-cols-4'} gap-4`}>
-        {/* SUBJECT FILTER */}
+        {/* SUBJECT FILTER }
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Subject
@@ -150,7 +151,7 @@ const ParentTimetableFilters = ({
           </select>
         </div>
 
-        {/* DATE RANGE FILTERS */}
+        {/* DATE RANGE FILTERS }
         {(currentView === "weekly" || currentView === "monthly" || currentView === "calendar") && (
           <>
             <div>
@@ -178,7 +179,7 @@ const ParentTimetableFilters = ({
           </>
         )}
 
-        {/* EXPORT BUTTON */}
+        {/* EXPORT BUTTON }
         <div className="flex items-end">
           <div className="relative w-full">
             <button
@@ -222,7 +223,7 @@ const ParentTimetableFilters = ({
         </div>
       </div>
 
-      {/* SEARCH (FOR LARGER VIEWS) */}
+      {/* SEARCH (FOR LARGER VIEWS) }
       {!isMobile && currentView !== "today" && (
         <div className="flex gap-4">
           <div className="flex-1">
@@ -249,7 +250,7 @@ const ParentTimetableFilters = ({
         </div>
       )}
 
-      {/* QUICK DATE RANGES */}
+      {/* QUICK DATE RANGES }
       {currentView === "weekly" && (
         <div className="flex flex-wrap gap-2">
           <span className="text-sm font-medium text-gray-700 self-center">Quick select:</span>
@@ -295,7 +296,7 @@ const ParentTimetableFilters = ({
         </div>
       )}
 
-      {/* FILTER STATUS */}
+      {/* FILTER STATUS }
       {(filters.subjectId || filters.search || filters.academicYearId) && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-gray-600">Active filters:</span>
@@ -345,7 +346,7 @@ const ParentTimetableFilters = ({
         </div>
       )}
 
-      {/* EXPORT INFO */}
+      {/* EXPORT INFO }
       {selectedChild && (
         <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-md">
           💡 Export {selectedChild.firstName}'s timetable for home study planning. 
@@ -357,3 +358,6 @@ const ParentTimetableFilters = ({
 };
 
 export default ParentTimetableFilters;
+
+
+*/

@@ -10,10 +10,6 @@ const SubjectTeachersModal = ({
 }) => {
   const [open, setOpen] = useState(false);
 
-  // Safely access teacher assignments
-  const teacherAssignments = subject?.TeacherAssignment || [];
-  const hasTeachers = teacherAssignments.length > 0;
-
   return (
     <>
       <button
@@ -28,51 +24,45 @@ const SubjectTeachersModal = ({
           <div className="bg-white p-4 rounded-md relative w-[90%] md:w-[70%] lg:w-[60%] xl:w-[50%] 2xl:w-[40%]">
             <div className="p-4 flex flex-col gap-4 max-w-md">
               <span className="text-xl font-medium">
-                Teachers for {subject?.name || 'Unknown Subject'}
+                Teachers for {subject.name}
               </span>
               
-              {!hasTeachers ? (
+              {(!subject.TeacherAssignment || subject.TeacherAssignment.length === 0) ? (
                 <p className="text-gray-500">No teachers assigned to this subject.</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   <p className="text-sm text-gray-600 mb-2">
-                    Total: {teacherAssignments.length} teacher(s)
+                    Total: {subject.TeacherAssignment.length} teacher(s)
                   </p>
                   <div className="max-h-60 overflow-y-auto">
-                    {teacherAssignments.map((assignment: any) => {
-                      const teacher = assignment?.Teacher;
-                      if (!teacher) return null;
-                      
+                    {subject.TeacherAssignment.map((assignment: any) => {
+                      const teacher = assignment.Teacher;
                       return (
-                        <div 
-                          key={teacher.id} 
-                          className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50"
-                        >
-                          <Image
-                            src="/noAvatar.png"
-                            alt=""
-                            width={32}
-                            height={32}
-                            className="w-8 h-8 rounded-full object-cover"
-                          />
-                          <div className="flex flex-col">
-                            <span className="font-medium text-sm">
-                              {teacher.firstName} {teacher.lastName}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {teacher.email || teacher.phone}
-                            </span>
-                          </div>
-                          <div className="ml-auto">
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              teacher.status === "ACTIVE" 
-                                ? "bg-green-100 text-green-800" 
-                                : "bg-red-100 text-red-800"
-                            }`}>
-                              {teacher.status}
-                            </span>
-                          </div>
+                      <div 
+                        key={teacher.id} 
+                        className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50"
+                      >
+                        <Image
+                          src="/noAvatar.png"
+                          alt=""
+                          width={32}
+                          height={32}
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm">
+                            {teacher.firstName} {teacher.lastName}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {teacher.teacherId}
+                          </span>
                         </div>
+                        <div className="ml-auto">
+                          <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                            {assignment.role}
+                          </span>
+                        </div>
+                      </div>
                       );
                     })}
                   </div>

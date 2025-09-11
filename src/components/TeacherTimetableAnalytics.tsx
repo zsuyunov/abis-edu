@@ -2,14 +2,44 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell 
+} from "recharts";
+import { 
+  BarChart3, 
+  TrendingUp, 
+  BookOpen, 
+  Clock, 
+  CheckCircle, 
+  AlertTriangle,
+  Target,
+  Calendar,
+  Users,
+  Award
+} from "lucide-react";
 
 interface TeacherTimetableAnalyticsProps {
   teacherId: string;
+  teacherData: any;
+  relatedData: {
+    branches: any[];
+    classes: any[];
+    subjects: any[];
+    supervisedClasses: any[];
+  };
   filters: any;
 }
 
-const TeacherTimetableAnalytics = ({ teacherId, filters }: TeacherTimetableAnalyticsProps) => {
+const TeacherTimetableAnalytics = ({ teacherId, teacherData, relatedData, filters }: TeacherTimetableAnalyticsProps) => {
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,27 +69,32 @@ const TeacherTimetableAnalytics = ({ teacherId, filters }: TeacherTimetableAnaly
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="animate-pulse">
-            <div className="h-32 bg-gray-200 rounded-md"></div>
-          </div>
-        ))}
+      <div className="bg-white/80 backdrop-blur-sm border border-white/20 rounded-2xl p-8 shadow-xl">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        </div>
       </div>
     );
   }
 
   if (!analytics) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        <Image
-          src="/nodata.png"
-          alt="No data"
-          width={64}
-          height={64}
-          className="mx-auto mb-4"
-        />
-        <p>Unable to load analytics data.</p>
+      <div className="bg-white/80 backdrop-blur-sm border border-white/20 rounded-2xl p-6 shadow-xl">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl">
+            <BarChart3 className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Teaching Analytics</h2>
+            <p className="text-orange-600">Performance insights & progress tracking</p>
+          </div>
+        </div>
+        
+        <div className="text-center py-12">
+          <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 text-lg">Analytics coming soon</p>
+          <p className="text-gray-400">This feature is under development</p>
+        </div>
       </div>
     );
   }

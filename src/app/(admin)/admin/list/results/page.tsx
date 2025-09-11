@@ -138,8 +138,8 @@ const renderRow = (item: ResultList) => (
       break;
     case "teacher":
       query.OR = [
-        { exam: { timetable: { teacherId: currentUserId! } } },
         { homework: { teacherId: currentUserId! } },
+        { exam: { teacherId: currentUserId! } },
       ];
       break;
 

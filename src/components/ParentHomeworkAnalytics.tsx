@@ -1,3 +1,4 @@
+/*
 'use client';
 
 import React from 'react';
@@ -221,7 +222,7 @@ const ParentHomeworkAnalytics: React.FC<ParentHomeworkAnalyticsProps> = ({ homew
         <CardTitle className="text-xl">Homework Analytics</CardTitle>
       </CardHeader>
       <CardContent className="space-y-8">
-        {/* Subject-wise Performance */}
+        {/* Subject-wise Performance }
         <div>
           <h3 className="text-lg font-semibold mb-4">Subject-wise Completion Rate</h3>
           <div className="h-64">
@@ -229,7 +230,7 @@ const ParentHomeworkAnalytics: React.FC<ParentHomeworkAnalyticsProps> = ({ homew
           </div>
         </div>
 
-        {/* Timeline Progress */}
+        {/* Timeline Progress }
         <div>
           <h3 className="text-lg font-semibold mb-4">Homework Completion Timeline</h3>
           <div className="h-64">
@@ -238,7 +239,7 @@ const ParentHomeworkAnalytics: React.FC<ParentHomeworkAnalyticsProps> = ({ homew
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Overall Status Distribution */}
+          {/* Overall Status Distribution }
           <div>
             <h3 className="text-lg font-semibold mb-4">Submission Status Distribution</h3>
             <div className="h-64">
@@ -246,7 +247,7 @@ const ParentHomeworkAnalytics: React.FC<ParentHomeworkAnalyticsProps> = ({ homew
             </div>
           </div>
 
-          {/* Class Comparison */}
+          {/* Class Comparison }
           {classComparisonData && (
             <div>
               <h3 className="text-lg font-semibold mb-4">Class Performance Comparison</h3>
@@ -268,7 +269,7 @@ const ParentHomeworkAnalytics: React.FC<ParentHomeworkAnalyticsProps> = ({ homew
           )}
         </div>
 
-        {/* Key Insights */}
+        {/* Key Insights }
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
           <h3 className="text-lg font-semibold mb-2 text-blue-800">Key Insights</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -313,3 +314,5 @@ const ParentHomeworkAnalytics: React.FC<ParentHomeworkAnalyticsProps> = ({ homew
 };
 
 export default ParentHomeworkAnalytics;
+
+*/

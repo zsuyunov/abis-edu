@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -85,3 +86,5 @@ export const useSDHomework = createSDCrudHook("/homework", "sd-homework");
 export const useSDExams = createSDCrudHook("/exams", "sd-exams");
 export const useSDDocuments = createSDCrudHook("/documents", "sd-documents");
 export const useSDComplaints = createSDCrudHook("/complaints", "sd-complaints");
+
+*/

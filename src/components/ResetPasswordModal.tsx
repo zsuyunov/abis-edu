@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { z } from "zod";
 import { resetParentPassword } from "@/lib/actions";
-import PasswordField from "./PasswordField";
 
 const resetPasswordSchema = z.object({
   newPassword: z.string().min(8, { message: "Password must be at least 8 characters long!" }),
@@ -36,7 +35,7 @@ const ResetPasswordModal = ({
     resolver: zodResolver(resetPasswordSchema),
   });
 
-  const [state, formAction] = useFormState(resetParentPassword, {
+  const [state, formAction] = useFormState(resetParentPassword as any, {
     success: false,
     error: false,
     message: '',
@@ -61,7 +60,7 @@ const ResetPasswordModal = ({
     formData.append("parentId", parentId);
     formData.append("newPassword", data.newPassword);
     formData.append("currentUserId", currentUserId);
-    formAction(formData);
+    formAction();
   });
 
   return (
@@ -85,14 +84,22 @@ const ResetPasswordModal = ({
                 </p>
               </div>
 
-              <PasswordField
-                label="New Password"
-                name="newPassword"
-                register={register}
-                error={errors.newPassword}
-                required={true}
-                inputProps={{ placeholder: "Enter new password" }}
-              />
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-gray-500">
+                  New Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  {...register("newPassword")}
+                  className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
+                  placeholder="Enter new password"
+                />
+                {errors.newPassword?.message && (
+                  <p className="text-xs text-red-400">
+                    {errors.newPassword.message.toString()}
+                  </p>
+                )}
+              </div>
 
               {state.error && !state.message && (
                 <span className="text-red-500">Failed to reset password. Please try again.</span>

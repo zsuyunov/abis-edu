@@ -188,7 +188,7 @@ const DocumentUsageChart = ({ uploadsData, downloadsData, totalDocuments, totalD
             <h4 className="font-medium text-gray-700 mb-2">Usage Insights</h4>
             <div className="text-sm text-gray-600 space-y-1">
               {(() => {
-                const downloadRatio = totalUploads > 0 ? totalDownloads / totalDocuments : 0;
+                const downloadRatio = totalDocuments > 0 ? totalDownloads / totalDocuments : 0;
                 if (downloadRatio > 3) {
                   return <p>📈 <strong>Excellent engagement:</strong> Documents are being actively downloaded and used.</p>;
                 } else if (downloadRatio > 1.5) {

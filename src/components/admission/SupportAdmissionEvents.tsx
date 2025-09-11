@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -240,3 +241,6 @@ const SupportAdmissionEvents = () => {
 };
 
 export default SupportAdmissionEvents;
+
+
+*/

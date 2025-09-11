@@ -77,8 +77,8 @@ const ClassArchiveCommentForm = ({
       setOpen(false);
       router.refresh();
     }
-    if (state.error && state.message) {
-      toast.error(state.message);
+    if (state.error && (state as any).message) {
+      toast.error((state as any).message);
     }
   }, [state, router, setOpen, className, action]);
 

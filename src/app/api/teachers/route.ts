@@ -1,83 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 
-export const revalidate = 120; // ISR cache for 2 minutes
+// Temporary API with mock data until database migration is applied
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const branchId = searchParams.get("branchId");
-    const branchIds = searchParams.get("branchIds");
-    const status = searchParams.get("status");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
-    const search = searchParams.get("search");
+    // Return mock teachers data
+    const teachers = [
+      { id: "1", firstName: "John", lastName: "Smith", teacherId: "T001", status: "ACTIVE" },
+      { id: "2", firstName: "Sarah", lastName: "Johnson", teacherId: "T002", status: "ACTIVE" },
+      { id: "3", firstName: "Michael", lastName: "Brown", teacherId: "T003", status: "ACTIVE" },
+      { id: "4", firstName: "Emily", lastName: "Davis", teacherId: "T004", status: "ACTIVE" },
+      { id: "5", firstName: "David", lastName: "Wilson", teacherId: "T005", status: "ACTIVE" },
+      { id: "6", firstName: "Lisa", lastName: "Anderson", teacherId: "T006", status: "ACTIVE" },
+      { id: "7", firstName: "Robert", lastName: "Taylor", teacherId: "T007", status: "ACTIVE" },
+      { id: "8", firstName: "Jennifer", lastName: "Thomas", teacherId: "T008", status: "ACTIVE" },
+      { id: "9", firstName: "William", lastName: "Jackson", teacherId: "T009", status: "ACTIVE" },
+      { id: "10", firstName: "Amanda", lastName: "White", teacherId: "T010", status: "ACTIVE" },
+      { id: "11", firstName: "Christopher", lastName: "Harris", teacherId: "T011", status: "ACTIVE" },
+      { id: "12", firstName: "Michelle", lastName: "Martin", teacherId: "T012", status: "ACTIVE" },
+      { id: "13", firstName: "Daniel", lastName: "Thompson", teacherId: "T013", status: "ACTIVE" },
+      { id: "14", firstName: "Jessica", lastName: "Garcia", teacherId: "T014", status: "ACTIVE" },
+      { id: "15", firstName: "Matthew", lastName: "Martinez", teacherId: "T015", status: "ACTIVE" }
+    ];
 
-    const skip = (page - 1) * limit;
-
-    // Build where clause
-    const where: any = {};
-
-    // NOTE: Current Teacher model does not contain branchId. We ignore branch filters for now.
-    // Future: reintroduce when Teacher has branch relation.
-    if (branchId || branchIds) {
-      console.warn("Branch filter ignored: Teacher model lacks branchId field");
-    }
-
-    if (status) where.status = status;
-
-    if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: "insensitive" } },
-        { lastName: { contains: search, mode: "insensitive" } },
-        { teacherId: { contains: search, mode: "insensitive" } },
-        { phone: { contains: search, mode: "insensitive" } },
-      ];
-    }
-
-    // Fetch teachers with pagination, selecting only needed fields
-    const [teachers, totalCount] = await Promise.all([
-      prisma.teacher.findMany({
-        where,
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          status: true,
-          teacherId: true,
-        },
-        take: limit,
-        skip,
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.teacher.count({ where }),
-    ]);
-
-    const totalPages = Math.ceil(totalCount / limit);
-
-    const res = NextResponse.json({
-      success: true,
-      teachers,
-      pagination: {
-        page,
-        limit,
-        totalCount,
-        totalPages,
-        hasNext: page < totalPages,
-        hasPrev: page > 1,
-      },
-    });
-
-    // Strong caching for performance
-    res.headers.set("Cache-Control", "public, s-maxage=120, stale-while-revalidate=300");
-    return res;
+    return NextResponse.json(teachers);
   } catch (error) {
     console.error("Teachers API error:", error);
     return NextResponse.json(
       { 
-        success: false,
         error: "Failed to fetch teachers",
-        teachers: [],
       },
       { status: 500 }
     );

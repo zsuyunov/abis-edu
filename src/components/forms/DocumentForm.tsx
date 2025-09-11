@@ -170,7 +170,7 @@ const DocumentForm = ({ type, data, onClose, onSuccess }: DocumentFormProps) => 
   const removeTag = (tagToRemove: string) => {
     setFormData(prev => ({
       ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
+      tags: prev.tags.filter((tag: string) => tag !== tagToRemove)
     }));
   };
 
@@ -187,7 +187,7 @@ const DocumentForm = ({ type, data, onClose, onSuccess }: DocumentFormProps) => 
   const removeKeyword = (keywordToRemove: string) => {
     setFormData(prev => ({
       ...prev,
-      keywords: prev.keywords.filter(keyword => keyword !== keywordToRemove)
+      keywords: prev.keywords.filter((keyword: string) => keyword !== keywordToRemove)
     }));
   };
 
@@ -230,7 +230,7 @@ const DocumentForm = ({ type, data, onClose, onSuccess }: DocumentFormProps) => 
       formDataObj.append("id", data.id.toString());
     }
 
-    formAction(formDataObj);
+    formAction(formDataObj as any);
   };
 
   return (
@@ -506,7 +506,7 @@ const DocumentForm = ({ type, data, onClose, onSuccess }: DocumentFormProps) => 
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {formData.tags.map((tag, index) => (
+                    {formData.tags.map((tag: string, index: number) => (
                       <span
                         key={index}
                         className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded"
@@ -544,7 +544,7 @@ const DocumentForm = ({ type, data, onClose, onSuccess }: DocumentFormProps) => 
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {formData.keywords.map((keyword, index) => (
+                    {formData.keywords.map((keyword: string, index: number) => (
                       <span
                         key={index}
                         className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 text-xs rounded"

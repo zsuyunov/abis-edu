@@ -38,6 +38,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
+    if (!student.classId) {
+      return NextResponse.json({ error: "Student class information is missing" }, { status: 400 });
+    }
+
     // Get academic year (current or specified)
     const targetAcademicYear = academicYearId 
       ? await prisma.academicYear.findUnique({ where: { id: academicYearId } })
@@ -52,27 +56,12 @@ export async function POST(request: NextRequest) {
       where: {
         classId: student.classId,
         academicYearId: targetAcademicYear.id,
-        status: "ACTIVE",
+        isActive: true,
       },
       include: {
         subject: true,
-        teacher: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        topics: {
-          where: { status: { in: ["COMPLETED", "IN_PROGRESS"] } },
-          select: {
-            title: true,
-            description: true,
-          },
-        },
       },
       orderBy: [
-        { fullDate: "asc" },
         { startTime: "asc" },
       ],
     });
@@ -181,7 +170,7 @@ function generateGoogleCalendarUrl(timetables: any[]): string {
   const endTime = new Date(firstTimetable.endTime);
   
   const formatGoogleDate = (date: Date) => {
-    return date.toISOString().replace(/[-:]/g, '').replace /\.\d{3}/, '');
+    return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   };
 
   const params = new URLSearchParams({

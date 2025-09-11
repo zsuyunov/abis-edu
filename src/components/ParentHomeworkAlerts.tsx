@@ -1,3 +1,4 @@
+/*
 'use client';
 
 import React from 'react';
@@ -290,7 +291,7 @@ const ParentHomeworkAlerts: React.FC<ParentHomeworkAlertsProps> = ({ homeworks, 
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Achievements Section */}
+        {/* Achievements Section }
         {achievements.length > 0 && (
           <div>
             <h3 className="text-lg font-semibold mb-3 text-green-700">🎉 Achievements</h3>
@@ -308,7 +309,7 @@ const ParentHomeworkAlerts: React.FC<ParentHomeworkAlertsProps> = ({ homeworks, 
           </div>
         )}
 
-        {/* Alerts Section */}
+        {/* Alerts Section }
         <div>
           <h3 className="text-lg font-semibold mb-3">📢 Important Notifications</h3>
           {alerts.length > 0 ? (
@@ -335,7 +336,7 @@ const ParentHomeworkAlerts: React.FC<ParentHomeworkAlertsProps> = ({ homeworks, 
           )}
         </div>
 
-        {/* Quick Summary */}
+        {/* Quick Summary }
         <div className="p-4 border rounded-md bg-gray-50">
           <h3 className="font-semibold mb-2">Quick Summary</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -365,3 +366,5 @@ const ParentHomeworkAlerts: React.FC<ParentHomeworkAlertsProps> = ({ homeworks, 
 };
 
 export default ParentHomeworkAlerts;
+
+*/

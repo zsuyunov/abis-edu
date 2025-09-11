@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { AuthService } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,22 +30,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Get teacher information
+    // Get teacher information with assignments
     const teacher = await prisma.teacher.findUnique({
       where: { id: teacherId },
       include: {
-        branch: true,
+        TeacherAssignment: {
+          where: { status: "ACTIVE" },
+          include: {
+            Branch: true,
+          },
+        },
       },
     });
 
-    if (!teacher) {
-      return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
+    if (!teacher || teacher.TeacherAssignment.length === 0) {
+      return NextResponse.json({ error: "Teacher not found or no active assignments" }, { status: 404 });
     }
+
+    // Get the teacher's branch from their assignment
+    const teacherBranch = teacher.TeacherAssignment[0].Branch;
+    const branchId = teacher.TeacherAssignment[0].branchId;
 
     // Build filter conditions
     const homeworkWhere: any = {
       teacherId,
-      branchId: teacher.branchId, // Always filter by teacher's branch
+      branchId, // Always filter by teacher's branch
     };
 
     if (homeworkId) homeworkWhere.id = parseInt(homeworkId);
@@ -69,7 +78,7 @@ export async function GET(request: NextRequest) {
             students: {
               where: {
                 status: "ACTIVE",
-                branchId: teacher.branchId,
+                branchId: branchId,
               },
               select: {
                 id: true,
@@ -110,6 +119,7 @@ export async function GET(request: NextRequest) {
     if (format === "pdf") {
       return generateHomeworkPDF({
         teacher,
+        teacherBranch,
         homework,
         reportType,
         startDate,
@@ -120,6 +130,7 @@ export async function GET(request: NextRequest) {
     } else if (format === "excel") {
       return generateHomeworkExcel({
         teacher,
+        teacherBranch,
         homework,
         reportType,
         startDate,
@@ -141,7 +152,7 @@ export async function GET(request: NextRequest) {
 }
 
 async function generateHomeworkPDF(data: any) {
-  const { teacher, homework, reportType, startDate, endDate, classId, subjectId } = data;
+  const { teacher, teacherBranch, homework, reportType, startDate, endDate, classId, subjectId } = data;
   
   // Calculate overall statistics
   const totalHomework = homework.length;
@@ -189,7 +200,7 @@ async function generateHomeworkPDF(data: any) {
       <div class="header">
         <h1>📚 Teacher Homework Report</h1>
         <h2>${teacher.firstName} ${teacher.lastName} (${teacher.teacherId})</h2>
-        <p><strong>Branch:</strong> ${teacher.branch.shortName} - ${teacher.branch.legalName}</p>
+        <p><strong>Branch:</strong> ${teacherBranch.shortName} - ${teacherBranch.legalName}</p>
         ${startDate && endDate ? `<p><strong>Period:</strong> ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}</p>` : ""}
         <p><strong>Report Generated:</strong> ${new Date().toLocaleDateString("en-US", { 
           year: "numeric", 
@@ -205,7 +216,7 @@ async function generateHomeworkPDF(data: any) {
           <div style="font-weight: bold; color: #1e40af; margin-bottom: 10px;">Teacher Information</div>
           <div><strong>Name:</strong> ${teacher.firstName} ${teacher.lastName}</div>
           <div><strong>Teacher ID:</strong> ${teacher.teacherId}</div>
-          <div><strong>Branch:</strong> ${teacher.branch.legalName}</div>
+          <div><strong>Branch:</strong> ${teacherBranch.legalName}</div>
         </div>
         <div class="info-section">
           <div style="font-weight: bold; color: #1e40af; margin-bottom: 10px;">Report Summary</div>
@@ -344,7 +355,7 @@ async function generateHomeworkPDF(data: any) {
       ` : ""}
 
       <div class="footer">
-        <p>This homework report was generated for ${teacher.firstName} ${teacher.lastName} from ${teacher.branch.shortName}.</p>
+        <p>This homework report was generated for ${teacher.firstName} ${teacher.lastName} from ${teacherBranch.shortName}.</p>
         <p>Report includes${startDate && endDate ? ` homework assigned from ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}` : " all homework assignments"}.</p>
         <p style="margin-top: 15px; font-style: italic;">Keep up the great work in engaging students with meaningful homework assignments! 📚✨</p>
       </div>
@@ -360,7 +371,7 @@ async function generateHomeworkPDF(data: any) {
 }
 
 async function generateHomeworkExcel(data: any) {
-  const { teacher, homework, reportType, startDate, endDate, classId, subjectId } = data;
+  const { teacher, teacherBranch, homework, reportType, startDate, endDate, classId, subjectId } = data;
   
   // Calculate overall statistics
   const totalHomework = homework.length;
@@ -375,7 +386,7 @@ async function generateHomeworkExcel(data: any) {
     // Header information
     [`Teacher Homework Report - ${teacher.firstName} ${teacher.lastName}`],
     [`Teacher ID: ${teacher.teacherId}`],
-    [`Branch: ${teacher.branch.shortName} - ${teacher.branch.legalName}`],
+    [`Branch: ${teacherBranch.shortName} - ${teacherBranch.legalName}`],
     [`Period: ${startDate ? new Date(startDate).toLocaleDateString() : "All"} - ${endDate ? new Date(endDate).toLocaleDateString() : "All"}`],
     [`Generated: ${new Date().toLocaleString()}`],
     [""], // Empty row
@@ -474,7 +485,7 @@ async function generateHomeworkExcel(data: any) {
   // Convert to CSV format
   const csvContent = csvRows
     .map(row => 
-      row.map(cell => 
+      row.map((cell: any) => 
         typeof cell === "string" && (cell.includes(",") || cell.includes('"')) 
           ? `"${cell.replace(/"/g, '""')}"` 
           : cell

@@ -32,7 +32,7 @@ const SmallParentSendMessageModal = ({
     },
   });
 
-  const [state, formAction] = useFormState(sendMessage, {
+  const [state, formAction] = useFormState(sendMessage as any, {
     success: false,
     error: false,
     message: '',
@@ -54,7 +54,7 @@ const SmallParentSendMessageModal = ({
 
   const onSubmit = handleSubmit((data) => {
     const messageData = { ...data, senderId: currentUserId };
-    formAction(messageData);
+    formAction();
   });
 
   return (

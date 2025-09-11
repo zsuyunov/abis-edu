@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
 
     // Create uploads directory if it doesn't exist
     const uploadsDir = join(process.cwd(), 'public', 'uploads', 'timetable-topics');
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest) {
     const filepath = join(uploadsDir, filename);
 
     // Write file
-    await writeFile(filepath, buffer);
+    await writeFile(filepath, new Uint8Array(bytes));
 
     // Return public URL
     const url = `/uploads/timetable-topics/${filename}`;

@@ -38,15 +38,18 @@ export async function GET(request: NextRequest) {
           include: {
             academicYear: true,
             branch: true,
-            subjects: true,
           },
         },
         branch: true,
-        parent: {
-          select: {
-            firstName: true,
-            lastName: true,
-            phone: true,
+        studentParents: {
+          include: {
+            parent: {
+              select: {
+                firstName: true,
+                lastName: true,
+                phone: true,
+              },
+            },
           },
         },
       },
@@ -58,6 +61,10 @@ export async function GET(request: NextRequest) {
 
     // Get student's branch for filtering
     const studentBranchId = student.branchId;
+
+    if (!studentBranchId) {
+      return NextResponse.json({ error: "Student branch information is missing" }, { status: 400 });
+    }
 
     // Get available academic years for the student (scoped by branch)
     let availableAcademicYears;
@@ -105,7 +112,7 @@ export async function GET(request: NextRequest) {
     if (academicYearId) {
       targetAcademicYearId = parseInt(academicYearId);
     } else if (timeFilter === "current") {
-      targetAcademicYearId = availableAcademicYears[0]?.id || student.class.academicYearId;
+      targetAcademicYearId = availableAcademicYears[0]?.id || student.class?.academicYearId;
     } else {
       targetAcademicYearId = availableAcademicYears[0]?.id;
     }
@@ -117,8 +124,8 @@ export async function GET(request: NextRequest) {
           firstName: student.firstName,
           lastName: student.lastName,
           studentId: student.studentId,
-          class: student.class,
-          branch: student.branch,
+          class: student.class || null,
+          branch: student.branch || null,
         },
         grades: [],
         examResults: [],
@@ -245,9 +252,9 @@ export async function GET(request: NextRequest) {
     // Get subjects for filter options (scoped by student's branch)
     const subjects = await prisma.subject.findMany({
       where: {
-        classes: {
+        timetables: {
           some: {
-            id: student.classId,
+            classId: student.classId || 0, // Handle null classId
             branchId: studentBranchId, // Ensure subjects are from student's branch
           },
         },
@@ -268,7 +275,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate summary statistics
     const gradeValues = grades.map(g => g.value);
-    const examMarks = examResults.map(r => (r.marksObtained / r.exam.totalMarks) * 100);
+    const examMarks = examResults.map(r => (r.marksObtained / r.exam.fullMarks) * 100);
     const allScores = [...gradeValues, ...examMarks];
 
     const summary = {
@@ -294,7 +301,7 @@ export async function GET(request: NextRequest) {
       const subjectGrades = grades.filter(g => g.subjectId === subject.id);
       const subjectExams = examResults.filter(r => r.exam.subjectId === subject.id);
       const subjectGradeValues = subjectGrades.map(g => g.value);
-      const subjectExamMarks = subjectExams.map(r => (r.marksObtained / r.exam.totalMarks) * 100);
+      const subjectExamMarks = subjectExams.map(r => (r.marksObtained / r.exam.fullMarks) * 100);
       const allSubjectScores = [...subjectGradeValues, ...subjectExamMarks];
 
       return {
@@ -321,9 +328,9 @@ export async function GET(request: NextRequest) {
         firstName: student.firstName,
         lastName: student.lastName,
         studentId: student.studentId,
-        class: student.class,
-        branch: student.branch,
-        parent: student.parent,
+        class: student.class || null,
+        branch: student.branch || null,
+        parent: student.studentParents?.[0]?.parent || null,
       },
       grades,
       examResults,
@@ -357,7 +364,7 @@ function getGradesByType(grades: any[]) {
 async function getStudentAnalytics(grades: any[], examResults: any[], student: any, filters: any) {
   // Calculate detailed analytics
   const gradeValues = grades.map(g => g.value);
-  const examMarks = examResults.map(r => (r.marksObtained / r.exam.totalMarks) * 100);
+  const examMarks = examResults.map(r => (r.marksObtained / r.exam.fullMarks) * 100);
   const allScores = [...gradeValues, ...examMarks];
 
   // Grade distribution
@@ -369,14 +376,14 @@ async function getStudentAnalytics(grades: any[], examResults: any[], student: a
   };
 
   // Performance trends over time
-  const performanceTrends = {};
+  const performanceTrends: Record<string, any> = {};
   [...grades, ...examResults.map(r => ({
     ...r,
-    value: (r.marksObtained / r.exam.totalMarks) * 100,
+    value: (r.marksObtained / r.exam.fullMarks) * 100,
     date: r.exam.date,
     subject: r.exam.subject,
     type: 'EXAM'
-  }))].forEach(item => {
+  }))].forEach((item: any) => {
     const monthKey = `${new Date(item.date).getFullYear()}-${String(new Date(item.date).getMonth() + 1).padStart(2, '0')}`;
     if (!performanceTrends[monthKey]) {
       performanceTrends[monthKey] = {
@@ -389,16 +396,16 @@ async function getStudentAnalytics(grades: any[], examResults: any[], student: a
   });
 
   // Calculate monthly averages
-  Object.keys(performanceTrends).forEach(month => {
+  Object.keys(performanceTrends).forEach((month: string) => {
     const trend = performanceTrends[month];
-    trend.average = Math.round((trend.scores.reduce((sum, s) => sum + s, 0) / trend.scores.length) * 100) / 100;
+    trend.average = Math.round((trend.scores.reduce((sum: number, s: number) => sum + s, 0) / trend.scores.length) * 100) / 100;
   });
 
   const trendData = Object.values(performanceTrends).sort((a: any, b: any) => a.month.localeCompare(b.month));
 
   // Subject-wise performance
-  const subjectPerformance = {};
-  grades.forEach(grade => {
+  const subjectPerformance: Record<string, any> = {};
+  grades.forEach((grade: any) => {
     const subjectId = grade.subject.id;
     if (!subjectPerformance[subjectId]) {
       subjectPerformance[subjectId] = {
@@ -414,7 +421,7 @@ async function getStudentAnalytics(grades: any[], examResults: any[], student: a
     subjectPerformance[subjectId].count++;
   });
 
-  examResults.forEach(result => {
+  examResults.forEach((result: any) => {
     const subjectId = result.exam.subject.id;
     if (!subjectPerformance[subjectId]) {
       subjectPerformance[subjectId] = {
@@ -473,8 +480,8 @@ async function getStudentAnalytics(grades: any[], examResults: any[], student: a
 
   // Improvement achievement
   if (trendData.length >= 2) {
-    const firstMonth = trendData[0];
-    const lastMonth = trendData[trendData.length - 1];
+    const firstMonth = trendData[0] as any;
+    const lastMonth = trendData[trendData.length - 1] as any;
     const improvement = lastMonth.average - firstMonth.average;
     if (improvement >= 10) {
       achievements.push({
@@ -493,7 +500,7 @@ async function getStudentAnalytics(grades: any[], examResults: any[], student: a
 
   // Declining performance alert
   if (trendData.length >= 2) {
-    const recentMonths = trendData.slice(-2);
+    const recentMonths = trendData.slice(-2) as any[];
     if (recentMonths.length === 2) {
       const decline = recentMonths[0].average - recentMonths[1].average;
       if (decline >= 8) {
@@ -540,8 +547,8 @@ async function getStudentAnalytics(grades: any[], examResults: any[], student: a
       firstName: student.firstName,
       lastName: student.lastName,
       studentId: student.studentId,
-      class: student.class,
-      branch: student.branch,
+      class: student.class || null,
+      branch: student.branch || null,
     },
     analytics: {
       summary: {

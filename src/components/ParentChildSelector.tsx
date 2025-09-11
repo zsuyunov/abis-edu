@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -136,7 +137,7 @@ const ParentChildSelector = ({
 
   return (
     <div className="mb-6">
-      {/* Multi-Branch Dashboard for parents with children in different branches */}
+      {/* Multi-Branch Dashboard for parents with children in different branches }
       {hasMultipleBranches && onBranchChange && (
         <ParentMultiBranchDashboard
           parentId={parentId}
@@ -180,7 +181,7 @@ const ParentChildSelector = ({
             Select Child to View Academic Performance
           </label>
           
-          {/* Dropdown Selector */}
+          {/* Dropdown Selector }
           <div className="mb-4">
             <select
               value={selectedChildId}
@@ -196,7 +197,7 @@ const ParentChildSelector = ({
             </select>
           </div>
 
-          {/* Children Cards Grid */}
+          {/* Children Cards Grid }
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {children.map((child) => (
               <div
@@ -257,7 +258,7 @@ const ParentChildSelector = ({
             ))}
           </div>
 
-          {/* Quick Stats Summary */}
+          {/* Quick Stats Summary }
           {selectedChildId && (
             <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-md border border-blue-200">
               <div className="text-sm text-blue-800">
@@ -269,7 +270,7 @@ const ParentChildSelector = ({
         </div>
       )}
 
-      {/* Total Children Indicator */}
+      {/* Total Children Indicator }
       {children.length > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
           <span>Total Children: {children.length}</span>
@@ -284,3 +285,5 @@ const ParentChildSelector = ({
 };
 
 export default ParentChildSelector;
+
+*/

@@ -1,142 +1,114 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { headers } from 'next/headers';
 
-export async function GET(
+// PATCH /api/attendance/[id] - Update attendance record
+export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = Number(params.id);
-    if (!Number.isInteger(id)) {
-      return NextResponse.json(
-        { error: "Invalid attendance id" },
-        { status: 400 }
-      );
+    const headersList = headers();
+    const teacherId = headersList.get('x-user-id');
+
+    if (!teacherId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const attendance = await prisma.attendance.findUnique({
-      where: { id },
-      include: {
-        student: { 
-          select: { 
-            id: true, 
-            firstName: true, 
-            lastName: true,
-            studentId: true,
-            class: { select: { name: true } },
-            branch: { select: { shortName: true } }
-          } 
-        },
-        timetable: {
-          select: {
-            id: true,
-            fullDate: true,
-            startTime: true,
-            endTime: true,
-            roomNumber: true,
-            buildingName: true,
-            subject: { select: { name: true } },
-            class: { select: { name: true } },
-            branch: { select: { shortName: true } },
-            academicYear: { select: { name: true } },
-            teacher: { 
-              select: { 
-                firstName: true, 
-                lastName: true 
-              } 
-            },
-          }
-        },
-        archiveComments: {
-          select: {
-            comment: true,
-            action: true,
-            createdBy: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "desc" }
-        },
-      },
+
+    const attendanceId = parseInt(params.id);
+    if (isNaN(attendanceId)) {
+      return NextResponse.json({ error: 'Invalid attendance ID' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { status, notes } = body;
+
+    // Verify the attendance record exists and belongs to this teacher
+    const existingRecord = await prisma.attendance.findFirst({
+      where: {
+        id: attendanceId,
+        teacherId
+      }
     });
 
-    if (!attendance) {
-      return NextResponse.json(
-        { error: "Attendance record not found" },
-        { status: 404 }
-      );
+    if (!existingRecord) {
+      return NextResponse.json({ error: 'Attendance record not found or unauthorized' }, { status: 404 });
     }
 
-    return NextResponse.json(attendance);
-  } catch (error) {
-    console.error("Error fetching attendance:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch attendance record" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const body = await request.json();
-    
-    const attendance = await prisma.attendance.update({
-      where: { id: parseInt(params.id) },
+    // Update the attendance record
+    const updatedRecord = await prisma.attendance.update({
+      where: { id: attendanceId },
       data: {
-        studentId: body.studentId,
-        timetableId: body.timetableId,
-        date: new Date(body.date),
-        status: body.status,
-        notes: body.notes || null,
-        archived: body.archived || false,
+        status: status || existingRecord.status,
+        notes: notes !== undefined ? notes : existingRecord.notes,
+        updatedAt: new Date()
       },
       include: {
-        student: { 
-          select: { 
-            id: true, 
-            firstName: true, 
+        student: {
+          select: {
+            id: true,
+            firstName: true,
             lastName: true,
             studentId: true
-          } 
-        },
-        timetable: {
-          select: {
-            id: true,
-            fullDate: true,
-            subject: { select: { name: true } },
-            class: { select: { name: true } },
           }
-        },
-      },
+        }
+      }
     });
-    
-    return NextResponse.json(attendance);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Attendance updated successfully',
+      data: updatedRecord
+    });
+
   } catch (error) {
-    console.error("Error updating attendance:", error);
-    return NextResponse.json(
-      { error: "Failed to update attendance record" },
-      { status: 500 }
-    );
+    console.error('Error updating attendance:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
+// DELETE /api/attendance/[id] - Delete attendance record
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await prisma.attendance.delete({
-      where: { id: parseInt(params.id) },
+    const headersList = headers();
+    const teacherId = headersList.get('x-user-id');
+
+    if (!teacherId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const attendanceId = parseInt(params.id);
+    if (isNaN(attendanceId)) {
+      return NextResponse.json({ error: 'Invalid attendance ID' }, { status: 400 });
+    }
+
+    // Verify the attendance record exists and belongs to this teacher
+    const existingRecord = await prisma.attendance.findFirst({
+      where: {
+        id: attendanceId,
+        teacherId
+      }
     });
-    
-    return NextResponse.json({ message: "Attendance record deleted successfully" });
+
+    if (!existingRecord) {
+      return NextResponse.json({ error: 'Attendance record not found or unauthorized' }, { status: 404 });
+    }
+
+    // Delete the attendance record
+    await prisma.attendance.delete({
+      where: { id: attendanceId }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Attendance record deleted successfully'
+    });
+
   } catch (error) {
-    console.error("Error deleting attendance:", error);
-    return NextResponse.json(
-      { error: "Failed to delete attendance record" },
-      { status: 500 }
-    );
+    console.error('Error deleting attendance:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

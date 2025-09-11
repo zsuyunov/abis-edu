@@ -38,7 +38,7 @@ export function useAuth() {
   // This would typically connect to your state management solution
   // For now, returning a stub that matches the Clerk interface
   return {
-    userId: 'user_001', // This should come from your client-side auth state
+    userId: 'chief-001', // This should come from your client-side auth state
     isLoaded: true,
     isSignedIn: true,
   };

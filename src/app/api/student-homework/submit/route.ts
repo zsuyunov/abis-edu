@@ -1,250 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
-import { homeworkSubmissionSchema } from "@/lib/formValidationSchemas";
-
-export async function POST(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const studentId = session.id;
-
-    // Validate submission data
-    const validatedData = homeworkSubmissionSchema.parse({
-      ...body,
-      studentId,
-    });
-
-    // Get student information to verify branch and class access
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      include: {
-        class: true,
-        branch: true,
-      },
-    });
-
-    if (!student) {
-      return NextResponse.json({ error: "Student not found" }, { status: 404 });
-    }
-
-    // Get homework details and verify student access
-    const homework = await prisma.homework.findUnique({
-      where: { id: validatedData.homeworkId },
-      include: {
-        teacher: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        subject: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        class: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (!homework) {
-      return NextResponse.json({ error: "Homework not found" }, { status: 404 });
-    }
-
-    // Verify student can submit to this homework (branch and class match)
-    if (homework.branchId !== student.branchId || homework.classId !== student.classId) {
-      return NextResponse.json({ error: "Access denied to this homework" }, { status: 403 });
-    }
-
-    // Check if homework is still active
-    if (homework.status !== "ACTIVE") {
-      return NextResponse.json({ error: "This homework is no longer accepting submissions" }, { status: 400 });
-    }
-
-    // Check deadline (allow late submissions if configured)
-    const now = new Date();
-    const dueDate = new Date(homework.dueDate);
-    const isLate = now > dueDate;
-
-    if (isLate && !homework.allowLateSubmission) {
-      return NextResponse.json({ 
-        error: "Deadline has passed and late submissions are not allowed" 
-      }, { status: 400 });
-    }
-
-    // Check if submission already exists
-    const existingSubmission = await prisma.homeworkSubmission.findUnique({
-      where: {
-        homeworkId_studentId: {
-          homeworkId: validatedData.homeworkId,
-          studentId: studentId,
-        },
-      },
-    });
-
-    const submissionData = {
-      content: validatedData.content || "",
-      submissionDate: new Date(),
-      status: "SUBMITTED" as const,
-      isLate,
-    };
-
-    let submission;
-
-    if (existingSubmission) {
-      // Update existing submission (allow resubmission until deadline)
-      if (existingSubmission.status === "GRADED") {
-        return NextResponse.json({ 
-          error: "Cannot resubmit homework that has already been graded" 
-        }, { status: 400 });
-      }
-
-      submission = await prisma.homeworkSubmission.update({
-        where: { id: existingSubmission.id },
-        data: submissionData,
-        include: {
-          homework: {
-            include: {
-              subject: true,
-              teacher: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                },
-              },
-            },
-          },
-          student: {
-            select: {
-              firstName: true,
-              lastName: true,
-              studentId: true,
-            },
-          },
-        },
-      });
-    } else {
-      // Create new submission
-      submission = await prisma.homeworkSubmission.create({
-        data: {
-          ...submissionData,
-          homeworkId: validatedData.homeworkId,
-          studentId: studentId,
-        },
-        include: {
-          homework: {
-            include: {
-              subject: true,
-              teacher: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                },
-              },
-            },
-          },
-          student: {
-            select: {
-              firstName: true,
-              lastName: true,
-              studentId: true,
-            },
-          },
-        },
-      });
-    }
-
-    // Handle attachments if provided
-    if (validatedData.attachments && validatedData.attachments.length > 0) {
-      // Delete existing attachments if updating
-      if (existingSubmission) {
-        await prisma.submissionAttachment.deleteMany({
-          where: { submissionId: submission.id },
-        });
-      }
-
-      // Create new attachments
-      await prisma.submissionAttachment.createMany({
-        data: validatedData.attachments.map(attachment => ({
-          ...attachment,
-          submissionId: submission.id,
-        })),
-      });
-    }
-
-    // Get updated submission with attachments
-    const finalSubmission = await prisma.homeworkSubmission.findUnique({
-      where: { id: submission.id },
-      include: {
-        attachments: true,
-        homework: {
-          include: {
-            subject: true,
-            teacher: {
-              select: {
-                firstName: true,
-                lastName: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      submission: finalSubmission,
-      message: isLate 
-        ? `Homework submitted successfully (late submission)`
-        : `Homework submitted successfully`,
-      isUpdate: !!existingSubmission,
-    });
-
-  } catch (error) {
-    console.error("Error submitting homework:", error);
-    if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: "Failed to submit homework" },
-      { status: 500 }
-    );
-  }
-}
+import { writeFile, mkdir } from "fs/promises";
+import { join } from "path";
+import { existsSync } from "fs";
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const studentId = request.headers.get('x-user-id');
     const url = new URL(request.url);
-    const studentId = session.id;
-    const homeworkId = url.searchParams.get("homeworkId");
+    const homeworkId = url.searchParams.get('homeworkId');
+
+    if (!studentId) {
+      return NextResponse.json({ error: "Student ID is required" }, { status: 401 });
+    }
 
     if (!homeworkId) {
       return NextResponse.json({ error: "Homework ID is required" }, { status: 400 });
@@ -254,8 +23,8 @@ export async function GET(request: NextRequest) {
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       include: {
-        class: true,
         branch: true,
+        class: true,
       },
     });
 
@@ -345,143 +114,260 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const dueDate = new Date(homework.dueDate);
     const isOverdue = now > dueDate;
-    const canSubmit = homework.status === "ACTIVE" && (!isOverdue || homework.allowLateSubmission);
-    const canResubmit = submission && submission.status !== "GRADED" && canSubmit;
+    const hasSubmission = submission && submission.status !== "NOT_SUBMITTED";
+    const canSubmit = !isOverdue || homework.allowLateSubmission;
+    const submissionStatus = hasSubmission ? submission.status : "NOT_SUBMITTED";
+
+    // Calculate time until due
+    const timeDiff = dueDate.getTime() - now.getTime();
+    const daysLeft = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    const hoursLeft = Math.ceil(timeDiff / (1000 * 3600));
+    const timeUntilDue = isOverdue 
+      ? `Overdue by ${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? 's' : ''}`
+      : daysLeft > 0 
+        ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`
+        : `${hoursLeft} hour${hoursLeft !== 1 ? 's' : ''} left`;
 
     return NextResponse.json({
       homework,
       submission,
-      student: {
-        id: student.id,
-        firstName: student.firstName,
-        lastName: student.lastName,
-        studentId: student.studentId,
-        class: student.class,
-        branch: student.branch,
-      },
       submissionDetails: {
-        canSubmit,
-        canResubmit,
+        canSubmit: canSubmit && (!hasSubmission || submissionStatus === "SUBMITTED"),
+        hasSubmission,
+        submissionStatus,
         isOverdue,
-        hasSubmission: !!submission,
-        submissionStatus: submission?.status || "NOT_SUBMITTED",
-        daysUntilDue: Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
-        timeUntilDue: getTimeUntilDue(dueDate),
+        timeUntilDue,
       },
     });
 
   } catch (error) {
-    console.error("Error getting homework submission details:", error);
+    console.error("Error fetching homework submission details:", error);
     return NextResponse.json(
-      { error: "Failed to get homework details" },
+      { error: "Failed to fetch homework details" },
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const studentId = request.headers.get('x-user-id');
     
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!studentId) {
+      return NextResponse.json({ error: "Student ID is required" }, { status: 401 });
     }
 
-    const url = new URL(request.url);
-    const studentId = session.id;
-    const submissionId = url.searchParams.get("submissionId");
-
-    if (!submissionId) {
-      return NextResponse.json({ error: "Submission ID is required" }, { status: 400 });
+    const formData = await request.formData();
+    
+    // Extract form fields
+    const homeworkId = parseInt(formData.get('homeworkId') as string);
+    const content = formData.get('content') as string;
+    
+    if (!homeworkId) {
+      return NextResponse.json({ error: "Homework ID is required" }, { status: 400 });
     }
 
-    // Get submission and verify ownership
-    const submission = await prisma.homeworkSubmission.findUnique({
-      where: { id: parseInt(submissionId) },
+    // Get student information
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
       include: {
-        homework: true,
+        branch: true,
+        class: true,
+      },
+    });
+
+    if (!student) {
+      return NextResponse.json({ error: "Student not found" }, { status: 404 });
+    }
+
+    // Get homework details and verify access
+    const homework = await prisma.homework.findUnique({
+      where: { id: homeworkId },
+    });
+
+    if (!homework) {
+      return NextResponse.json({ error: "Homework not found" }, { status: 404 });
+    }
+
+    // Verify student access
+    if (homework.branchId !== student.branchId || homework.classId !== student.classId) {
+      return NextResponse.json({ error: "Access denied to this homework" }, { status: 403 });
+    }
+
+    // Check if submission is allowed
+    const now = new Date();
+    const dueDate = new Date(homework.dueDate);
+    const isOverdue = now > dueDate;
+    
+    if (isOverdue && !homework.allowLateSubmission) {
+      return NextResponse.json({ error: "Deadline has passed and late submissions are not allowed" }, { status: 400 });
+    }
+
+    // Create or update submission first
+    const submissionData = {
+      content: content || null,
+      status: "SUBMITTED" as const,
+      submissionDate: now,
+      isLate: isOverdue,
+    };
+
+    const submission = await prisma.homeworkSubmission.upsert({
+      where: {
+        homeworkId_studentId: {
+          homeworkId: homeworkId,
+          studentId: studentId,
+        },
+      },
+      update: submissionData,
+      create: {
+        homeworkId: homeworkId,
+        studentId: studentId,
+        ...submissionData,
+      },
+    });
+
+    // Handle file uploads after submission is created
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'submissions', homeworkId.toString(), studentId);
+    if (!existsSync(uploadDir)) {
+      await mkdir(uploadDir, { recursive: true });
+    }
+
+    const attachments = [];
+
+    // Process uploaded files
+    const files = formData.getAll('files') as File[];
+    for (const file of files) {
+      if (file.size > 0) {
+        const bytes = await file.arrayBuffer();
+        const buffer = new Uint8Array(bytes);
+        const fileName = `sub_${Date.now()}_${file.name}`;
+        const filePath = join(uploadDir, fileName);
+        await writeFile(filePath, buffer);
+        
+        const attachment = await prisma.submissionAttachment.create({
+          data: {
+            fileName: fileName,
+            originalName: file.name,
+            fileType: file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT',
+            fileUrl: `/uploads/submissions/${homeworkId}/${studentId}/${fileName}`,
+            filePath: filePath,
+            fileSize: file.size,
+            mimeType: file.type,
+            submissionId: submission.id, // Now we have the submission ID
+          },
+        });
+        attachments.push(attachment);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      submission: {
+        ...submission,
+        attachments,
+      },
+      message: `Homework submitted successfully${isOverdue ? ' (late submission)' : ''}`,
+    });
+
+  } catch (error) {
+    console.error("Error submitting homework:", error);
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json(
+      { error: "Failed to submit homework" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const studentId = request.headers.get('x-user-id');
+    
+    if (!studentId) {
+      return NextResponse.json({ error: "Student ID is required" }, { status: 401 });
+    }
+
+    const { homeworkId, action, contentType, attachmentId } = await request.json();
+    
+    if (!homeworkId) {
+      return NextResponse.json({ error: "Homework ID is required" }, { status: 400 });
+    }
+
+    // Get student information
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: { branch: true, class: true },
+    });
+
+    if (!student) {
+      return NextResponse.json({ error: "Student not found" }, { status: 404 });
+    }
+
+    // Get homework details and verify access
+    const homework = await prisma.homework.findUnique({
+      where: { id: homeworkId },
+    });
+
+    if (!homework) {
+      return NextResponse.json({ error: "Homework not found" }, { status: 404 });
+    }
+
+    // Verify student access
+    if (homework.branchId !== student.branchId || homework.classId !== student.classId) {
+      return NextResponse.json({ error: "Access denied to this homework" }, { status: 403 });
+    }
+
+    // Get existing submission
+    const submission = await prisma.homeworkSubmission.findUnique({
+      where: {
+        homeworkId_studentId: {
+          homeworkId: homeworkId,
+          studentId: studentId,
+        },
       },
     });
 
     if (!submission) {
-      return NextResponse.json({ error: "Submission not found" }, { status: 404 });
+      return NextResponse.json({ error: "No submission found" }, { status: 404 });
     }
 
-    if (submission.studentId !== studentId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    if (action === 'deleteContent' && contentType === 'text') {
+      // Delete text content
+      await prisma.homeworkSubmission.update({
+        where: { id: submission.id },
+        data: { content: null },
+      });
+
+      return NextResponse.json({ success: true, message: "Text content removed successfully" });
     }
 
-    // Check if submission can be deleted (not graded and within resubmission window)
-    if (submission.status === "GRADED") {
-      return NextResponse.json({ 
-        error: "Cannot delete graded submission" 
-      }, { status: 400 });
+    if (action === 'deleteAttachment' && attachmentId) {
+      // Delete specific attachment
+      const attachment = await prisma.submissionAttachment.findUnique({
+        where: { id: attachmentId },
+      });
+
+      if (!attachment || attachment.submissionId !== submission.id) {
+        return NextResponse.json({ error: "Attachment not found" }, { status: 404 });
+      }
+
+      // Delete the attachment record
+      await prisma.submissionAttachment.delete({
+        where: { id: attachmentId },
+      });
+
+      return NextResponse.json({ success: true, message: "Attachment removed successfully" });
     }
 
-    const now = new Date();
-    const dueDate = new Date(submission.homework.dueDate);
-    const canModify = submission.homework.status === "ACTIVE" && 
-                      (now <= dueDate || submission.homework.allowLateSubmission);
-
-    if (!canModify) {
-      return NextResponse.json({ 
-        error: "Cannot delete submission after deadline" 
-      }, { status: 400 });
-    }
-
-    // Delete attachments first (cascade should handle this, but being explicit)
-    await prisma.submissionAttachment.deleteMany({
-      where: { submissionId: submission.id },
-    });
-
-    // Reset submission to NOT_SUBMITTED state instead of deleting
-    await prisma.homeworkSubmission.update({
-      where: { id: submission.id },
-      data: {
-        content: null,
-        submissionDate: null,
-        status: "NOT_SUBMITTED",
-        isLate: false,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: "Submission removed successfully. You can submit again if needed.",
-    });
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 
   } catch (error) {
-    console.error("Error deleting homework submission:", error);
+    console.error("Error updating submission:", error);
     return NextResponse.json(
-      { error: "Failed to delete submission" },
+      { error: "Failed to update submission" },
       { status: 500 }
     );
-  }
-}
-
-// Helper functions
-function getTimeUntilDue(dueDate: Date) {
-  const now = new Date();
-  const timeDiff = dueDate.getTime() - now.getTime();
-  
-  if (timeDiff <= 0) {
-    return "Overdue";
-  }
-
-  const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (days > 0) {
-    return `${days} day${days !== 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
-  } else if (hours > 0) {
-    return `${hours} hour${hours !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-  } else {
-    return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
   }
 }

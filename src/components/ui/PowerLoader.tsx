@@ -39,9 +39,9 @@ export const GlobalPowerLoader = ({ loading }: { loading: boolean }) => {
         {/* Animated logo */}
         <div className="text-center mb-6">
           <div className="w-16 h-16 mx-auto bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center mb-4 animate-pulse">
-            <span className="text-white text-2xl font-bold">S</span>
+            <span className="text-white text-2xl font-bold">A</span>
           </div>
-          <h3 className="text-xl font-bold text-gray-800">SchooLama</h3>
+          <h3 className="text-xl font-bold text-gray-800">ABIS</h3>
         </div>
 
         {/* Progress bar */}

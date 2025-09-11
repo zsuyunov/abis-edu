@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -293,3 +294,4 @@ const MainAdmissionMessages = () => {
 };
 
 export default MainAdmissionMessages;
+*/

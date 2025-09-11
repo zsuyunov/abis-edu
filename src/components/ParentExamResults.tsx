@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import React from "react";
@@ -39,3 +40,5 @@ const ParentExamResults = ({
 };
 
 export default ParentExamResults;
+
+*/

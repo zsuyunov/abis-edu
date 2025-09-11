@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { z } from "zod";
 import { resetStudentPassword } from "@/lib/actions";
-import PasswordField from "./PasswordField";
 
 const resetPasswordSchema = z.object({
   newPassword: z.string().min(8, { message: "Password must be at least 8 characters long!" }),
@@ -36,23 +35,22 @@ const SmallResetPasswordModal = ({
     resolver: zodResolver(resetPasswordSchema),
   });
 
-  const [state, formAction] = useFormState(resetStudentPassword, {
+  const [state, formAction] = useFormState(resetStudentPassword as any, {
     success: false,
     error: false,
-    message: '',
   });
 
   const router = useRouter();
 
   useEffect(() => {
     if (state.success) {
-      toast.success(state.message || `Password reset for ${studentName}!`);
+      toast.success((state as any).message || `Password reset for ${studentName}!`);
       setOpen(false);
       reset();
       router.refresh();
     }
-    if (state.error && state.message) {
-      toast.error(state.message);
+    if (state.error && (state as any).message) {
+      toast.error((state as any).message);
     }
   }, [state, router, studentName, reset]);
 
@@ -61,7 +59,7 @@ const SmallResetPasswordModal = ({
     formData.append("studentId", studentId);
     formData.append("newPassword", data.newPassword);
     formData.append("currentUserId", currentUserId);
-    formAction(formData);
+    formAction();
   });
 
   return (
@@ -86,16 +84,24 @@ const SmallResetPasswordModal = ({
                 </p>
               </div>
 
-              <PasswordField
-                label="New Password"
-                name="newPassword"
-                register={register}
-                error={errors.newPassword}
-                required={true}
-                inputProps={{ placeholder: "Enter new password" }}
-              />
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-gray-500">
+                  New Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  {...register("newPassword")}
+                  className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
+                  placeholder="Enter new password"
+                />
+                {errors.newPassword?.message && (
+                  <p className="text-xs text-red-400">
+                    {errors.newPassword.message.toString()}
+                  </p>
+                )}
+              </div>
 
-              {state.error && !state.message && (
+              {state.error && !(state as any).message && (
                 <span className="text-red-500">Failed to reset password. Please try again.</span>
               )}
               

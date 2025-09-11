@@ -16,13 +16,13 @@ export const classSchema = z.object({
     "JAPANESE", 
     "FRENCH", 
     "GERMAN"
-  ], { message: "Language is required!" }),
+  ]).optional(),
   educationType: z.enum([
     "KINDERGARTEN", 
     "PRIMARY", 
     "SECONDARY", 
     "HIGH"
-  ], { message: "Education type is required!" }),
+  ]).optional(),
   // Supervisor is assigned later via Teacher Assignments workflow
   supervisorId: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE"], { message: "Status is required!" }),
@@ -474,9 +474,9 @@ export const homeworkSchema = z.object({
   attachments: z.array(z.object({
     fileName: z.string(),
     originalName: z.string(),
-    fileType: z.enum(["TEXT", "IMAGE", "DOCUMENT", "AUDIO", "VIDEO", "LINK", "OTHER"]),
+    fileType: z.string(),
     fileUrl: z.string(),
-    filePath: z.string(),
+    filePath: z.string().optional(),
     fileSize: z.number(),
     duration: z.number().optional(),
     mimeType: z.string(),
@@ -658,6 +658,7 @@ export const examSchema = z.object({
   name: z.string().min(3, { message: "Exam name must be at least 3 characters!" })
     .max(200, { message: "Exam name cannot exceed 200 characters!" }),
   date: z.coerce.date({ message: "Exam date is required!" }),
+  examDay: z.string().min(1, { message: "Exam day is required!" }),
   startTime: z.string().min(1, { message: "Start time is required!" }),
   endTime: z.string().min(1, { message: "End time is required!" }),
   roomNumber: z.string().min(1, { message: "Room number is required!" })
@@ -671,8 +672,8 @@ export const examSchema = z.object({
   branchId: z.coerce.number().min(1, { message: "Branch is required!" }),
   academicYearId: z.coerce.number().min(1, { message: "Academic Year is required!" }),
   classId: z.coerce.number().min(1, { message: "Class is required!" }),
-  subjectId: z.coerce.number().min(1, { message: "Subject is required!" }),
-  teacherId: z.string().min(1, { message: "Teacher is required!" }),
+  subjectId: z.coerce.number().optional(),
+  teacherId: z.string().optional(),
 }).refine((data) => {
   return data.passingMarks <= data.fullMarks;
 }, {
@@ -831,7 +832,7 @@ export const userSchema = z.object({
   firstName: z.string().min(1, { message: "First name is required!" }),
   lastName: z.string().min(1, { message: "Last name is required!" }),
   gender: z.enum(["MALE", "FEMALE"], { message: "Gender is required!" }),
-  dateOfBirth: z.coerce.date().optional(),
+  dateOfBirth: z.coerce.date().optional().or(z.literal("")),
   phone: z
     .string()
     .min(10, { message: "Phone number must be at least 10 digits!" })
@@ -851,7 +852,7 @@ export const userSchema = z.object({
     .optional()
     .or(z.literal("")),
   status: z.enum(["ACTIVE", "INACTIVE"], { message: "Status is required!" }),
-  address: z.string().min(1, { message: "Address is required!" }),
+  address: z.string().optional().or(z.literal("")),
   position: z.enum([
     "MAIN_DIRECTOR",
     "SUPPORT_DIRECTOR",
@@ -863,8 +864,8 @@ export const userSchema = z.object({
     "CHIEF"
   ], { message: "Position is required!" }),
   branchId: z.coerce.number().optional().nullable(),
-  passport: userPassportSchema,
-  education: userEducationSchema,
+  passport: userPassportSchema.optional(),
+  education: userEducationSchema.optional(),
   attachments: z.object({
     passport: attachmentSchema.optional(),
     resume: attachmentSchema.optional(),
@@ -1147,20 +1148,26 @@ export type StudentSchema = z.infer<typeof studentSchema>;
 
 // Update schemas with optional passwords for edit operations
 export const studentUpdateSchema = studentSchema.extend({
-  password: z.string().optional().or(z.literal("")),
+  password: z.string().min(8, { message: "Password must be at least 8 characters long!" }).optional().or(z.literal('')),
 });
 
 export const parentUpdateSchema = parentSchema.extend({
-  password: z.string().optional().or(z.literal("")),
+  password: z.string().min(8, { message: "Password must be at least 8 characters long!" }).optional().or(z.literal('')),
 });
 
 export const userUpdateSchema = userSchema.extend({
-  password: z.string().optional().or(z.literal("")),
+  password: z.string().min(8, { message: "Password must be at least 8 characters long!" }).optional().or(z.literal('')),
+  address: z.string().optional().or(z.literal('')),
+});
+
+export const teacherUpdateSchema = teacherSchema.extend({
+  password: z.string().min(8, { message: "Password must be at least 8 characters long!" }).optional().or(z.literal('')),
 });
 
 export type StudentUpdateSchema = z.infer<typeof studentUpdateSchema>;
 export type ParentUpdateSchema = z.infer<typeof parentUpdateSchema>;
 export type UserUpdateSchema = z.infer<typeof userUpdateSchema>;
+export type TeacherUpdateSchema = z.infer<typeof teacherUpdateSchema>;
 
 export const transferStudentSchema = z.object({
   studentId: z.string().min(1, { message: "Student is required!" }),

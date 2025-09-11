@@ -141,9 +141,17 @@ const PREFETCH_RULES: PrefetchRule[] = [
 
 export const usePrefetch = () => {
   const pathname = usePathname();
+  
+  // Always call useQueryClient - let it handle its own errors
   const queryClient = useQueryClient();
 
   const prefetchForPath = useCallback(async (path: string) => {
+    // Check if queryClient is available before using it
+    if (!queryClient) {
+      console.warn('QueryClient not available, skipping prefetch');
+      return;
+    }
+
     const rules = PREFETCH_RULES.filter(rule => 
       path.startsWith(rule.currentPath) || rule.currentPath === path
     );
@@ -175,7 +183,7 @@ export const usePrefetch = () => {
         }
       }, delay);
     }
-  }, []);
+  }, [queryClient]);
 
   // Prefetch on pathname change
   useEffect(() => {

@@ -31,9 +31,10 @@ export const DevTools = () => {
         const entries = list.getEntries();
         entries.forEach((entry) => {
           if (entry.entryType === 'navigation') {
+            const navEntry = entry as PerformanceNavigationTiming;
             setMetrics(prev => ({
               ...prev,
-              loadTime: entry.loadEventEnd - entry.loadEventStart,
+              loadTime: navEntry.loadEventEnd - navEntry.loadEventStart,
             }));
           }
         });

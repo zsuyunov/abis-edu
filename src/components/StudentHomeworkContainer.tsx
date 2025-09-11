@@ -4,12 +4,9 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import StudentHomeworkList from "./StudentHomeworkList";
 import StudentHomeworkSubmission from "./StudentHomeworkSubmission";
-import StudentHomeworkTimeline from "./StudentHomeworkTimeline";
-import StudentHomeworkAnalytics from "./StudentHomeworkAnalytics";
-import StudentHomeworkMotivation from "./StudentHomeworkMotivation";
 import StudentHomeworkFilters from "./StudentHomeworkFilters";
 
-type ViewType = "list" | "submit" | "timeline" | "analytics" | "motivation" | "export";
+type ViewType = "list" | "submit" | "export";
 
 interface StudentHomeworkContainerProps {
   studentId: string;
@@ -80,10 +77,36 @@ const StudentHomeworkContainer = ({ studentId }: StudentHomeworkContainerProps) 
         ...filters,
       });
 
-      const response = await fetch(`/api/student-homework?${queryParams}`);
+      console.log('Fetching homework for student:', studentId);
+      console.log('Query params:', queryParams.toString());
+      
+      const response = await fetch(`/api/student-homework?${queryParams}`, {
+        headers: {
+          'x-user-id': studentId,
+        },
+      });
+      
+      console.log('Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Student homework data received:', data);
+        console.log('Homework count:', data.homework?.length || 0);
+        console.log('Student info:', {
+          id: data.student?.id,
+          branchId: data.student?.branchId,
+          classId: data.student?.classId,
+          branch: data.student?.branch?.shortName,
+          class: data.student?.class?.name
+        });
+        console.log('Available academic years:', data.availableAcademicYears);
+        console.log('Available subjects:', data.availableSubjects);
+        console.log('Stats:', data.stats);
         handleDataUpdate(data);
+      } else {
+        const error = await response.json();
+        console.error('Failed to fetch student homework:', error);
+        console.error('Response status:', response.status);
       }
     } catch (error) {
       console.error("Error fetching homework data:", error);
@@ -104,12 +127,6 @@ const StudentHomeworkContainer = ({ studentId }: StudentHomeworkContainerProps) 
         return "📚";
       case "submit":
         return "📝";
-      case "timeline":
-        return "📅";
-      case "analytics":
-        return "📊";
-      case "motivation":
-        return "🎯";
       case "export":
         return "📁";
       default:
@@ -123,12 +140,6 @@ const StudentHomeworkContainer = ({ studentId }: StudentHomeworkContainerProps) 
         return "My Homework";
       case "submit":
         return "Submit Work";
-      case "timeline":
-        return "Progress Timeline";
-      case "analytics":
-        return "My Analytics";
-      case "motivation":
-        return "Achievements";
       case "export":
         return "Export Report";
       default:
@@ -226,61 +237,35 @@ const StudentHomeworkContainer = ({ studentId }: StudentHomeworkContainerProps) 
       )}
 
       {/* VIEW SELECTOR */}
-      <div className="flex items-center gap-2 mb-6 overflow-x-auto">
+      <div className="flex items-center gap-1 sm:gap-2 mb-4 overflow-x-auto">
         <button
           onClick={() => handleViewChange("list")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`p-2 sm:px-3 sm:py-2 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             currentView === "list"
               ? "bg-green-500 text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
+          title="My Homework"
         >
-          {getViewIcon("list")} {getViewTitle("list")}
-        </button>
-        <button
-          onClick={() => handleViewChange("timeline")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-            currentView === "timeline"
-              ? "bg-blue-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {getViewIcon("timeline")} {getViewTitle("timeline")}
-        </button>
-        <button
-          onClick={() => handleViewChange("analytics")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-            currentView === "analytics"
-              ? "bg-purple-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {getViewIcon("analytics")} {getViewTitle("analytics")}
-        </button>
-        <button
-          onClick={() => handleViewChange("motivation")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-            currentView === "motivation"
-              ? "bg-yellow-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {getViewIcon("motivation")} {getViewTitle("motivation")}
+          <span className="sm:hidden">{getViewIcon("list")}</span>
+          <span className="hidden sm:inline">{getViewIcon("list")} {getViewTitle("list")}</span>
         </button>
         <button
           onClick={() => handleViewChange("export")}
-          className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+          className={`p-2 sm:px-3 sm:py-2 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
             currentView === "export"
               ? "bg-cyan-500 text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
+          title="Export Report"
         >
-          {getViewIcon("export")} {getViewTitle("export")}
+          <span className="sm:hidden">{getViewIcon("export")}</span>
+          <span className="hidden sm:inline">{getViewIcon("export")} {getViewTitle("export")}</span>
         </button>
       </div>
 
       {/* FILTERS */}
-      {(currentView === "list" || currentView === "timeline" || currentView === "analytics") && studentData && (
+      {currentView === "list" && studentData && (
         <StudentHomeworkFilters
           filters={filters}
           onFilterChange={handleFilterChange}
@@ -312,32 +297,6 @@ const StudentHomeworkContainer = ({ studentId }: StudentHomeworkContainerProps) 
           />
         )}
         
-        {currentView === "timeline" && (
-          <StudentHomeworkTimeline
-            studentId={studentId}
-            filters={filters}
-            onDataUpdate={handleDataUpdate}
-            isMobile={isMobile}
-          />
-        )}
-        
-        {currentView === "analytics" && (
-          <StudentHomeworkAnalytics
-            studentId={studentId}
-            filters={filters}
-            onDataUpdate={handleDataUpdate}
-            isMobile={isMobile}
-          />
-        )}
-        
-        {currentView === "motivation" && (
-          <StudentHomeworkMotivation
-            studentId={studentId}
-            motivationalData={studentData?.motivationalData}
-            onDataUpdate={handleDataUpdate}
-            isMobile={isMobile}
-          />
-        )}
         
         {currentView === "export" && (
           <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -346,71 +305,28 @@ const StudentHomeworkContainer = ({ studentId }: StudentHomeworkContainerProps) 
             <p className="text-gray-600 mb-4">
               Download your complete homework history and performance statistics.
             </p>
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center justify-center gap-2 sm:gap-4">
               <button
                 onClick={() => window.open(`/api/student-homework/export?format=pdf&studentId=${studentId}`)}
-                className="px-6 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                className="px-3 py-2 sm:px-4 sm:py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-xs sm:text-sm"
+                title="Download PDF Report"
               >
-                📄 Download PDF
+                <span className="sm:hidden">📄</span>
+                <span className="hidden sm:inline">📄 Download PDF</span>
               </button>
               <button
                 onClick={() => window.open(`/api/student-homework/export?format=excel&studentId=${studentId}`)}
-                className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                className="px-3 py-2 sm:px-4 sm:py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors text-xs sm:text-sm"
+                title="Download Excel Report"
               >
-                📊 Download Excel
+                <span className="sm:hidden">📊</span>
+                <span className="hidden sm:inline">📊 Download Excel</span>
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* STUDENT GUIDANCE */}
-      <div className="mt-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-md border border-blue-200">
-        <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center gap-2">
-          <span>💡</span>
-          Student Homework Guide
-        </h4>
-        <div className="text-xs text-blue-800 space-y-1">
-          {currentView === "list" && (
-            <>
-              <div>• <strong>Stay Organized:</strong> Check deadlines regularly and plan your work</div>
-              <div>• <strong>Submit Early:</strong> Aim to submit assignments before the deadline</div>
-              <div>• <strong>Read Instructions:</strong> Carefully read homework requirements and attachments</div>
-              <div>• <strong>Ask Questions:</strong> Contact your teacher if you need clarification</div>
-            </>
-          )}
-          {currentView === "submit" && (
-            <>
-              <div>• <strong>Multiple Formats:</strong> You can submit text, images, documents, and audio</div>
-              <div>• <strong>Save Often:</strong> Your work is saved automatically as you type</div>
-              <div>• <strong>Check Attachments:</strong> Review any files you've uploaded before submitting</div>
-              <div>• <strong>Resubmission:</strong> You can update your submission until the deadline</div>
-            </>
-          )}
-          {currentView === "analytics" && (
-            <>
-              <div>• <strong>Track Progress:</strong> Monitor your completion rates and grades</div>
-              <div>• <strong>Identify Patterns:</strong> See which subjects need more attention</div>
-              <div>• <strong>Set Goals:</strong> Aim for 90%+ completion and on-time submission rates</div>
-              <div>• <strong>Celebrate Success:</strong> Acknowledge your achievements and improvements</div>
-            </>
-          )}
-          {currentView === "motivation" && (
-            <>
-              <div>• <strong>Build Streaks:</strong> Complete homework on time to build your streak</div>
-              <div>• <strong>Earn Badges:</strong> Achieve milestones to unlock special recognition</div>
-              <div>• <strong>Stay Motivated:</strong> Use your progress to stay encouraged</div>
-              <div>• <strong>Share Success:</strong> Show your achievements to parents and friends</div>
-            </>
-          )}
-          
-          <div className="mt-2 pt-2 border-t border-blue-200">
-            <div>🎯 <strong>Success Tip:</strong> Complete homework consistently to build good study habits</div>
-            <div>📱 <strong>Mobile Access:</strong> You can view and submit homework from any device</div>
-            <div>⏰ <strong>Time Management:</strong> Start assignments early to avoid last-minute stress</div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

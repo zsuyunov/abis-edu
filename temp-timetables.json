@@ -1,0 +1,282 @@
+[
+  {
+    "id": 9387,
+    "branchId": 2,
+    "classId": 2,
+    "academicYearId": 2,
+    "dayOfWeek": "Tuesday",
+    "subjectId": 10,
+    "subjectIds": [
+      10
+    ],
+    "teacherIds": [
+      "11"
+    ],
+    "startTime": "09:12",
+    "endTime": "11:15",
+    "roomNumber": "",
+    "buildingName": "",
+    "isElective": false,
+    "isActive": true,
+    "createdAt": "2025-09-09T17:17:45.163Z",
+    "updatedAt": "2025-09-09T17:17:45.163Z",
+    "branch": {
+      "id": 2,
+      "shortName": "SuzukOta",
+      "legalName": "SuzukOta - Kindergarten"
+    },
+    "class": {
+      "id": 2,
+      "name": "9-A"
+    },
+    "academicYear": {
+      "id": 2,
+      "name": "2024-2025",
+      "isCurrent": true
+    },
+    "subject": {
+      "id": 10,
+      "name": "Subject 10"
+    }
+  },
+  {
+    "id": 6991,
+    "branchId": 2,
+    "classId": 2,
+    "academicYearId": 2,
+    "dayOfWeek": "Wednesday",
+    "subjectId": 9,
+    "subjectIds": [
+      9
+    ],
+    "teacherIds": [
+      "12"
+    ],
+    "startTime": "08:15",
+    "endTime": "10:15",
+    "roomNumber": "",
+    "buildingName": "",
+    "isElective": false,
+    "isActive": true,
+    "createdAt": "2025-09-09T17:17:45.171Z",
+    "updatedAt": "2025-09-09T17:17:45.171Z",
+    "branch": {
+      "id": 2,
+      "shortName": "SuzukOta",
+      "legalName": "SuzukOta - Kindergarten"
+    },
+    "class": {
+      "id": 2,
+      "name": "9-A"
+    },
+    "academicYear": {
+      "id": 2,
+      "name": "2024-2025",
+      "isCurrent": true
+    },
+    "subject": {
+      "id": 9,
+      "name": "Subject 9"
+    }
+  },
+  {
+    "id": 8318,
+    "branchId": 2,
+    "classId": 2,
+    "academicYearId": 2,
+    "dayOfWeek": "Thursday",
+    "subjectId": 5,
+    "subjectIds": [
+      5
+    ],
+    "teacherIds": [
+      "9"
+    ],
+    "startTime": "10:20",
+    "endTime": "12:20",
+    "roomNumber": "",
+    "buildingName": "",
+    "isElective": false,
+    "isActive": true,
+    "createdAt": "2025-09-09T17:17:45.193Z",
+    "updatedAt": "2025-09-09T17:17:45.193Z",
+    "branch": {
+      "id": 2,
+      "shortName": "SuzukOta",
+      "legalName": "SuzukOta - Kindergarten"
+    },
+    "class": {
+      "id": 2,
+      "name": "9-A"
+    },
+    "academicYear": {
+      "id": 2,
+      "name": "2024-2025",
+      "isCurrent": true
+    },
+    "subject": {
+      "id": 5,
+      "name": "Subject 5"
+    }
+  },
+  {
+    "id": 2399,
+    "branchId": 2,
+    "classId": 2,
+    "academicYearId": 2,
+    "dayOfWeek": "Friday",
+    "subjectId": 15,
+    "subjectIds": [
+      15
+    ],
+    "teacherIds": [
+      "15"
+    ],
+    "startTime": "13:13",
+    "endTime": "15:19",
+    "roomNumber": "",
+    "buildingName": "",
+    "isElective": false,
+    "isActive": true,
+    "createdAt": "2025-09-09T17:17:45.214Z",
+    "updatedAt": "2025-09-09T17:17:45.214Z",
+    "branch": {
+      "id": 2,
+      "shortName": "SuzukOta",
+      "legalName": "SuzukOta - Kindergarten"
+    },
+    "class": {
+      "id": 2,
+      "name": "9-A"
+    },
+    "academicYear": {
+      "id": 2,
+      "name": "2024-2025",
+      "isCurrent": true
+    },
+    "subject": {
+      "id": 15,
+      "name": "Subject 15"
+    }
+  },
+  {
+    "id": 4720,
+    "branchId": 2,
+    "classId": 2,
+    "academicYearId": 2,
+    "dayOfWeek": "Monday",
+    "subjectId": 11,
+    "subjectIds": [
+      11
+    ],
+    "teacherIds": [
+      "10"
+    ],
+    "startTime": "10:12",
+    "endTime": "12:14",
+    "roomNumber": "",
+    "buildingName": "",
+    "isElective": false,
+    "isActive": true,
+    "createdAt": "2025-09-09T17:17:45.231Z",
+    "updatedAt": "2025-09-09T17:17:45.231Z",
+    "branch": {
+      "id": 2,
+      "shortName": "SuzukOta",
+      "legalName": "SuzukOta - Kindergarten"
+    },
+    "class": {
+      "id": 2,
+      "name": "9-A"
+    },
+    "academicYear": {
+      "id": 2,
+      "name": "2024-2025",
+      "isCurrent": true
+    },
+    "subject": {
+      "id": 11,
+      "name": "Subject 11"
+    }
+  },
+  {
+    "id": 7592,
+    "branchId": 2,
+    "classId": 2,
+    "academicYearId": 2,
+    "dayOfWeek": "Monday",
+    "subjectId": 11,
+    "subjectIds": [
+      11
+    ],
+    "teacherIds": [
+      "4"
+    ],
+    "startTime": "11:09",
+    "endTime": "12:15",
+    "roomNumber": "",
+    "buildingName": "",
+    "isElective": false,
+    "isActive": true,
+    "createdAt": "2025-09-09T18:10:03.582Z",
+    "updatedAt": "2025-09-09T21:22:43.464Z",
+    "branch": {
+      "id": 2,
+      "shortName": "SuzukOta",
+      "legalName": "SuzukOta - Kindergarten"
+    },
+    "class": {
+      "id": 2,
+      "name": "9-A"
+    },
+    "academicYear": {
+      "id": 2,
+      "name": "2024-2025",
+      "isCurrent": true
+    },
+    "subject": {
+      "id": 11,
+      "name": "Subject 11"
+    }
+  },
+  {
+    "id": 5828,
+    "branchId": 2,
+    "classId": 2,
+    "academicYearId": 2,
+    "dayOfWeek": "Monday",
+    "subjectId": 10,
+    "subjectIds": [
+      10
+    ],
+    "teacherIds": [
+      "12"
+    ],
+    "startTime": "05:48",
+    "endTime": "07:50",
+    "roomNumber": "",
+    "buildingName": "",
+    "isElective": false,
+    "isActive": true,
+    "createdAt": "2025-09-10T00:48:29.819Z",
+    "updatedAt": "2025-09-10T00:48:29.819Z",
+    "branch": {
+      "id": 2,
+      "shortName": "SuzukOta",
+      "legalName": "SuzukOta - Kindergarten"
+    },
+    "class": {
+      "id": 2,
+      "name": "9-A"
+    },
+    "academicYear": {
+      "id": 2,
+      "name": "2024-2025",
+      "isCurrent": true
+    },
+    "subject": {
+      "id": 10,
+      "name": "Subject 10"
+    }
+  }
+]

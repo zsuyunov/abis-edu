@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -199,7 +200,7 @@ const ParentWeeklyTimetable = ({
 
   return (
     <div>
-      {/* HEADER WITH CHILD INFO */}
+      {/* HEADER WITH CHILD INFO }
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-lg font-semibold">
@@ -230,7 +231,7 @@ const ParentWeeklyTimetable = ({
         )}
       </div>
 
-      {/* QUICK STATS */}
+      {/* QUICK STATS }
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
           <div className="text-lg font-bold text-blue-600">{timetables.length}</div>
@@ -256,10 +257,10 @@ const ParentWeeklyTimetable = ({
         </div>
       </div>
 
-      {/* TIMETABLE GRID */}
+      {/* TIMETABLE GRID }
       <div className="overflow-x-auto">
         <div className="min-w-[800px]">
-          {/* HEADER */}
+          {/* HEADER }
           <div className="grid grid-cols-6 gap-2 mb-4">
             <div className="p-3 bg-gray-100 rounded-md font-medium text-center">
               Time
@@ -281,15 +282,15 @@ const ParentWeeklyTimetable = ({
             ))}
           </div>
 
-          {/* TIME SLOTS */}
+          {/* TIME SLOTS }
           {timeSlots.map((timeSlot) => (
             <div key={timeSlot} className="grid grid-cols-6 gap-2 mb-2">
-              {/* TIME COLUMN */}
+              {/* TIME COLUMN }
               <div className="p-3 bg-gray-50 rounded-md text-sm font-medium text-center text-gray-600">
                 {timeSlot}
               </div>
 
-              {/* DAY COLUMNS */}
+              {/* DAY COLUMNS }
               {days.map((day) => {
                 const timetable = getTimetableForSlot(day, timeSlot);
                 
@@ -344,7 +345,7 @@ const ParentWeeklyTimetable = ({
         </div>
       </div>
 
-      {/* PARENT GUIDANCE */}
+      {/* PARENT GUIDANCE }
       <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-md border border-blue-200">
         <h4 className="text-sm font-medium text-blue-900 mb-2 flex items-center gap-2">
           <Image src="/parent.png" alt="Parent" width={16} height={16} />
@@ -361,7 +362,7 @@ const ParentWeeklyTimetable = ({
         </div>
       </div>
 
-      {/* LEGEND */}
+      {/* LEGEND }
       <div className="mt-4 p-4 bg-gray-50 rounded-md">
         <h4 className="text-sm font-medium text-gray-900 mb-2">Legend</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
@@ -396,7 +397,7 @@ const ParentWeeklyTimetable = ({
         </div>
       </div>
 
-      {/* LESSON TOPIC VIEWER MODAL */}
+      {/* LESSON TOPIC VIEWER MODAL }
       {showTopicViewer && selectedTimetable && (
         <LessonTopicViewer
           timetable={selectedTimetable}
@@ -412,3 +413,5 @@ const ParentWeeklyTimetable = ({
 };
 
 export default ParentWeeklyTimetable;
+
+*/

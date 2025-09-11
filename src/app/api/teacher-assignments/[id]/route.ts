@@ -23,40 +23,28 @@ export async function DELETE(
     // Remove the connections
     await prisma.$transaction(async (tx) => {
       // Check if this is the only class-subject assignment for this teacher
-      const teacherAssignments = await tx.teacher.findUnique({
-        where: { id: teacherId },
-        select: {
-          subjects: {
-            where: { id: subjectId },
-          },
-          classes: {
-            where: { id: classId },
-          },
+      const teacherAssignmentsCount = await tx.teacherAssignment.count({
+        where: {
+          teacherId: teacherId,
+          subjectId: subjectId,
         },
       });
 
-      if (teacherAssignments?.subjects.length === 1) {
-        // Disconnect teacher from subject if this is their only subject assignment
-        await tx.teacher.update({
-          where: { id: teacherId },
-          data: {
-            subjects: {
-              disconnect: { id: subjectId },
-            },
-          },
-        });
+      if (teacherAssignmentsCount === 1) {
+        // This was the teacher's only assignment for this subject
+        // Additional cleanup could be done here if needed
       }
 
-      if (teacherAssignments?.classes.length === 1) {
-        // Disconnect teacher from class if this is their only class assignment
-        await tx.teacher.update({
-          where: { id: teacherId },
-          data: {
-            classes: {
-              disconnect: { id: classId },
-            },
-          },
-        });
+      const classAssignmentsCount = await tx.teacherAssignment.count({
+        where: {
+          teacherId: teacherId,
+          classId: classId,
+        },
+      });
+
+      if (classAssignmentsCount === 1) {
+        // This was the teacher's only assignment for this class
+        // Additional cleanup could be done here if needed
       }
     });
 

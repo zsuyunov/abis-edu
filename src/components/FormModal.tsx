@@ -174,44 +174,184 @@ const GradeForm = dynamic(() => import("./forms/GradeForm"), {
 const forms: {
   [key: string]: (
     setOpen: Dispatch<SetStateAction<boolean>>,
-    type: "create" | "update" | "delete" | "archive" | "restore" | "assign",
+    type: "create" | "update" | "delete" | "archive" | "restore" | "assign" | "resetPassword" | "sendMessage",
     data?: any,
     relatedData?: any,
     currentUserId?: string
   ) => JSX.Element;
 } = {
-  subject: (setOpen, type, data, relatedData) => (
-    <SubjectForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
-  teacher: (setOpen, type, data, relatedData) => (
-    <TeacherForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
-  teacherAssignment: (setOpen, type, data, relatedData) => (
-    <TeacherAssignmentForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
-  studentAssignment: (setOpen, type, data, relatedData) => (
-    <StudentAssignmentForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
+  subject: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <SubjectForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
+  teacher: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.firstName} ${data.lastName}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.firstName} ${data.lastName}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.firstName} ${data.lastName}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <TeacherForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
+  teacherAssignment: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Teacher Assignment ${data.id}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Teacher Assignment ${data.id}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Teacher Assignment ${data.id}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <TeacherAssignmentForm
+        type={type === "assign" ? "create" : type as "create" | "update" | "delete"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
+  studentAssignment: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Student Assignment ${data.id}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Student Assignment ${data.id}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Student Assignment ${data.id}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <StudentAssignmentForm
+        type={type as "create" | "update" | "delete"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
   student: (setOpen, type, data, relatedData, currentUserId) => {
     if (type === "archive") {
       return (
@@ -266,28 +406,98 @@ const forms: {
     }
     return (
       <StudentForm
-        type={type}
+        type={type as "create" | "update"}
         data={data}
         setOpen={setOpen}
         relatedData={relatedData}
       />
     );
   },
-  exam: (setOpen, type, data, relatedData) => (
-    <ExamForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
-  branch: (setOpen, type, data, relatedData) => (
-    <BranchForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-    />
-  ),
+  exam: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <ExamForm
+        type={type as "create" | "update"}
+        data={data}
+        onClose={() => setOpen(false)}
+        onSuccess={() => setOpen(false)}
+      />
+    );
+  },
+  branch: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.shortName}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.shortName}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.shortName}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <BranchForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+      />
+    );
+  },
   user: (setOpen, type, data, relatedData, currentUserId) => {
     if (type === "archive") {
       return (
@@ -313,7 +523,7 @@ const forms: {
     }
     return (
       <UserForm
-        type={type}
+        type={type as "create" | "update"}
         data={data}
         setOpen={setOpen}
         relatedData={relatedData}
@@ -356,21 +566,56 @@ const forms: {
     }
     return (
       <ClassForm
-        type={type}
+        type={type as "create" | "update"}
         data={data}
         setOpen={setOpen}
         relatedData={relatedData}
       />
     );
   },
-  parent: (setOpen, type, data, relatedData) => (
-    <ParentForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
+  parent: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.firstName} ${data.lastName}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.firstName} ${data.lastName}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.firstName} ${data.lastName}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <ParentForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
   parentAssign: (setOpen, type, data, relatedData, currentUserId) => (
     <ParentAssignForm
       studentId={data?.studentId}
@@ -379,29 +624,134 @@ const forms: {
       setOpen={setOpen}
     />
   ),
-  academicYear: (setOpen, type, data, relatedData) => (
-    <AcademicYearForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-    />
-  ),
-  event: (setOpen, type, data, relatedData) => (
-    <EventForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
-  announcement: (setOpen, type, data, relatedData) => (
-    <AnnouncementForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
+  academicYear: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.name}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <AcademicYearForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+      />
+    );
+  },
+  event: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.title}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.title}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.title}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <EventForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
+  announcement: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.title}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.title}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`${data.title}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <AnnouncementForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
   message: (setOpen, type, data, relatedData, currentUserId) => (
     <AdminMessageForm
       type={type as "create"}
@@ -411,30 +761,134 @@ const forms: {
       currentUserId={currentUserId || ""}
     />
   ),
-  timetable: (setOpen, type, data, relatedData) => (
-    <TimetableForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
-  attendance: (setOpen, type, data, relatedData) => (
-    <AttendanceForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
-  grade: (setOpen, type, data, relatedData) => (
-    <GradeForm
-      type={type}
-      data={data}
-      setOpen={setOpen}
-      relatedData={relatedData}
-    />
-  ),
+  timetable: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Timetable ${data.id}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Timetable ${data.id}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Timetable ${data.id}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <TimetableForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
+  attendance: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Attendance ${data.id}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Attendance ${data.id}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Attendance ${data.id}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <AttendanceForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+      />
+    );
+  },
+  grade: (setOpen, type, data, relatedData, currentUserId) => {
+    if (type === "archive") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Grade ${data.id}`}
+          action="ARCHIVE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "restore") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Grade ${data.id}`}
+          action="RESTORE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    if (type === "delete") {
+      return (
+        <ArchiveCommentForm
+          userId={data.id}
+          userName={`Grade ${data.id}`}
+          action="DELETE"
+          currentUserId={currentUserId || ""}
+          setOpen={setOpen}
+        />
+      );
+    }
+    return (
+      <GradeForm
+        type={type as "create" | "update"}
+        data={data}
+        setOpen={setOpen}
+        relatedData={relatedData}
+      />
+    );
+  },
 };
 
 const FormModal = ({
@@ -498,6 +952,36 @@ const FormModal = ({
       }
     }, [state, router]);
 
+    // Unassign hooks - moved outside conditional
+    const isTeacherAssignment = table === 'teacherAssignment';
+    const isParent = table === 'parent';
+    
+    let unassignAction;
+    if (isParent) {
+      unassignAction = unassignParent;
+    } else {
+      unassignAction = (deleteActionMap as any)[table];
+    }
+    
+    const [unassignState, unassignFormAction] = useFormState(unassignAction, { success: false, error: false, message: '' });
+    const [isPending, startTransition] = useTransition();
+
+    useEffect(() => {
+      if (type === "unassign") {
+        console.log("🔄 Unassign state changed:", unassignState);
+        if (unassignState.success) {
+          console.log("✅ Unassign success, showing toast:", unassignState.message);
+          toast.success(unassignState.message || "Unassignment successful!");
+          setOpen(false);
+          router.refresh();
+        }
+        if (unassignState.error) {
+          console.log("❌ Unassign error, showing toast:", unassignState.message);
+          toast.error(unassignState.message || "Unassignment failed.");
+        }
+      }
+    }, [unassignState, router, setOpen, type]);
+
     // Academic years use specialized action modals only for delete
     if (isAcademicYearDelete) {
       return (
@@ -532,39 +1016,10 @@ const FormModal = ({
     }
 
     if (type === "unassign") {
-      const isTeacherAssignment = table === 'teacherAssignment';
-      const isParent = table === 'parent';
-      
-      let action;
-      if (isParent) {
-        action = unassignParent;
-      } else {
-        action = (deleteActionMap as any)[table];
-      }
-      
-      const [state, formAction] = useFormState(action, { success: false, error: false, message: '' });
-      const [isPending, startTransition] = useTransition();
-
-      const router = useRouter();
-
-      useEffect(() => {
-        console.log("🔄 Unassign state changed:", state);
-        if (state.success) {
-          console.log("✅ Unassign success, showing toast:", state.message);
-          toast.success(state.message || "Unassignment successful!");
-          setOpen(false);
-          router.refresh();
-        }
-        if (state.error) {
-          console.log("❌ Unassign error, showing toast:", state.message);
-          toast.error(state.message || "Unassignment failed.");
-        }
-      }, [state, router, setOpen]);
-
       const handleSubmit = async (formData: FormData) => {
         console.log("🚀 Unassign form submitted:", formData);
-        console.log("🚀 Action being used:", action);
-        formAction(formData);
+        console.log("🚀 Action being used:", unassignAction);
+        unassignFormAction();
       };
 
       return (

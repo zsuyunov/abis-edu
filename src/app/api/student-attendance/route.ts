@@ -4,50 +4,51 @@ import { AuthService } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Try header-based auth first, then fallback to token auth
+    const studentId = request.headers.get('x-user-id');
+    let authenticatedUserId = studentId;
+
+    if (!studentId) {
+      const authHeader = request.headers.get('authorization');
+      const token = AuthService.extractTokenFromHeader(authHeader);
+      if (!token) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      
+      const session = AuthService.verifyToken(token);
+      if (!session?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      authenticatedUserId = session.id;
     }
 
     const url = new URL(request.url);
-    const studentId = url.searchParams.get("studentId") || session.id;
-    const academicYearId = url.searchParams.get("academicYearId");
-    const subjectId = url.searchParams.get("subjectId");
-    const startDate = url.searchParams.get("startDate");
-    const endDate = url.searchParams.get("endDate");
-    const timeFilter = url.searchParams.get("timeFilter") || "current"; // current, past
-    const view = url.searchParams.get("view") || "overview"; // overview, analytics, export
+    const requestedStudentId = url.searchParams.get("studentId") || authenticatedUserId;
     
-    // Verify student can only access their own data
-    if (session.id !== studentId) {
+    if (!requestedStudentId) {
+      return NextResponse.json({ error: "Student ID is required" }, { status: 400 });
+    }
+    const period = url.searchParams.get("period") || "7days"; // 7days, 4weeks, 12weeks, year
+    const subjectId = url.searchParams.get("subjectId");
+    const academicYearIdRaw = url.searchParams.get("academicYearId");
+    const academicYearId: string | undefined = academicYearIdRaw === null ? undefined : academicYearIdRaw;
+    const view = url.searchParams.get("view") || "stats"; // stats, calendar, analytics
+
+    // Verify student can only access their own attendance data
+    if (authenticatedUserId !== requestedStudentId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    // Get student information with branch and class details
+    // Get student information
     const student = await prisma.student.findUnique({
-      where: { id: studentId },
+      where: { id: requestedStudentId || undefined },
       include: {
         class: {
           include: {
-            academicYear: true,
             branch: true,
-            subjects: true,
           },
         },
         branch: true,
-        parent: {
-          select: {
-            firstName: true,
-            lastName: true,
-            phone: true,
-          },
-        },
       },
     });
 
@@ -55,171 +56,62 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    // Get student's branch for filtering
-    const studentBranchId = student.branchId;
+    // Calculate date range based on period
+    const dateRange = calculateDateRange(period);
 
-    // Get available academic years for the student (scoped by branch)
-    let availableAcademicYears;
-    if (timeFilter === "current") {
-      availableAcademicYears = await prisma.academicYear.findMany({
-        where: { 
-          isCurrent: true, 
-          status: "ACTIVE",
-          classes: {
-            some: {
-              students: {
-                some: { 
-                  id: studentId,
-                  branchId: studentBranchId, // Ensure branch consistency
-                },
-              },
-              branchId: studentBranchId, // Classes must be in student's branch
-            },
-          },
-        },
-        orderBy: { startDate: "desc" },
-      });
-    } else {
-      availableAcademicYears = await prisma.academicYear.findMany({
-        where: { 
-          isCurrent: false,
-          classes: {
-            some: {
-              students: {
-                some: { 
-                  id: studentId,
-                  branchId: studentBranchId, // Ensure branch consistency
-                },
-              },
-              branchId: studentBranchId, // Classes must be in student's branch
-            },
-          },
-        },
-        orderBy: { startDate: "desc" },
-      });
-    }
-
-    // Determine which academic year to use
-    let targetAcademicYearId;
-    if (academicYearId) {
-      targetAcademicYearId = parseInt(academicYearId);
-    } else if (timeFilter === "current") {
-      targetAcademicYearId = availableAcademicYears[0]?.id || student.class.academicYearId;
-    } else {
-      targetAcademicYearId = availableAcademicYears[0]?.id;
-    }
-
-    if (!targetAcademicYearId) {
-      return NextResponse.json({
-        student: {
-          id: student.id,
-          firstName: student.firstName,
-          lastName: student.lastName,
-          studentId: student.studentId,
-          class: student.class,
-          branch: student.branch,
-        },
-        attendances: [],
-        summary: {},
-        availableAcademicYears,
-        message: "No academic year data available"
-      });
-    }
-
-    // Build filter conditions for attendance records with branch restriction
+    // Build filter conditions
     const attendanceWhere: any = {
-      studentId,
-      branchId: studentBranchId, // Always filter by student's branch
-      academicYearId: targetAcademicYearId,
+      studentId: requestedStudentId,
+      date: {
+        gte: dateRange.startDate,
+        lte: dateRange.endDate,
+      },
     };
 
-    if (subjectId) attendanceWhere.subjectId = parseInt(subjectId);
-
-    if (startDate && endDate) {
-      attendanceWhere.date = {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
+    if (subjectId) {
+      attendanceWhere.timetable = {
+        subjectId: parseInt(subjectId),
       };
     }
 
-    // Get attendance records with related data
-    const attendances = await prisma.attendance.findMany({
-      where: attendanceWhere,
-      include: {
-        subject: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        class: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        teacher: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        academicYear: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        timetable: {
-          select: {
-            id: true,
-            fullDate: true,
-            startTime: true,
-            endTime: true,
-          },
-        },
-      },
-      orderBy: [
-        { date: "desc" },
-        { subject: { name: "asc" } },
-      ],
-    });
-
-    // Get subjects for filter options (scoped by student's branch)
-    const subjects = await prisma.subject.findMany({
-      where: {
-        classes: {
-          some: {
-            id: student.classId,
-            branchId: studentBranchId, // Ensure subjects are from student's branch
-          },
-        },
-      },
-      orderBy: { name: "asc" },
-    });
-
-    if (view === "analytics") {
-      return getStudentAttendanceAnalytics(attendances, student, {
-        academicYearId: targetAcademicYearId,
-        subjectId,
-        startDate,
-        endDate,
-      });
+    if (academicYearId) {
+      attendanceWhere.timetable = {
+        ...attendanceWhere.timetable,
+        academicYearId: parseInt(academicYearId),
+      };
     }
 
-    // Calculate summary statistics
-    const summary = calculateAttendanceSummary(attendances);
-    
-    // Calculate subject-wise statistics
-    const subjectStats = calculateSubjectWiseStats(attendances);
-    
-    // Calculate attendance trends
-    const trends = calculateAttendanceTrends(attendances);
-    
-    // Calculate motivational data
-    const motivationalData = calculateMotivationalData(attendances, summary);
+    // Get attendance records
+    const attendanceRecords = await prisma.attendance.findMany({
+      where: attendanceWhere,
+      include: {
+        timetable: {
+          include: {
+            subject: true,
+            class: true,
+          },
+        },
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    });
 
+    // Calculate statistics
+    const stats = calculateAttendanceStats(attendanceRecords, period);
+
+    if (view === "calendar") {
+      // @ts-ignore: TypeScript strict null check issue with URL search params
+      return getAttendanceCalendar(requestedStudentId!, dateRange, subjectId, academicYearId);
+    }
+
+    if (view === "analytics") {
+      return getAttendanceAnalytics(attendanceRecords, student, period);
+    }
+
+    // Format data for analytics components
+    const barData = generateBarChartData(attendanceRecords, period);
+    
     return NextResponse.json({
       student: {
         id: student.id,
@@ -229,15 +121,19 @@ export async function GET(request: NextRequest) {
         class: student.class,
         branch: student.branch,
       },
-      attendances,
-      summary,
-      subjectStats,
-      trends,
-      motivationalData,
-      availableAcademicYears,
-      subjects,
-      timeFilter,
-      view,
+      attendance: attendanceRecords,
+      stats: {
+        present: stats.presentCount,
+        absent: stats.absentCount,
+        late: stats.lateCount,
+        excused: stats.excusedCount,
+        total: stats.totalRecords,
+        percentage: stats.attendanceRate
+      },
+      barData,
+      period,
+      dateRange,
+      subjects: student.class?.branch ? [] : [],
     });
 
   } catch (error) {
@@ -250,16 +146,80 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper functions
-function calculateAttendanceSummary(attendances: any[]) {
-  const totalRecords = attendances.length;
-  const presentCount = attendances.filter(a => a.status === "PRESENT").length;
-  const absentCount = attendances.filter(a => a.status === "ABSENT").length;
-  const lateCount = attendances.filter(a => a.status === "LATE").length;
-  const excusedCount = attendances.filter(a => a.status === "EXCUSED").length;
+function calculateDateRange(period: string) {
+  const now = new Date();
+  const endDate = new Date(now);
+  let startDate = new Date(now);
+
+  switch (period) {
+    case "7days":
+      startDate.setDate(now.getDate() - 7);
+      break;
+    case "4weeks":
+      startDate.setDate(now.getDate() - 28);
+      break;
+    case "12weeks":
+      startDate.setDate(now.getDate() - 84);
+      break;
+    case "year":
+      startDate.setFullYear(now.getFullYear() - 1);
+      break;
+    default:
+      startDate.setDate(now.getDate() - 7);
+  }
+
+  return { startDate, endDate };
+}
+
+function calculateAttendanceStats(records: any[], period: string) {
+  const totalRecords = records.length;
+  const presentCount = records.filter(r => r.status === "PRESENT").length;
+  const absentCount = records.filter(r => r.status === "ABSENT").length;
+  const lateCount = records.filter(r => r.status === "LATE").length;
+  const excusedCount = records.filter(r => r.status === "EXCUSED").length;
 
   const attendanceRate = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
-  const absenteeismRate = totalRecords > 0 ? Math.round((absentCount / totalRecords) * 100) : 0;
-  const lateRate = totalRecords > 0 ? Math.round((lateCount / totalRecords) * 100) : 0;
+  const punctualityRate = totalRecords > 0 ? Math.round(((presentCount + excusedCount) / totalRecords) * 100) : 0;
+
+  // Group by date for chart data
+  const dailyStats: Record<string, any> = {};
+  records.forEach(record => {
+    const dateKey = record.date.toISOString().split('T')[0];
+    if (!dailyStats[dateKey]) {
+      dailyStats[dateKey] = {
+        date: dateKey,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        total: 0,
+      };
+    }
+    dailyStats[dateKey][record.status.toLowerCase()]++;
+    dailyStats[dateKey].total++;
+  });
+
+  const chartData = Object.values(dailyStats).sort((a: any, b: any) => 
+    a.date.localeCompare(b.date)
+  );
+
+  // Subject-wise breakdown
+  const subjectStats: Record<string, any> = {};
+  records.forEach(record => {
+    const subjectName = record.timetable.subject.name;
+    if (!subjectStats[subjectName]) {
+      subjectStats[subjectName] = {
+        subject: subjectName,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        total: 0,
+      };
+    }
+    subjectStats[subjectName][record.status.toLowerCase()]++;
+    subjectStats[subjectName].total++;
+  });
 
   return {
     totalRecords,
@@ -268,325 +228,279 @@ function calculateAttendanceSummary(attendances: any[]) {
     lateCount,
     excusedCount,
     attendanceRate,
-    absenteeismRate,
-    lateRate,
+    punctualityRate,
+    chartData,
+    subjectStats: Object.values(subjectStats),
+    period,
   };
 }
 
-function calculateSubjectWiseStats(attendances: any[]) {
-  const subjectStats: Record<string, any> = {};
+async function getAttendanceCalendar(studentId: string, dateRange: any, subjectId?: string, academicYearId?: string) {
+  const attendanceWhere: any = {
+    studentId,
+    date: {
+      gte: dateRange.startDate,
+      lte: dateRange.endDate,
+    },
+  };
 
-  attendances.forEach(attendance => {
-    const subjectId = attendance.subjectId;
-    const subjectName = attendance.subject.name;
-    
-    if (!subjectStats[subjectId]) {
-      subjectStats[subjectId] = {
-        subject: {
-          id: subjectId,
-          name: subjectName,
+  if (subjectId) {
+    attendanceWhere.timetable = {
+      subjectId: parseInt(subjectId),
+    };
+  }
+
+  if (academicYearId) {
+    attendanceWhere.timetable = {
+      ...attendanceWhere.timetable,
+      academicYearId: parseInt(academicYearId),
+    };
+  }
+
+  const attendanceRecords = await prisma.attendance.findMany({
+    where: attendanceWhere,
+    include: {
+      timetable: {
+        include: {
+          subject: true,
         },
-        totalRecords: 0,
-        presentCount: 0,
-        absentCount: 0,
-        lateCount: 0,
-        excusedCount: 0,
-        attendanceRate: 0,
-      };
-    }
-
-    subjectStats[subjectId].totalRecords++;
-    if (attendance.status === "PRESENT") subjectStats[subjectId].presentCount++;
-    if (attendance.status === "ABSENT") subjectStats[subjectId].absentCount++;
-    if (attendance.status === "LATE") subjectStats[subjectId].lateCount++;
-    if (attendance.status === "EXCUSED") subjectStats[subjectId].excusedCount++;
+      },
+    },
+    orderBy: {
+      date: 'desc',
+    },
   });
 
-  // Calculate rates
-  Object.values(subjectStats).forEach((stats: any) => {
-    stats.attendanceRate = stats.totalRecords > 0 ? 
-      Math.round((stats.presentCount / stats.totalRecords) * 100) : 0;
+  // Group by date for calendar view
+  const calendarData: Record<string, any[]> = {};
+  attendanceRecords.forEach(record => {
+    const dateKey = record.date.toISOString().split('T')[0];
+    if (!calendarData[dateKey]) {
+      calendarData[dateKey] = [];
+    }
+    calendarData[dateKey].push(record);
   });
 
-  return Object.values(subjectStats).sort((a: any, b: any) => b.attendanceRate - a.attendanceRate);
-}
-
-function calculateAttendanceTrends(attendances: any[]) {
-  const trends: Record<string, any> = {};
-
-  attendances.forEach(attendance => {
-    const dateKey = new Date(attendance.date).toISOString().split('T')[0];
-    
-    if (!trends[dateKey]) {
-      trends[dateKey] = {
-        date: dateKey,
-        totalRecords: 0,
-        presentCount: 0,
-        absentCount: 0,
-        lateCount: 0,
-        excusedCount: 0,
-        attendanceRate: 0,
-      };
-    }
-
-    trends[dateKey].totalRecords++;
-    if (attendance.status === "PRESENT") trends[dateKey].presentCount++;
-    if (attendance.status === "ABSENT") trends[dateKey].absentCount++;
-    if (attendance.status === "LATE") trends[dateKey].lateCount++;
-    if (attendance.status === "EXCUSED") trends[dateKey].excusedCount++;
+  return NextResponse.json({
+    calendarData,
+    dateRange,
+    totalRecords: attendanceRecords.length,
   });
-
-  // Calculate rates and sort by date
-  return Object.values(trends)
-    .map((trend: any) => ({
-      ...trend,
-      attendanceRate: trend.totalRecords > 0 ? 
-        Math.round((trend.presentCount / trend.totalRecords) * 100) : 0,
-    }))
-    .sort((a: any, b: any) => a.date.localeCompare(b.date));
 }
 
-function calculateMotivationalData(attendances: any[], summary: any) {
-  const badges: string[] = [];
-  const alerts: string[] = [];
-  const achievements: string[] = [];
-
-  // Perfect Attendance Badge
-  if (summary.totalRecords >= 10 && summary.attendanceRate === 100) {
-    badges.push("Perfect Attendance");
-    achievements.push(`🏆 Perfect Attendance! You've attended all ${summary.totalRecords} classes.`);
-  }
-
-  // Excellent Attendance Badge
-  if (summary.attendanceRate >= 95 && summary.totalRecords >= 10) {
-    badges.push("Excellent Attendance");
-    achievements.push(`🌟 Excellent Attendance! ${summary.attendanceRate}% attendance rate.`);
-  }
-
-  // Good Attendance Badge
-  if (summary.attendanceRate >= 85 && summary.attendanceRate < 95 && summary.totalRecords >= 10) {
-    badges.push("Good Attendance");
-    achievements.push(`✨ Good Attendance! Keep up the ${summary.attendanceRate}% attendance rate.`);
-  }
-
-  // Punctuality Badge
-  if (summary.lateCount === 0 && summary.totalRecords >= 10) {
-    badges.push("Always On Time");
-    achievements.push(`⏰ Always On Time! No late arrivals in ${summary.totalRecords} classes.`);
-  }
-
-  // Low Attendance Alert
-  if (summary.attendanceRate < 75 && summary.totalRecords >= 5) {
-    alerts.push(`⚠️ Low Attendance Warning: Your attendance rate is ${summary.attendanceRate}%. Aim for at least 85%.`);
-  }
-
-  // Frequent Lateness Alert
-  if (summary.lateRate > 20 && summary.totalRecords >= 5) {
-    alerts.push(`⏰ Punctuality Alert: You've been late to ${summary.lateCount} classes. Try to arrive on time.`);
-  }
-
-  // Recent Absences Alert
-  const recentAttendances = attendances.slice(0, 5); // Last 5 records
-  const recentAbsences = recentAttendances.filter(a => a.status === "ABSENT").length;
-  if (recentAbsences >= 3) {
-    alerts.push(`📚 Recent Absences: You've missed ${recentAbsences} of your last 5 classes. Stay engaged!`);
-  }
-
-  // Improvement Recognition
-  if (attendances.length >= 20) {
-    const firstHalf = attendances.slice(Math.floor(attendances.length / 2));
-    const secondHalf = attendances.slice(0, Math.floor(attendances.length / 2));
-    
-    const firstHalfRate = Math.round((firstHalf.filter(a => a.status === "PRESENT").length / firstHalf.length) * 100);
-    const secondHalfRate = Math.round((secondHalf.filter(a => a.status === "PRESENT").length / secondHalf.length) * 100);
-    
-    if (secondHalfRate > firstHalfRate + 10) {
-      achievements.push(`📈 Great Improvement! Your attendance improved from ${firstHalfRate}% to ${secondHalfRate}%.`);
-    }
-  }
-
-  return {
-    badges,
-    alerts,
-    achievements,
-    streaks: calculateStreaks(attendances),
-  };
-}
-
-function calculateStreaks(attendances: any[]) {
-  if (attendances.length === 0) return { current: 0, longest: 0 };
-
-  let currentStreak = 0;
-  let longestStreak = 0;
-  let tempStreak = 0;
-
-  // Sort by date (oldest first) for streak calculation
-  const sortedAttendances = [...attendances].sort((a, b) => 
-    new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
-
-  sortedAttendances.forEach((attendance, index) => {
-    if (attendance.status === "PRESENT") {
-      tempStreak++;
-      longestStreak = Math.max(longestStreak, tempStreak);
-    } else {
-      tempStreak = 0;
-    }
-  });
-
-  // Calculate current streak (from most recent backwards)
-  const reverseAttendances = [...attendances].sort((a, b) => 
-    new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
-
-  for (const attendance of reverseAttendances) {
-    if (attendance.status === "PRESENT") {
-      currentStreak++;
-    } else {
-      break;
-    }
-  }
-
-  return { current: currentStreak, longest: longestStreak };
-}
-
-async function getStudentAttendanceAnalytics(attendances: any[], student: any, filters: any) {
-  const summary = calculateAttendanceSummary(attendances);
-  const subjectStats = calculateSubjectWiseStats(attendances);
-  const trends = calculateAttendanceTrends(attendances);
-  const motivationalData = calculateMotivationalData(attendances, summary);
-
-  // Monthly breakdown
-  const monthlyStats = calculateMonthlyStats(attendances);
-  
-  // Weekly breakdown
-  const weeklyStats = calculateWeeklyStats(attendances);
-
+async function getAttendanceAnalytics(records: any[], student: any, period: string) {
   const analytics = {
-    summary,
-    subjectStats,
-    trends,
-    monthlyStats,
-    weeklyStats,
-    motivationalData,
-    insights: generateInsights(summary, subjectStats, trends),
+    trends: calculateAttendanceTrends(records),
+    patterns: calculateAttendancePatterns(records),
+    insights: generateAttendanceInsights(records, period),
+    recommendations: generateRecommendations(records),
   };
 
   return NextResponse.json({
     student,
     analytics,
-    filters,
+    period,
   });
 }
 
-function calculateMonthlyStats(attendances: any[]) {
-  const monthlyStats: Record<string, any> = {};
-
-  attendances.forEach(attendance => {
-    const date = new Date(attendance.date);
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    
-    if (!monthlyStats[monthKey]) {
-      monthlyStats[monthKey] = {
-        month: monthKey,
-        monthName: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-        totalRecords: 0,
-        presentCount: 0,
-        absentCount: 0,
-        lateCount: 0,
-        attendanceRate: 0,
-      };
-    }
-
-    monthlyStats[monthKey].totalRecords++;
-    if (attendance.status === "PRESENT") monthlyStats[monthKey].presentCount++;
-    if (attendance.status === "ABSENT") monthlyStats[monthKey].absentCount++;
-    if (attendance.status === "LATE") monthlyStats[monthKey].lateCount++;
-  });
-
-  // Calculate rates
-  return Object.values(monthlyStats)
-    .map((stats: any) => ({
-      ...stats,
-      attendanceRate: stats.totalRecords > 0 ? 
-        Math.round((stats.presentCount / stats.totalRecords) * 100) : 0,
-    }))
-    .sort((a: any, b: any) => a.month.localeCompare(b.month));
-}
-
-function calculateWeeklyStats(attendances: any[]) {
-  const weeklyStats: Record<string, any> = {};
-
-  attendances.forEach(attendance => {
-    const date = new Date(attendance.date);
-    const weekStart = new Date(date);
-    weekStart.setDate(date.getDate() - date.getDay() + 1); // Monday
+function calculateAttendanceTrends(records: any[]) {
+  // Weekly trends
+  const weeklyTrends: Record<string, any> = {};
+  records.forEach(record => {
+    const weekStart = getWeekStart(record.date);
     const weekKey = weekStart.toISOString().split('T')[0];
     
-    if (!weeklyStats[weekKey]) {
-      weeklyStats[weekKey] = {
+    if (!weeklyTrends[weekKey]) {
+      weeklyTrends[weekKey] = {
         week: weekKey,
-        weekStart: weekStart.toLocaleDateString(),
-        totalRecords: 0,
-        presentCount: 0,
-        absentCount: 0,
-        lateCount: 0,
-        attendanceRate: 0,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        total: 0,
       };
     }
-
-    weeklyStats[weekKey].totalRecords++;
-    if (attendance.status === "PRESENT") weeklyStats[weekKey].presentCount++;
-    if (attendance.status === "ABSENT") weeklyStats[weekKey].absentCount++;
-    if (attendance.status === "LATE") weeklyStats[weekKey].lateCount++;
+    
+    weeklyTrends[weekKey][record.status.toLowerCase()]++;
+    weeklyTrends[weekKey].total++;
   });
 
-  // Calculate rates
-  return Object.values(weeklyStats)
-    .map((stats: any) => ({
-      ...stats,
-      attendanceRate: stats.totalRecords > 0 ? 
-        Math.round((stats.presentCount / stats.totalRecords) * 100) : 0,
-    }))
-    .sort((a: any, b: any) => a.week.localeCompare(b.week));
+  return Object.values(weeklyTrends).sort((a: any, b: any) => 
+    a.week.localeCompare(b.week)
+  );
 }
 
-function generateInsights(summary: any, subjectStats: any[], trends: any[]) {
-  const insights: string[] = [];
-
-  // Overall performance insight
-  if (summary.attendanceRate >= 95) {
-    insights.push("🌟 Outstanding! Your attendance is excellent across all subjects.");
-  } else if (summary.attendanceRate >= 85) {
-    insights.push("✨ Good job! Your attendance is above average.");
-  } else if (summary.attendanceRate >= 75) {
-    insights.push("📚 Your attendance needs improvement. Aim for 85% or higher.");
-  } else {
-    insights.push("⚠️ Critical: Your attendance is below acceptable levels. Please speak with your advisor.");
-  }
-
-  // Subject-specific insights
-  const bestSubject = subjectStats[0];
-  const worstSubject = subjectStats[subjectStats.length - 1];
+function calculateAttendancePatterns(records: any[]) {
+  // Day of week patterns
+  const dayPatterns: Record<string, any> = {};
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   
-  if (bestSubject && worstSubject && bestSubject.attendanceRate !== worstSubject.attendanceRate) {
-    insights.push(`📊 Best attendance: ${bestSubject.subject.name} (${bestSubject.attendanceRate}%). Consider what motivates you in this subject.`);
-    if (worstSubject.attendanceRate < 80) {
-      insights.push(`📉 Needs attention: ${worstSubject.subject.name} (${worstSubject.attendanceRate}%). Try to improve attendance in this subject.`);
+  records.forEach(record => {
+    const dayOfWeek = record.date.getDay();
+    const dayName = dayNames[dayOfWeek];
+    
+    if (!dayPatterns[dayName]) {
+      dayPatterns[dayName] = {
+        day: dayName,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        total: 0,
+      };
     }
+    
+    dayPatterns[dayName][record.status.toLowerCase()]++;
+    dayPatterns[dayName].total++;
+  });
+
+  return Object.values(dayPatterns);
+}
+
+function generateAttendanceInsights(records: any[], period: string) {
+  const insights: string[] = [];
+  const stats = calculateAttendanceStats(records, period);
+
+  if (stats.attendanceRate >= 95) {
+    insights.push("🌟 Excellent attendance! You're consistently present in class.");
+  } else if (stats.attendanceRate >= 85) {
+    insights.push("👍 Good attendance rate. Keep up the consistent effort!");
+  } else if (stats.attendanceRate >= 75) {
+    insights.push("📈 Your attendance could improve. Try to be more consistent.");
+  } else {
+    insights.push("⚠️ Low attendance rate. Consider speaking with your teacher about any challenges.");
   }
 
-  // Trend insights
-  if (trends.length >= 5) {
-    const recentTrends = trends.slice(-5);
-    const averageRecentRate = Math.round(recentTrends.reduce((sum, trend) => sum + trend.attendanceRate, 0) / recentTrends.length);
-    
-    if (averageRecentRate > summary.attendanceRate + 5) {
-      insights.push("📈 Great news! Your recent attendance has been improving.");
-    } else if (averageRecentRate < summary.attendanceRate - 5) {
-      insights.push("📉 Your recent attendance has declined. Focus on getting back on track.");
-    }
+  if (stats.lateCount > stats.totalRecords * 0.1) {
+    insights.push("⏰ You have several late arrivals. Try to arrive on time to not miss important content.");
+  }
+
+  if (stats.punctualityRate >= 90) {
+    insights.push("⏰ Great punctuality! You're rarely late or absent.");
   }
 
   return insights;
+}
+
+function generateRecommendations(records: any[]) {
+  const recommendations: string[] = [];
+  const stats = calculateAttendanceStats(records, "");
+
+  if (stats.attendanceRate < 85) {
+    recommendations.push("Set a daily routine to ensure consistent attendance");
+    recommendations.push("Speak with your teacher if you're facing challenges");
+  }
+
+  if (stats.lateCount > 3) {
+    recommendations.push("Leave home 10-15 minutes earlier to avoid being late");
+    recommendations.push("Prepare your school materials the night before");
+  }
+
+  if (stats.attendanceRate >= 95) {
+    recommendations.push("Maintain your excellent attendance record");
+    recommendations.push("Help classmates who might be struggling with attendance");
+  }
+
+  return recommendations;
+}
+
+function getWeekStart(date: Date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day;
+  return new Date(d.setDate(diff));
+}
+
+function generateBarChartData(records: any[], period: string) {
+  const barData = [];
+  
+  if (period === "7days") {
+    // Generate data for last 7 days
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayRecords = records.filter(r => r.date.toISOString().split('T')[0] === dateStr);
+      const total = dayRecords.length;
+      const present = dayRecords.filter(r => r.status === "PRESENT").length;
+      const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
+      
+      barData.push({
+        label: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        percentage,
+        date: dateStr
+      });
+    }
+  } else if (period === "4weeks") {
+    // Generate data for last 4 weeks
+    for (let i = 3; i >= 0; i--) {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - (i * 7));
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 6);
+      
+      const weekRecords = records.filter(r => {
+        const recordDate = new Date(r.date);
+        return recordDate >= startDate && recordDate <= endDate;
+      });
+      
+      const total = weekRecords.length;
+      const present = weekRecords.filter(r => r.status === "PRESENT").length;
+      const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
+      
+      barData.push({
+        label: `${startDate.getDate()}/${startDate.getMonth() + 1}`,
+        percentage,
+        date: startDate.toISOString().split('T')[0]
+      });
+    }
+  } else if (period === "12weeks") {
+    // Generate data for last 12 weeks
+    for (let i = 11; i >= 0; i--) {
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - (i * 7));
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 6);
+      
+      const weekRecords = records.filter(r => {
+        const recordDate = new Date(r.date);
+        return recordDate >= startDate && recordDate <= endDate;
+      });
+      
+      const total = weekRecords.length;
+      const present = weekRecords.filter(r => r.status === "PRESENT").length;
+      const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
+      
+      barData.push({
+        label: `${startDate.getDate() < 10 ? '0' : ''}${startDate.getDate()}`,
+        percentage,
+        date: startDate.toISOString().split('T')[0]
+      });
+    }
+  } else if (period === "year") {
+    // Generate data for last 12 months
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+      const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      
+      const monthRecords = records.filter(r => {
+        const recordDate = new Date(r.date);
+        return recordDate >= monthStart && recordDate <= monthEnd;
+      });
+      
+      const total = monthRecords.length;
+      const present = monthRecords.filter(r => r.status === "PRESENT").length;
+      const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
+      
+      barData.push({
+        label: `${date.getMonth() + 1 < 10 ? '0' : ''}${date.getMonth() + 1}`,
+        percentage,
+        date: monthStart.toISOString().split('T')[0]
+      });
+    }
+  }
+  
+  return barData;
 }

@@ -33,6 +33,11 @@ const SubjectListPage = async ({
 
   const columns = [
     {
+      header: "ID",
+      accessor: "id",
+      className: "hidden sm:table-cell",
+    },
+    {
       header: "Subject Name",
       accessor: "name",
     },
@@ -68,6 +73,9 @@ const SubjectListPage = async ({
       key={item.id}
       className="border-b border-gray-200 even:bg-slate-50 text-sm hover:bg-lamaPurpleLight"
     >
+      <td className="hidden sm:table-cell p-4 font-mono text-sm text-gray-600">
+        #{item.id}
+      </td>
       <td className="flex items-center gap-4 p-4 font-medium">{item.name}</td>
       <td className="hidden md:table-cell">
         <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(item.status)}`}>

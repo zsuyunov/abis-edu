@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 const LessonsRedirectPage = () => {
-  redirect("/list/timetables");
+  redirect("/admin/list/timetables");
 };
 
 export default LessonsRedirectPage;

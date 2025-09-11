@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState } from "react";
@@ -62,7 +63,7 @@ const ParentInsightsAlerts = ({ insights, childName }: ParentInsightsAlertsProps
 
   return (
     <div className="mb-6 space-y-4">
-      {/* SUCCESS INSIGHTS */}
+      {/* SUCCESS INSIGHTS }
       {visibleInsights.length > 0 && (
         <div className="space-y-3">
           {visibleInsights.map((insight: any, index: number) => (
@@ -82,7 +83,7 @@ const ParentInsightsAlerts = ({ insights, childName }: ParentInsightsAlertsProps
         </div>
       )}
 
-      {/* ALERTS REQUIRING ATTENTION */}
+      {/* ALERTS REQUIRING ATTENTION }
       {visibleAlerts.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -110,7 +111,7 @@ const ParentInsightsAlerts = ({ insights, childName }: ParentInsightsAlertsProps
                       </div>
                       <p className="text-sm mb-2">{alert.message}</p>
                       
-                      {/* Failed Exams Details */}
+                      {/* Failed Exams Details }
                       {alert.details && alert.details.length > 0 && (
                         <div className="mt-3">
                           <button
@@ -147,7 +148,7 @@ const ParentInsightsAlerts = ({ insights, childName }: ParentInsightsAlertsProps
                         </div>
                       )}
                       
-                      {/* Action Recommendations */}
+                      {/* Action Recommendations }
                       {alert.actionable && (
                         <div className="mt-3 p-3 bg-white/50 rounded border">
                           <div className="text-xs font-medium mb-2">💡 Recommended Actions:</div>
@@ -205,7 +206,7 @@ const ParentInsightsAlerts = ({ insights, childName }: ParentInsightsAlertsProps
         </div>
       )}
 
-      {/* SUMMARY STATISTICS */}
+      {/* SUMMARY STATISTICS }
       {insights.summary && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between text-sm">
@@ -246,7 +247,7 @@ const ParentInsightsAlerts = ({ insights, childName }: ParentInsightsAlertsProps
         </div>
       )}
 
-      {/* PARENT GUIDANCE */}
+      {/* PARENT GUIDANCE }
       <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <span className="text-lg flex-shrink-0">👨‍👩‍👧‍👦</span>
@@ -267,3 +268,5 @@ const ParentInsightsAlerts = ({ insights, childName }: ParentInsightsAlertsProps
 };
 
 export default ParentInsightsAlerts;
+
+*/

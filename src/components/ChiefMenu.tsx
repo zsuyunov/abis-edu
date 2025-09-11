@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import Image from "next/image";
@@ -21,22 +22,56 @@ export default function ChiefMenu() {
   const { navigateTo } = useNavigation();
 
   return (
-    <div className="mt-4 text-sm">
-      <span className="hidden lg:block text-gray-500 font-light my-4">CHIEF MENU</span>
-      {items.map((item) => {
-        const isActive = pathname === item.href;
-        return (
-          <button
-            onClick={() => navigateTo(item.href)}
-            key={item.label}
-            className={`flex items-center justify-center lg:justify-start gap-4 text-gray-700 py-2 md:px-2 rounded-md hover:bg-gray-100 w-full text-left transition-all duration-200 ${isActive ? "bg-gray-100 text-gray-900" : ""}`}
-          >
-            <Image src={item.icon} alt="" width={20} height={20} />
-            <span className="hidden lg:block">{item.label}</span>
-            <InlineGifLoader loading={false} className="ml-auto hidden lg:block" />
-          </button>
-        );
-      })}
+    <div className="mt-6 text-sm">
+      <div className="hidden lg:block mb-6">
+        <div className="flex items-center gap-3 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl border border-blue-200/50">
+          <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
+          <span className="text-gray-700 font-bold text-xs uppercase tracking-wider">Chief Menu</span>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {items.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <button
+              onClick={() => navigateTo(item.href)}
+              key={item.label}
+              className={`group relative flex items-center justify-center lg:justify-start gap-4 py-3 px-4 rounded-2xl w-full text-left transition-all duration-300 hover:scale-[1.02] ${
+                isActive 
+                  ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/25" 
+                  : "text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 hover:text-blue-700 hover:shadow-md"
+              }`}
+            >
+              <div className={`p-2 rounded-xl transition-all duration-300 ${
+                isActive 
+                  ? "bg-white/20 backdrop-blur-sm" 
+                  : "bg-white group-hover:bg-blue-100 group-hover:scale-110"
+              }`}>
+                <Image 
+                  src={item.icon} 
+                  alt="" 
+                  width={18} 
+                  height={18} 
+                  className={`transition-all duration-300 ${
+                    isActive ? "filter brightness-0 invert" : "group-hover:scale-110"
+                  }`}
+                />
+              </div>
+              <span className={`hidden lg:block font-medium transition-all duration-300 ${
+                isActive ? "text-white" : "group-hover:font-semibold"
+              }`}>
+                {item.label}
+              </span>
+              {isActive && (
+                <div className="absolute right-3 w-2 h-2 bg-white rounded-full animate-pulse"></div>
+              )}
+              <InlineGifLoader loading={false} className="ml-auto hidden lg:block" />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
+*/

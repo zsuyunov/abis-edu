@@ -7,6 +7,7 @@ import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { z } from "zod";
+import { Dispatch, SetStateAction } from "react";
 import { createParent, assignStudentToParent } from "@/lib/actions";
 import ParentForm from "./forms/ParentForm";
 
@@ -25,7 +26,7 @@ const ParentAssignForm = ({
   studentId: string;
   studentName: string;
   currentUserId: string;
-  setOpen: (open: boolean) => void;
+  setOpen: Dispatch<SetStateAction<boolean>>;
 }) => {
   const [newParentToggle, setNewParentToggle] = useState(false);
   const [existingParentToggle, setExistingParentToggle] = useState(false);
@@ -176,7 +177,7 @@ const ParentAssignForm = ({
             type="create"
             data={{ studentId }}
             setOpen={setOpen}
-            currentUserId={currentUserId}
+            relatedData={undefined}
           />
         </div>
       )}

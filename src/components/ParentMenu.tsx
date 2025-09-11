@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import Image from "next/image";
@@ -99,3 +100,6 @@ const ParentMenu = () => {
 };
 
 export default ParentMenu;
+
+
+*/

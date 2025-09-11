@@ -610,46 +610,55 @@ const GradebookPage = () => {
             {/* Class Average by Grade Type Chart */}
             <ClassAverageChart 
               data={{
-                daily: gradebookData.studentStats.length > 0 
-                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.daily || 0), 0) / 
-                    gradebookData.studentStats.filter(s => s.averages.daily !== null).length) || null
-                  : null,
-                weekly: gradebookData.studentStats.length > 0 
-                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.weekly || 0), 0) / 
-                    gradebookData.studentStats.filter(s => s.averages.weekly !== null).length) || null
-                  : null,
-                monthly: gradebookData.studentStats.length > 0 
-                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.monthly || 0), 0) / 
-                    gradebookData.studentStats.filter(s => s.averages.monthly !== null).length) || null
-                  : null,
-                termly: gradebookData.studentStats.length > 0 
-                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.termly || 0), 0) / 
-                    gradebookData.studentStats.filter(s => s.averages.termly !== null).length) || null
-                  : null,
-                yearly: gradebookData.studentStats.length > 0 
-                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.yearly || 0), 0) / 
-                    gradebookData.studentStats.filter(s => s.averages.yearly !== null).length) || null
-                  : null,
-                examMidterm: gradebookData.studentStats.length > 0 
-                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.examMidterm || 0), 0) / 
-                    gradebookData.studentStats.filter(s => s.averages.examMidterm !== null).length) || null
-                  : null,
-                examFinal: gradebookData.studentStats.length > 0 
-                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.examFinal || 0), 0) / 
-                    gradebookData.studentStats.filter(s => s.averages.examFinal !== null).length) || null
-                  : null,
-                examNational: gradebookData.studentStats.length > 0 
-                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.examNational || 0), 0) / 
-                    gradebookData.studentStats.filter(s => s.averages.examNational !== null).length) || null
-                  : null,
+                daily: gradebookData.studentStats.length > 0
+                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.daily || 0), 0) /
+                    gradebookData.studentStats.filter(s => s.averages.daily !== null).length) || undefined
+                  : undefined,
+                weekly: gradebookData.studentStats.length > 0
+                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.weekly || 0), 0) /
+                    gradebookData.studentStats.filter(s => s.averages.weekly !== null).length) || undefined
+                  : undefined,
+                monthly: gradebookData.studentStats.length > 0
+                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.monthly || 0), 0) /
+                    gradebookData.studentStats.filter(s => s.averages.monthly !== null).length) || undefined
+                  : undefined,
+                termly: gradebookData.studentStats.length > 0
+                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.termly || 0), 0) /
+                    gradebookData.studentStats.filter(s => s.averages.termly !== null).length) || undefined
+                  : undefined,
+                yearly: gradebookData.studentStats.length > 0
+                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.yearly || 0), 0) /
+                    gradebookData.studentStats.filter(s => s.averages.yearly !== null).length) || undefined
+                  : undefined,
+                examMidterm: gradebookData.studentStats.length > 0
+                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.examMidterm || 0), 0) /
+                    gradebookData.studentStats.filter(s => s.averages.examMidterm !== null).length) || undefined
+                  : undefined,
+                examFinal: gradebookData.studentStats.length > 0
+                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.examFinal || 0), 0) /
+                    gradebookData.studentStats.filter(s => s.averages.examFinal !== null).length) || undefined
+                  : undefined,
+                examNational: gradebookData.studentStats.length > 0
+                  ? Math.round(gradebookData.studentStats.reduce((sum, s) => sum + (s.averages.examNational || 0), 0) /
+                    gradebookData.studentStats.filter(s => s.averages.examNational !== null).length) || undefined
+                  : undefined,
               }}
               classAverage={gradebookData.classSummary.classAverage}
             />
           </div>
 
           {/* Performance Comparison Chart */}
-          <PerformanceComparisonChart 
-            studentStats={gradebookData.studentStats}
+          <PerformanceComparisonChart
+            studentStats={gradebookData.studentStats.map(stat => ({
+              studentId: stat.student.id,
+              student: {
+                firstName: stat.student.firstName,
+                lastName: stat.student.lastName,
+              },
+              overallAverage: stat.overallAverage || 0,
+              totalGrades: stat.totalGrades,
+              recentTrend: stat.recentTrend,
+            }))}
             classAverage={gradebookData.classSummary.classAverage}
           />
         </div>

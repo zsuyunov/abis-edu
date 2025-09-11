@@ -36,6 +36,8 @@ import {
   StudentUpdateSchema,
   ParentUpdateSchema,
   parentUpdateSchema,
+  TeacherUpdateSchema,
+  teacherUpdateSchema,
   EventSchema,
   AnnouncementSchema,
 } from "./formValidationSchemas";
@@ -43,7 +45,7 @@ import prisma from "./prisma";
 import type { Prisma } from "@prisma/client";
 import { AuthService } from "@/lib/auth";
 
-type CurrentState = { success: boolean; error: boolean };
+type CurrentState = { success: boolean; error: boolean; message?: string };
 
 export const createSubject = async (
   currentState: CurrentState,
@@ -439,14 +441,13 @@ export const createTimetable = async (
         classId: data.classId,
         academicYearId: data.academicYearId,
         subjectId: data.subjectId,
-        teacherId: data.teacherId,
-        fullDate: data.fullDate,
-        day: data.day as any,
+        teacherIds: [data.teacherId],
+        dayOfWeek: data.day as any,
         startTime: data.startTime,
         endTime: data.endTime,
         roomNumber: data.roomNumber,
         buildingName: data.buildingName || null,
-        status: data.status as any,
+        isActive: data.status === "ACTIVE",
       },
     });
 
@@ -473,14 +474,13 @@ export const updateTimetable = async (
         classId: data.classId,
         academicYearId: data.academicYearId,
         subjectId: data.subjectId,
-        teacherId: data.teacherId,
-        fullDate: data.fullDate,
-        day: data.day as any,
+        teacherIds: [data.teacherId],
+        dayOfWeek: data.day as any,
         startTime: data.startTime,
         endTime: data.endTime,
         roomNumber: data.roomNumber,
         buildingName: data.buildingName || null,
-        status: data.status as any,
+        isActive: data.status === "ACTIVE",
       },
     });
 
@@ -505,8 +505,7 @@ export const archiveTimetable = async (
       await tx.timetable.update({
         where: { id: parseInt(timetableId) },
         data: {
-          status: "INACTIVE",
-          archivedAt: new Date(),
+          isActive: false,
         },
       });
       await tx.archiveComment.create({
@@ -539,8 +538,7 @@ export const restoreTimetable = async (
       await tx.timetable.update({
         where: { id: parseInt(timetableId) },
         data: {
-          status: "ACTIVE",
-          restoredAt: new Date(),
+          isActive: true,
         },
       });
       await tx.archiveComment.create({
@@ -646,7 +644,7 @@ export const createAttendance = async (
         branchId: true,
         classId: true,
         subjectId: true,
-        teacherId: true,
+        teacherIds: true,
       },
     });
 
@@ -665,8 +663,8 @@ export const createAttendance = async (
         academicYearId: timetable.academicYearId,
         branchId: timetable.branchId,
         classId: timetable.classId,
-        subjectId: timetable.subjectId,
-        teacherId: timetable.teacherId,
+        subjectId: timetable.subjectId!,
+        teacherId: Array.isArray(timetable.teacherIds) ? (timetable.teacherIds as string[])[0] || "" : "",
       },
     });
 
@@ -855,9 +853,9 @@ export const getAttendanceStatistics = async (
         academicYearId: academicYearId,
         classId: classId,
         subjectId: subjectId,
-        status: "ACTIVE",
+        isActive: true,
         ...(startDate && endDate ? {
-          fullDate: {
+          startTime: {
             gte: startDate,
             lte: endDate,
           },
@@ -865,7 +863,7 @@ export const getAttendanceStatistics = async (
       },
       select: {
         id: true,
-        fullDate: true,
+        startTime: true,
         subject: { select: { name: true } },
       },
     });
@@ -885,7 +883,7 @@ export const getAttendanceStatistics = async (
       },
       include: {
         student: { select: { id: true, firstName: true, lastName: true, studentId: true } },
-        timetable: { select: { id: true, fullDate: true } },
+        timetable: { select: { id: true, startTime: true } },
       },
     });
 
@@ -2447,8 +2445,8 @@ export const checkExamConflicts = async (data: ExamConflictSchema) => {
         id: exam.id,
         name: exam.name,
         className: exam.class.name,
-        subjectName: exam.subject.name,
-        teacherName: `${exam.teacher.firstName} ${exam.teacher.lastName}`,
+        subjectName: exam.subject?.name || 'Unknown Subject',
+        teacherName: exam.teacher ? `${exam.teacher.firstName} ${exam.teacher.lastName}` : 'Unknown Teacher',
         startTime: exam.startTime,
         endTime: exam.endTime,
         roomNumber: exam.roomNumber,
@@ -2489,6 +2487,7 @@ export const createExam = async (
         data: {
           name: data.name,
           date: data.date,
+          examDay: data.examDay,
           startTime: data.startTime,
           endTime: data.endTime,
           roomNumber: data.roomNumber,
@@ -2498,8 +2497,8 @@ export const createExam = async (
           branchId: data.branchId,
           academicYearId: data.academicYearId,
           classId: data.classId,
-          subjectId: data.subjectId,
-          teacherId: data.teacherId,
+          subjectId: data.subjectId || undefined,
+          teacherId: data.teacherId || undefined,
         },
       });
 
@@ -2567,6 +2566,7 @@ export const updateExam = async (
       data: {
         name: data.name,
         date: data.date,
+        examDay: data.examDay,
         startTime: data.startTime,
         endTime: data.endTime,
         roomNumber: data.roomNumber,
@@ -2576,8 +2576,8 @@ export const updateExam = async (
         branchId: data.branchId,
         academicYearId: data.academicYearId,
         classId: data.classId,
-        subjectId: data.subjectId,
-        teacherId: data.teacherId,
+        subjectId: data.subjectId || undefined,
+        teacherId: data.teacherId || undefined,
       },
     });
 
@@ -2769,14 +2769,14 @@ export const getExamAnalytics = async (
 
     // Subject distribution
     const subjectStats = exams.reduce((acc, exam) => {
-      const subjectName = exam.subject.name;
+        const subjectName = exam.subject?.name || 'Unknown Subject';
       acc[subjectName] = (acc[subjectName] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
     // Teacher distribution
     const teacherStats = exams.reduce((acc, exam) => {
-      const teacherName = `${exam.teacher.firstName} ${exam.teacher.lastName}`;
+        const teacherName = exam.teacher ? `${exam.teacher.firstName} ${exam.teacher.lastName}` : 'Unknown Teacher';
       acc[teacherName] = (acc[teacherName] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -3033,18 +3033,21 @@ export const deleteBranch = async (
   try {
     // Delete in transaction to ensure consistency
     await prisma.$transaction(async (tx) => {
-      // First get the branch to check if it has a director and users
+      // First get the branch to check if it has users
       const branch = await tx.branch.findUnique({
         where: { id: parseInt(branchId) },
-        include: { director: true, users: true },
       });
 
       if (!branch) {
         return { success: false, error: true };
       }
 
-      // Check if branch has active users
-      if (branch.users.length > 0) {
+      // Check if branch has active users by querying users table
+      const userCount = await tx.user.count({
+        where: { branchId: parseInt(branchId) }
+      });
+      
+      if (userCount > 0) {
         throw new Error("Cannot delete branch with associated users");
       }
 
@@ -3058,12 +3061,7 @@ export const deleteBranch = async (
         },
       });
 
-      // If branch has a director, delete the director first
-      if (branch.director) {
-        await tx.director.delete({
-          where: { id: branch.director.id },
-        });
-      }
+      // Director functionality removed - not part of current schema
 
       // Then delete the branch
       await tx.branch.delete({
@@ -3117,7 +3115,7 @@ export const createUser = async (
       userId: data.userId,
       email: data.email || null,
       status: data.status,
-      address: data.address,
+      address: data.address || "",
       position: data.position,
       branchId: data.branchId || null,
       password: hashedPassword,
@@ -3157,25 +3155,7 @@ export const createUser = async (
         });
       }
 
-      // If user is SUPPORT_DIRECTOR and has a branch, create/update director record
-      if (data.position === "SUPPORT_DIRECTOR" && data.branchId) {
-        // Create director record
-        const director = await tx.director.create({
-          data: {
-            firstName: data.firstName,
-            lastName: data.lastName,
-            phone: data.phone,
-            email: data.email || "",
-            passportNumber: data.passport?.documentNumber || "",
-          },
-        });
-
-        // Update branch to assign this director
-        await tx.branch.update({
-          where: { id: data.branchId },
-          data: { directorId: director.id },
-        });
-      }
+      // Director functionality removed - not part of current schema
 
       // Create attachments if provided
       if (data.attachments) {
@@ -3308,64 +3288,7 @@ export const updateUser = async (
         });
       }
 
-      // Handle director assignment for SUPPORT_DIRECTOR updates
-      if (data.position === "SUPPORT_DIRECTOR" && data.branchId && data.id) {
-        // Check if user already has a director record through branch
-        const existingBranch = await tx.branch.findFirst({
-          where: { 
-            directorId: { not: null },
-            director: {
-              OR: [
-                { firstName: data.firstName, lastName: data.lastName },
-                { phone: data.phone }
-              ]
-            }
-          },
-          include: { director: true }
-        });
-
-        if (existingBranch) {
-          // Update existing director record
-          await tx.director.update({
-            where: { id: existingBranch.directorId! },
-            data: {
-              firstName: data.firstName,
-              lastName: data.lastName,
-              phone: data.phone,
-              email: data.email || "",
-              passportNumber: data.passport?.documentNumber || "",
-            },
-          });
-
-          // Update branch assignment if changed
-          if (existingBranch.id !== data.branchId) {
-            await tx.branch.update({
-              where: { id: existingBranch.id },
-              data: { directorId: null },
-            });
-            await tx.branch.update({
-              where: { id: data.branchId },
-              data: { directorId: existingBranch.directorId },
-            });
-          }
-        } else {
-          // Create new director record
-          const director = await tx.director.create({
-            data: {
-              firstName: data.firstName,
-              lastName: data.lastName,
-              phone: data.phone,
-              email: data.email || "",
-              passportNumber: data.passport?.documentNumber || "",
-            },
-          });
-
-          await tx.branch.update({
-            where: { id: data.branchId },
-            data: { directorId: director.id },
-          });
-        }
-      }
+      // Director functionality removed - not part of current schema
 
       // Handle attachments for updates
       if (data.attachments && data.id) {
@@ -3895,7 +3818,7 @@ export const deleteTeacherAssignment = async (
 
 export const updateTeacher = async (
   currentState: CurrentState,
-  data: TeacherSchema
+  data: TeacherUpdateSchema
 ) => {
   if (!data.id) {
     return { success: false, error: true };
@@ -3903,7 +3826,7 @@ export const updateTeacher = async (
 
   try {
     // Prepare teacher data
-    const teacherData = {
+    const teacherData: any = {
       firstName: data.firstName,
       lastName: data.lastName,
       gender: data.gender,
@@ -3913,6 +3836,11 @@ export const updateTeacher = async (
       address: data.address || "",
       status: data.status,
     };
+
+    // Only update password if provided
+    if (data.password && data.password.trim()) {
+      teacherData.password = await AuthService.hashPassword(data.password);
+    }
 
     // Update teacher with related data in transaction
     await prisma.$transaction(async (tx) => {
@@ -4507,12 +4435,12 @@ export const createParent = async (
       });
 
       if (existingLink) {
-        return {
-          success: false,
-          error: true,
+      return { 
+        success: false, 
+        error: true, 
           message:
             "This student is already assigned to a parent. Please assign another student.",
-        };
+      };
       }
     }
 
@@ -4598,7 +4526,7 @@ export const updateParent = async (
 
   try {
     const { studentIds, ...updateData } = parentData;
-    
+
     // Only update password if provided
     if (password && password.trim()) {
       (updateData as any).password = await AuthService.hashPassword(password);
@@ -4608,8 +4536,8 @@ export const updateParent = async (
       // Update the parent
       await tx.parent.update({
         where: { id: data.id as string },
-        data: updateData,
-      });
+      data: updateData,
+    });
 
       // Update student assignments if provided
       if (studentIds && studentIds.length > 0) {
@@ -5696,5 +5624,41 @@ export const sendMessage = async (
   } catch (err) {
     console.log(err);
     return { success: false, error: true };
+  }
+};
+
+export const resetTeacherPassword = async (
+  currentState: { success: boolean; error: boolean; message: string },
+  formData: FormData
+) => {
+  const data = Object.fromEntries(formData.entries());
+
+  if (!data.userId || !data.newPassword) {
+    return { success: false, error: true, message: "Invalid data" };
+  }
+
+  try {
+    const hashedPassword = await AuthService.hashPassword(String(data.newPassword));
+
+    await prisma.teacher.update({
+      where: { teacherId: String(data.userId) },
+      data: { password: hashedPassword },
+    });
+
+    // Log the action
+    await prisma.archiveComment.create({
+      data: {
+        comment: `Password reset for teacher ID: ${data.userId}`,
+        action: 'PASSWORD_RESET',
+        createdBy: String(data.currentUserId),
+        teacherId: String(data.userId),
+      },
+    });
+
+    revalidatePath("/admin/list/teachers");
+    return { success: true, error: false, message: "Password has been reset successfully!" };
+  } catch (err) {
+    console.error("Error resetting teacher password:", err);
+    return { success: false, error: true, message: "Failed to reset password." };
   }
 };

@@ -6,6 +6,8 @@ import "react-toastify/dist/ReactToastify.css";
 import ImageKitProvider from "@/components/ImageKitProvider";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { LoadingProvider } from "@/components/providers/LoadingProvider";
+import GlobalLoadingBar from "@/components/ui/GlobalLoadingBar";
+import NavigationLoader from "@/components/ui/NavigationLoader";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,11 +25,14 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <QueryProvider>
-          <ImageKitProvider>
-            <LoadingProvider>
-              {children} <ToastContainer position="bottom-right" theme="dark" />
-            </LoadingProvider>
-          </ImageKitProvider>
+          <LoadingProvider>
+            <ImageKitProvider>
+              <GlobalLoadingBar />
+              <NavigationLoader />
+              {children} 
+              <ToastContainer position="bottom-right" theme="dark" />
+            </ImageKitProvider>
+          </LoadingProvider>
         </QueryProvider>
       </body>
     </html>

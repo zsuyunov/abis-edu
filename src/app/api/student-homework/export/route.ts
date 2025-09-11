@@ -33,10 +33,14 @@ export async function GET(request: NextRequest) {
             academicYear: true,
           },
         },
-        parent: {
-          select: {
-            firstName: true,
-            lastName: true,
+        studentParents: {
+          include: {
+            parent: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
       },
@@ -50,7 +54,7 @@ export async function GET(request: NextRequest) {
     const homeworkWhere: any = {
       branchId: student.branchId,
       classId: student.classId,
-      academicYearId: academicYearId ? parseInt(academicYearId) : student.class.academicYear.id,
+      academicYearId: academicYearId ? parseInt(academicYearId) : student.class?.academicYear?.id,
       status: "ACTIVE",
     };
 
@@ -478,7 +482,7 @@ async function generateStudentHomeworkExcel(data: any) {
   // Convert to CSV format
   const csvContent = csvRows
     .map(row => 
-      row.map(cell => 
+      row.map((cell: any) => 
         typeof cell === "string" && (cell.includes(",") || cell.includes('"')) 
           ? `"${cell.replace(/"/g, '""')}"` 
           : cell

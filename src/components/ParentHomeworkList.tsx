@@ -1,3 +1,4 @@
+/*
 'use client';
 
 import React, { useState } from 'react';
@@ -196,7 +197,7 @@ const ParentHomeworkList: React.FC<ParentHomeworkListProps> = ({ homeworks, chil
         ))
       )}
 
-      {/* Detailed View Modal */}
+      {/* Detailed View Modal }
       {selectedHomework && (
         <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
           <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
@@ -338,3 +339,5 @@ const ParentHomeworkList: React.FC<ParentHomeworkListProps> = ({ homeworks, chil
 };
 
 export default ParentHomeworkList;
+
+*/

@@ -1,7 +1,21 @@
+/*
 "use client";
 
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { 
+  ClipboardCheck, 
+  Clock, 
+  CheckCircle, 
+  XCircle,
+  Eye,
+  AlertTriangle,
+  Calendar,
+  User,
+  MessageSquare,
+  Filter,
+  Search
+} from "lucide-react";
 
 interface Meal {
   id: number;
@@ -201,7 +215,7 @@ const MealApprovals = () => {
                     </div>
                   </div>
 
-                  {/* Approval Status */}
+                  {/* Approval Status }
                   <div className="mb-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-2">Approval Status</h4>
                     <div className="flex gap-4">
@@ -253,7 +267,7 @@ const MealApprovals = () => {
         </div>
       )}
 
-      {/* Modal for meal plan details and approval */}
+      {/* Modal for meal plan details and approval }
       {selectedMealPlan && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto">
@@ -274,7 +288,7 @@ const MealApprovals = () => {
                 </button>
               </div>
 
-              {/* Meal Details */}
+              {/* Meal Details }
               <div className="space-y-6 mb-6">
                 {selectedMealPlan.meals.map((meal, index) => (
                   <div key={index} className="border border-gray-200 rounded-lg p-4">
@@ -338,7 +352,7 @@ const MealApprovals = () => {
                 ))}
               </div>
 
-              {/* Approval Actions */}
+              {/* Approval Actions }
               {approvalAction && (
                 <div className="border border-gray-200 rounded-lg p-4 mb-4">
                   <h3 className="font-semibold text-gray-800 mb-3">
@@ -410,3 +424,5 @@ const MealApprovals = () => {
 };
 
 export default MealApprovals;
+
+*/

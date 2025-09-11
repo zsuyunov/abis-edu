@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
@@ -104,3 +105,6 @@ export function useMainDirectorTimetables(page = 1, search = "") {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+
+*/

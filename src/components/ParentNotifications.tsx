@@ -1,276 +1,258 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { 
+  Bell, 
+  Clock, 
+  AlertCircle, 
+  CheckCircle, 
+  Calendar,
+  BookOpen,
+  User,
+  X,
+  Info,
+  Users,
+  TrendingUp
+} from "lucide-react";
+
+interface Notification {
+  id: string;
+  type: "reminder" | "update" | "info" | "success" | "alert";
+  title: string;
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+  actionUrl?: string;
+  actionText?: string;
+  childName?: string;
+}
 
 interface ParentNotificationsProps {
   parentId: string;
 }
 
 const ParentNotifications = ({ parentId }: ParentNotificationsProps) => {
-  const [notifications, setNotifications] = useState([]);
-  const [summary, setSummary] = useState<any>({});
-  const [children, setChildren] = useState([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedChild, setSelectedChild] = useState<string>("");
 
   useEffect(() => {
     fetchNotifications();
-    
-    // Auto-refresh every 5 minutes
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
-    
+    // Set up polling for new notifications
+    const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
     return () => clearInterval(interval);
-  }, [parentId, selectedChild]);
+  }, [parentId]);
 
   const fetchNotifications = async () => {
     try {
-      const queryParams = new URLSearchParams({
-        parentId,
-        ...(selectedChild && { childId: selectedChild }),
+      const response = await fetch(`/api/parent/notifications?parentId=${parentId}`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
       });
-
-      const response = await fetch(`/api/parent-timetables/notifications?${queryParams}`);
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
-        setSummary(data.summary || {});
-        setChildren(data.children || []);
-      }
+      const data = await response.json();
+      setNotifications(data);
     } catch (error) {
-      console.error("Error fetching notifications:", error);
+      console.error("Failed to fetch notifications:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  const markAsRead = async (notificationId: string) => {
+    try {
+      await fetch(`/api/parent/notifications/${notificationId}/read`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === notificationId ? { ...notif, isRead: true } : notif
+        )
+      );
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await fetch(`/api/parent/notifications/read-all`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      setNotifications(prev => 
+        prev.map(notif => ({ ...notif, isRead: true }))
+      );
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+    }
+  };
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case "upcoming":
-        return { icon: "/lesson.png", color: "text-red-600 bg-red-100" };
-      case "next":
-        return { icon: "/calendar.png", color: "text-blue-600 bg-blue-100" };
-      case "tomorrow":
-        return { icon: "/date.png", color: "text-purple-600 bg-purple-100" };
-      case "new-topic":
-        return { icon: "/create.png", color: "text-green-600 bg-green-100" };
-      case "timetable-update":
-        return { icon: "/update.png", color: "text-orange-600 bg-orange-100" };
+      case "reminder":
+        return <Clock className="w-5 h-5 text-blue-600" />;
+      case "update":
+        return <AlertCircle className="w-5 h-5 text-orange-600" />;
+      case "info":
+        return <Info className="w-5 h-5 text-gray-600" />;
+      case "success":
+        return <CheckCircle className="w-5 h-5 text-green-600" />;
+      case "alert":
+        return <AlertCircle className="w-5 h-5 text-red-600" />;
       default:
-        return { icon: "/announcement.png", color: "text-gray-600 bg-gray-100" };
+        return <Bell className="w-5 h-5 text-gray-600" />;
     }
   };
 
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "medium":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "low":
-        return "bg-gray-100 text-gray-800 border-gray-200";
+  const getNotificationColor = (type: string) => {
+    switch (type) {
+      case "reminder":
+        return "border-blue-200 bg-blue-50";
+      case "update":
+        return "border-orange-200 bg-orange-50";
+      case "info":
+        return "border-gray-200 bg-gray-50";
+      case "success":
+        return "border-green-200 bg-green-50";
+      case "alert":
+        return "border-red-200 bg-red-50";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+        return "border-gray-200 bg-gray-50";
     }
   };
 
-  const getTimeAgo = (notification: any) => {
-    // For now, we'll show relative time based on notification type
-    switch (notification.type) {
-      case "upcoming":
-        return "Starting soon";
-      case "next":
-        return "Next class";
-      case "tomorrow":
-        return "Tomorrow";
-      case "new-topic":
-        return "Recently added";
-      case "timetable-update":
-        return "Recently updated";
-      default:
-        return "Recent";
-    }
-  };
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   if (loading) {
     return (
-      <div className="bg-white p-4 rounded-md">
-        <div className="h-6 bg-gray-200 rounded mb-4 animate-pulse"></div>
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-16 bg-gray-200 rounded animate-pulse"></div>
-          ))}
-        </div>
+      <div className="flex items-center justify-center h-32">
+        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white p-4 rounded-md">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold flex items-center gap-2">
-          <Image src="/announcement.png" alt="Notifications" width={20} height={20} />
-          Children's Updates
-        </h1>
-        <button
-          onClick={fetchNotifications}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
-          title="Refresh notifications"
-        >
-          <Image src="/update.png" alt="Refresh" width={16} height={16} />
-        </button>
-      </div>
-
-      {/* CHILD FILTER (if multiple children) */}
-      {children.length > 1 && (
-        <div className="mb-4">
-          <select
-            value={selectedChild}
-            onChange={(e) => setSelectedChild(e.target.value)}
-            className="w-full p-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-lamaSky focus:border-transparent"
-          >
-            <option value="">All Children</option>
-            {children.map((child: any) => (
-              <option key={child.id} value={child.id}>
-                {child.firstName} {child.lastName}
-              </option>
-            ))}
-          </select>
+    <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+      <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-t-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className="w-6 h-6" />
+            <CardTitle className="text-xl">Family Notifications</CardTitle>
+            {unreadCount > 0 && (
+              <Badge variant="destructive" className="bg-white text-red-600">
+                {unreadCount}
+              </Badge>
+            )}
+          </div>
+          {unreadCount > 0 && (
+            <Button size="sm" variant="ghost" onClick={markAllAsRead} className="text-white hover:bg-white/20">
+              Mark all as read
+            </Button>
+          )}
         </div>
-      )}
-
-      {/* QUICK SUMMARY */}
-      {summary.totalNotifications > 0 && (
-        <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
-          <div className="bg-red-50 border border-red-200 rounded p-2 text-center">
-            <div className="font-bold text-red-600">{summary.upcoming || 0}</div>
-            <div className="text-red-700">Starting Soon</div>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded p-2 text-center">
-            <div className="font-bold text-blue-600">{summary.next || 0}</div>
-            <div className="text-blue-700">Coming Up</div>
-          </div>
-          <div className="bg-green-50 border border-green-200 rounded p-2 text-center">
-            <div className="font-bold text-green-600">{summary.newTopics || 0}</div>
-            <div className="text-green-700">New Topics</div>
-          </div>
-          <div className="bg-purple-50 border border-purple-200 rounded p-2 text-center">
-            <div className="font-bold text-purple-600">{summary.tomorrow || 0}</div>
-            <div className="text-purple-700">Tomorrow</div>
-          </div>
-        </div>
-      )}
-
-      {/* NOTIFICATIONS LIST */}
-      <div className="space-y-3 max-h-96 overflow-y-auto">
+        <CardDescription className="text-blue-100">
+          Stay updated with your children's school activities and important announcements
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-6">
         {notifications.length === 0 ? (
-          <div className="text-center py-6">
-            <Image 
-              src="/announcement.png" 
-              alt="No notifications" 
-              width={48} 
-              height={48} 
-              className="mx-auto mb-3 opacity-50"
-            />
-            <p className="text-gray-600 text-sm">No updates for your children right now</p>
-            <p className="text-gray-500 text-xs mt-1">Check back later for new notifications</p>
+          <div className="text-center py-12">
+            <Bell className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No notifications</h3>
+            <p className="text-gray-600">You're all caught up with your children's activities!</p>
           </div>
         ) : (
-          notifications.map((notification: any) => {
-            const { icon, color } = getNotificationIcon(notification.type);
-            
-            return (
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {notifications.map((notification) => (
               <div
                 key={notification.id}
-                className={`p-3 rounded-md border transition-colors hover:shadow-sm ${
-                  notification.priority === "high" 
-                    ? "bg-red-50 border-red-200" 
-                    : "bg-white border-gray-200"
-                }`}
+                className={`p-4 rounded-xl border-2 transition-all hover:shadow-md ${
+                  notification.isRead ? "opacity-60" : ""
+                } ${getNotificationColor(notification.type)}`}
               >
-                <div className="flex items-start gap-3">
-                  {/* Icon */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${color}`}>
-                    <Image src={icon} alt={notification.type} width={14} height={14} />
-                  </div>
-                  
-                  {/* Content */}
+                <div className="flex items-start gap-4">
+                  {getNotificationIcon(notification.type)}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-medium text-gray-900 text-sm leading-tight">
-                        {notification.title}
-                      </h3>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <span className={`px-2 py-1 rounded-full text-xs border ${getPriorityBadge(notification.priority)}`}>
-                          {notification.priority}
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-sm text-gray-900">{notification.title}</h4>
+                      <div className="flex items-center gap-2">
+                        {notification.childName && (
+                          <Badge variant="outline" className="text-xs bg-white">
+                            {notification.childName}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-gray-500">
+                          {new Date(notification.timestamp).toLocaleTimeString()}
                         </span>
-                      </div>
-                    </div>
-                    
-                    <p className="text-gray-600 text-sm mt-1 leading-tight">
-                      {notification.message}
-                    </p>
-                    
-                    <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1">
-                          <Image src="/lesson.png" alt="Time" width={12} height={12} />
-                          {notification.time}
-                        </span>
-                        {notification.location && (
-                          <span className="flex items-center gap-1">
-                            <Image src="/singleClass.png" alt="Location" width={12} height={12} />
-                            {notification.location}
-                          </span>
+                        {!notification.isRead && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => markAsRead(notification.id)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
                         )}
                       </div>
-                      <span>{getTimeAgo(notification)}</span>
                     </div>
-                    
-                    {notification.hasTopics && (
-                      <div className="mt-2">
-                        <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                          📚 Has lesson content
-                        </span>
-                      </div>
+                    <p className="text-sm text-gray-700 mb-3">
+                      {notification.message}
+                    </p>
+                    {notification.actionUrl && notification.actionText && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs"
+                        onClick={() => window.location.href = notification.actionUrl!}
+                      >
+                        {notification.actionText}
+                      </Button>
                     )}
                   </div>
                 </div>
               </div>
-            );
-          })
+            ))}
+          </div>
         )}
-      </div>
 
-      {/* VIEW ALL LINK */}
-      {notifications.length > 0 && (
-        <div className="mt-4 pt-3 border-t border-gray-200">
-          <a
-            href="/parent/timetables"
-            className="block text-center text-sm text-lamaSky hover:text-blue-600 font-medium transition-colors"
-          >
-            View Full Timetables →
-          </a>
+        {/* Quick Stats }
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-3 bg-blue-50 rounded-lg">
+              <Bell className="w-6 h-6 text-blue-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-blue-800">Total</p>
+              <p className="text-lg font-bold text-blue-900">{notifications.length}</p>
+            </div>
+            <div className="text-center p-3 bg-orange-50 rounded-lg">
+              <Clock className="w-6 h-6 text-orange-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-orange-800">Reminders</p>
+              <p className="text-lg font-bold text-orange-900">
+                {notifications.filter(n => n.type === "reminder").length}
+              </p>
+            </div>
+            <div className="text-center p-3 bg-green-50 rounded-lg">
+              <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-green-800">Updates</p>
+              <p className="text-lg font-bold text-green-900">
+                {notifications.filter(n => n.type === "update").length}
+              </p>
+            </div>
+            <div className="text-center p-3 bg-purple-50 rounded-lg">
+              <Users className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-purple-800">Unread</p>
+              <p className="text-lg font-bold text-purple-900">{unreadCount}</p>
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* PARENT TIPS */}
-      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-        <h4 className="text-xs font-medium text-blue-900 mb-1 flex items-center gap-1">
-          <Image src="/parent.png" alt="Tip" width={12} height={12} />
-          Parent Tips
-        </h4>
-        <div className="text-xs text-blue-800 space-y-1">
-          <div>• Red notifications need immediate attention</div>
-          <div>• Blue notifications are helpful reminders</div>
-          <div>• Green badges show new learning content available</div>
-          {children.length > 1 && (
-            <div>• Use the dropdown to filter by specific child</div>
-          )}
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 
 export default ParentNotifications;
+
+*/

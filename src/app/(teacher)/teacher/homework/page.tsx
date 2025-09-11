@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 import { headers } from "next/headers";
+
+export const dynamic = 'force-dynamic';
 import TeacherHomeworkContainer from "@/components/TeacherHomeworkContainer";
 
 const TeacherHomeworkPage = async () => {

@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -138,15 +139,15 @@ const MainAdmissionSettings = () => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
+      {/* Header }
       <div className="bg-gradient-to-r from-emerald-100 to-green-100 p-6 rounded-lg">
         <h1 className="text-2xl font-bold text-emerald-800 mb-2">Main Admission Settings</h1>
         <p className="text-emerald-600">Configure your panel preferences and account settings</p>
       </div>
 
-      {/* Settings Sections */}
+      {/* Settings Sections }
       <div className="space-y-6">
-        {/* Notifications */}
+        {/* Notifications }
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Notifications</h3>
           <div className="space-y-4">
@@ -198,7 +199,7 @@ const MainAdmissionSettings = () => {
           </div>
         </div>
 
-        {/* Privacy */}
+        {/* Privacy }
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Privacy</h3>
           <div className="space-y-4">
@@ -247,7 +248,7 @@ const MainAdmissionSettings = () => {
           </div>
         </div>
 
-        {/* Preferences */}
+        {/* Preferences }
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Preferences</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -302,7 +303,7 @@ const MainAdmissionSettings = () => {
           </div>
         </div>
 
-        {/* Security */}
+        {/* Security }
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Security</h3>
           <div className="space-y-4">
@@ -354,7 +355,7 @@ const MainAdmissionSettings = () => {
         </div>
       </div>
 
-      {/* Action Buttons */}
+      {/* Action Buttons }
       <div className="flex items-center justify-between bg-white rounded-lg shadow-sm p-6">
         <button
           onClick={handleResetSettings}
@@ -391,3 +392,6 @@ const MainAdmissionSettings = () => {
 };
 
 export default MainAdmissionSettings;
+
+
+*/

@@ -16,7 +16,7 @@ export async function GET() {
       }
     });
     
-    return NextResponse.json({ academicYears });
+    return NextResponse.json(academicYears);
   } catch (error) {
     console.error("Failed to fetch academic years:", error);
     return NextResponse.json(

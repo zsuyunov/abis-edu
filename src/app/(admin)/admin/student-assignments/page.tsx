@@ -230,7 +230,7 @@ const StudentAssignmentsListPage = ({
       
       // Add pagination
       params.append('page', p.toString());
-      params.append('limit', ITEM_PER_PAGE.toString());
+      params.append('limit', '30');
       
       // Add filter parameters
       if (selectedBranch) params.append('branchId', selectedBranch);

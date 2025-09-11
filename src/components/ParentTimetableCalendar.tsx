@@ -1,72 +1,77 @@
+/*
 "use client";
 
-import { useState, useEffect } from "react";
-import Image from "next/image";
-import LessonTopicViewer from "./LessonTopicViewer";
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Calendar as CalendarIcon, 
+  Clock, 
+  MapPin, 
+  BookOpen, 
+  User,
+  Plus,
+  Eye,
+  TrendingUp
+} from "lucide-react";
 
-interface ParentTimetableCalendarProps {
-  parentId: string;
-  childId: string;
-  filters: any;
-  view: string;
-  dateRange: { start: Date; end: Date };
-  timeFilter: "current" | "past";
-  onParentDataUpdate: (data: any) => void;
+interface TimetableSlot {
+  id: number;
+  slotDate: string;
+  startTime: string;
+  endTime: string;
+  roomNumber: string;
+  buildingName?: string;
+  status: string;
+  subject: { name: string; id: number };
+  teacher: { firstName: string; lastName: string; id: string };
+  topics: TimetableSlotTopic[];
 }
 
-const ParentTimetableCalendar = ({ 
-  parentId,
-  childId, 
-  filters, 
-  view,
-  dateRange,
-  timeFilter,
-  onParentDataUpdate 
-}: ParentTimetableCalendarProps) => {
-  const [timetables, setTimetables] = useState([]);
-  const [selectedChild, setSelectedChild] = useState<any>(null);
+interface TimetableSlotTopic {
+  id: number;
+  topicTitle: string;
+  topicDescription?: string;
+  attachments: string[];
+  status: string;
+  progressPercentage: number;
+  completedAt?: string;
+  createdAt: string;
+}
+
+interface ParentTimetableCalendarProps {
+  childId: string;
+  academicYearId: number;
+  isCurrent: boolean;
+  childName: string;
+}
+
+const ParentTimetableCalendar = ({ childId, academicYearId, isCurrent, childName }: ParentTimetableCalendarProps) => {
+  const [slots, setSlots] = useState<TimetableSlot[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<"month" | "week" | "day">("month");
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedTimetable, setSelectedTimetable] = useState(null);
-  const [showTopicViewer, setShowTopicViewer] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
-    fetchCalendarData();
-  }, [parentId, childId, filters, view, dateRange, timeFilter, currentMonth]);
+    fetchTimetableSlots();
+  }, [childId, academicYearId]);
 
-  const fetchCalendarData = async () => {
+  const fetchTimetableSlots = async () => {
     try {
-      setLoading(true);
-      const queryParams = new URLSearchParams({
-        parentId,
-        childId,
-        ...filters,
-        startDate: dateRange.start.toISOString().split('T')[0],
-        endDate: dateRange.end.toISOString().split('T')[0],
-        view: "calendar",
-        timeFilter,
+      const response = await fetch(`/api/parent/timetable-slots?childId=${childId}&academicYearId=${academicYearId}`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
       });
-
-      const response = await fetch(`/api/parent-timetables?${queryParams}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTimetables(data.timetables || []);
-        setSelectedChild(data.selectedChild);
-        onParentDataUpdate(data);
-      }
+      const data = await response.json();
+      setSlots(data);
     } catch (error) {
-      console.error("Error fetching calendar data:", error);
+      console.error("Failed to fetch timetable slots:", error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatTime = (dateTime: string) => {
-    return new Date(dateTime).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -76,7 +81,7 @@ const ParentTimetableCalendar = ({
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
-    
+
     const days = [];
     
     // Add empty cells for days before the first day of the month
@@ -92,12 +97,63 @@ const ParentTimetableCalendar = ({
     return days;
   };
 
-  const getTimetablesForDate = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
-    return timetables.filter((timetable: any) => {
-      const timetableDate = timetable.fullDate.split('T')[0];
-      return timetableDate === dateString;
+  const getDaysInWeek = (date: Date) => {
+    const start = new Date(date);
+    start.setDate(date.getDate() - date.getDay());
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      days.push(day);
+    }
+    return days;
+  };
+
+  const getSlotsForDate = (date: Date) => {
+    return slots.filter(slot => {
+      const slotDate = new Date(slot.slotDate);
+      return slotDate.toDateString() === date.toDateString();
     });
+  };
+
+  const getSlotsForWeek = (weekStart: Date) => {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    return slots.filter(slot => {
+      const slotDate = new Date(slot.slotDate);
+      return slotDate >= weekStart && slotDate <= weekEnd;
+    });
+  };
+
+  const navigateMonth = (direction: "prev" | "next") => {
+    const newDate = new Date(currentDate);
+    if (direction === "prev") {
+      newDate.setMonth(currentDate.getMonth() - 1);
+    } else {
+      newDate.setMonth(currentDate.getMonth() + 1);
+    }
+    setCurrentDate(newDate);
+  };
+
+  const navigateWeek = (direction: "prev" | "next") => {
+    const newDate = new Date(currentDate);
+    if (direction === "prev") {
+      newDate.setDate(currentDate.getDate() - 7);
+    } else {
+      newDate.setDate(currentDate.getDate() + 7);
+    }
+    setCurrentDate(newDate);
+  };
+
+  const navigateDay = (direction: "prev" | "next") => {
+    const newDate = new Date(currentDate);
+    if (direction === "prev") {
+      newDate.setDate(currentDate.getDate() - 1);
+    } else {
+      newDate.setDate(currentDate.getDate() + 1);
+    }
+    setCurrentDate(newDate);
   };
 
   const isToday = (date: Date) => {
@@ -105,132 +161,92 @@ const ParentTimetableCalendar = ({
     return date.toDateString() === today.toDateString();
   };
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    const newMonth = new Date(currentMonth);
-    if (direction === 'prev') {
-      newMonth.setMonth(newMonth.getMonth() - 1);
-    } else {
-      newMonth.setMonth(newMonth.getMonth() + 1);
-    }
-    setCurrentMonth(newMonth);
+  const isSelected = (date: Date) => {
+    return selectedDate && date.toDateString() === selectedDate.toDateString();
   };
 
-  const getMonthYear = () => {
-    return currentMonth.toLocaleDateString("en-US", { 
-      year: "numeric", 
-      month: "long" 
+  const getTimeSlots = () => {
+    const slots = [];
+    for (let hour = 8; hour <= 18; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const time = new Date();
+        time.setHours(hour, minute, 0, 0);
+        slots.push(time);
+      }
+    }
+    return slots;
+  };
+
+  const getSlotForTimeSlot = (date: Date, timeSlot: Date) => {
+    return slots.find(slot => {
+      const slotDate = new Date(slot.slotDate);
+      const slotStart = new Date(slot.startTime);
+      
+      return slotDate.toDateString() === date.toDateString() &&
+             slotStart.getHours() === timeSlot.getHours() &&
+             slotStart.getMinutes() === timeSlot.getMinutes();
     });
   };
 
-  if (loading) {
+  const renderMonthView = () => {
+    const days = getDaysInMonth(currentDate);
+    const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
     return (
       <div className="space-y-4">
-        <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+        {/* Week day headers }
         <div className="grid grid-cols-7 gap-2">
-          {Array.from({ length: 42 }).map((_, i) => (
-            <div key={i} className="h-24 bg-gray-200 rounded animate-pulse"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const days = getDaysInMonth(currentMonth);
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  return (
-    <div className="space-y-6">
-      {/* HEADER */}
-      <div className="text-center">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">
-          {selectedChild?.firstName}'s Calendar View
-        </h2>
-        <p className="text-gray-600">
-          Monthly overview of classes and lesson topics
-        </p>
-        {timeFilter === "past" && (
-          <span className="inline-block mt-2 text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
-            📚 Archived Calendar
-          </span>
-        )}
-      </div>
-
-      {/* MONTH NAVIGATION */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={() => navigateMonth('prev')}
-            className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-          >
-            <Image src="/sort.png" alt="Previous" width={20} height={20} className="rotate-90" />
-          </button>
-          
-          <h3 className="text-xl font-semibold text-gray-900">
-            {getMonthYear()}
-          </h3>
-          
-          <button
-            onClick={() => navigateMonth('next')}
-            className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-          >
-            <Image src="/sort.png" alt="Next" width={20} height={20} className="-rotate-90" />
-          </button>
-        </div>
-
-        {/* CALENDAR GRID */}
-        <div className="grid grid-cols-7 gap-2">
-          {/* Day headers */}
-          {dayNames.map((dayName) => (
-            <div key={dayName} className="p-2 text-center font-medium text-gray-600 text-sm">
-              {dayName}
+          {weekDays.map((day) => (
+            <div key={day} className="p-3 text-center text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg">
+              {day}
             </div>
           ))}
-          
-          {/* Calendar days */}
+        </div>
+
+        {/* Calendar grid }
+        <div className="grid grid-cols-7 gap-2">
           {days.map((day, index) => {
             if (!day) {
-              return <div key={index} className="h-24"></div>;
+              return <div key={index} className="h-32 border-2 border-gray-100 rounded-lg"></div>;
             }
-            
-            const dayTimetables = getTimetablesForDate(day);
+
+            const daySlots = getSlotsForDate(day);
             const isCurrentDay = isToday(day);
-            
+            const isSelectedDay = isSelected(day);
+
             return (
               <div
-                key={day.toISOString()}
-                className={`h-24 border border-gray-200 rounded-md p-1 overflow-hidden ${
-                  isCurrentDay && timeFilter === "current"
-                    ? "bg-blue-50 border-blue-300 ring-2 ring-blue-200"
-                    : "bg-white hover:bg-gray-50"
-                } transition-colors`}
+                key={index}
+                className={`h-32 border-2 rounded-lg p-2 cursor-pointer hover:shadow-md transition-all duration-200 ${
+                  isCurrentDay ? "border-blue-400 bg-blue-50 shadow-lg" : "border-gray-200 hover:border-blue-300"
+                } ${isSelectedDay ? "border-purple-400 bg-purple-50 shadow-lg" : ""}`}
+                onClick={() => setSelectedDate(day)}
               >
-                <div className={`text-sm font-medium mb-1 ${
-                  isCurrentDay && timeFilter === "current" ? "text-blue-600" : "text-gray-900"
-                }`}>
-                  {day.getDate()}
-                  {isCurrentDay && timeFilter === "current" && (
-                    <span className="ml-1 text-xs text-blue-500">•</span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-sm font-semibold ${
+                    isCurrentDay ? "text-blue-700" : "text-gray-900"
+                  }`}>
+                    {day.getDate()}
+                  </span>
+                  {daySlots.length > 0 && (
+                    <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+                      {daySlots.length}
+                    </Badge>
                   )}
                 </div>
                 
                 <div className="space-y-1">
-                  {dayTimetables.slice(0, 2).map((timetable: any) => (
-                    <button
-                      key={timetable.id}
-                      onClick={() => {
-                        setSelectedTimetable(timetable);
-                        setShowTopicViewer(true);
-                      }}
-                      className="w-full text-left p-1 rounded text-xs bg-lamaSky text-white hover:bg-blue-600 transition-colors truncate"
-                      title={`${timetable.subject.name} - ${formatTime(timetable.startTime)}`}
+                  {daySlots.slice(0, 2).map((slot) => (
+                    <div
+                      key={slot.id}
+                      className="text-xs bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 rounded px-2 py-1 truncate font-medium"
                     >
-                      {timetable.subject.name}
-                    </button>
+                      {new Date(slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {slot.subject.name}
+                    </div>
                   ))}
-                  
-                  {dayTimetables.length > 2 && (
-                    <div className="text-xs text-gray-500 text-center">
-                      +{dayTimetables.length - 2} more
+                  {daySlots.length > 2 && (
+                    <div className="text-xs text-gray-500 font-medium">
+                      +{daySlots.length - 2} more
                     </div>
                   )}
                 </div>
@@ -239,126 +255,283 @@ const ParentTimetableCalendar = ({
           })}
         </div>
       </div>
+    );
+  };
 
-      {/* MONTHLY SUMMARY */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-600">{timetables.length}</div>
-          <div className="text-sm text-blue-700">Total Classes This Month</div>
+  const renderWeekView = () => {
+    const weekDays = getDaysInWeek(currentDate);
+    const weekSlots = getSlotsForWeek(weekDays[0]);
+
+    return (
+      <div className="space-y-4">
+        {/* Week day headers }
+        <div className="grid grid-cols-8 gap-2">
+          <div className="p-3 text-center text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg">Time</div>
+          {weekDays.map((day) => (
+            <div key={day.toISOString()} className="p-3 text-center text-sm font-semibold text-gray-600 bg-gray-100 rounded-lg">
+              <div>{day.toLocaleDateString('en-US', { weekday: 'short' })}</div>
+              <div className={`text-xs ${isToday(day) ? "text-blue-600 font-bold" : ""}`}>
+                {day.getDate()}
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-600">
-            {timetables.filter((t: any) => t.topics.length > 0).length}
-          </div>
-          <div className="text-sm text-green-700">Classes with Topics</div>
-        </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-purple-600">
-            {new Set(timetables.map((t: any) => t.subject.id)).size}
-          </div>
-          <div className="text-sm text-purple-700">Different Subjects</div>
+
+        {/* Time slots grid }
+        <div className="grid grid-cols-8 gap-2">
+          {getTimeSlots().map((timeSlot, index) => (
+            <React.Fragment key={index}>
+              <div className="text-xs text-gray-600 py-3 text-center bg-gray-50 rounded-lg font-medium">
+                {timeSlot.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              {weekDays.map((day) => {
+                const slot = getSlotForTimeSlot(day, timeSlot);
+                const isCurrentDay = isToday(day);
+                
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={`min-h-[50px] border-2 rounded-lg p-2 ${
+                      isCurrentDay ? "border-blue-300 bg-blue-50" : "border-gray-200 hover:border-blue-200"
+                    }`}
+                  >
+                    {slot && (
+                      <div className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-800 rounded-lg p-2 text-xs h-full">
+                        <div className="font-semibold">{slot.subject.name}</div>
+                        <div className="text-xs">{slot.teacher.firstName} {slot.teacher.lastName}</div>
+                        <div className="text-xs">{slot.roomNumber}</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
         </div>
       </div>
+    );
+  };
 
-      {/* UPCOMING CLASSES (FOR CURRENT FILTER) */}
-      {timeFilter === "current" && (
-        <div className="bg-white border border-gray-200 rounded-lg">
-          <div className="p-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Upcoming Classes</h3>
+  const renderDayView = () => {
+    const daySlots = getSlotsForDate(currentDate);
+    const timeSlots = getTimeSlots();
+
+    return (
+      <div className="space-y-4">
+        <div className="text-center p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl">
+          <h3 className="text-xl font-bold text-gray-800">
+            {currentDate.toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}
+          </h3>
+          <p className="text-gray-600 mt-1">{childName}'s Schedule</p>
+        </div>
+
+        <div className="space-y-3">
+          {timeSlots.map((timeSlot, index) => {
+            const slot = getSlotForTimeSlot(currentDate, timeSlot);
+            
+            return (
+              <div key={index} className="flex items-center gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition-all duration-200">
+                <div className="w-20 text-sm text-gray-600 font-medium bg-gray-100 p-2 rounded-lg text-center">
+                  {timeSlot.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div className="flex-1">
+                  {slot ? (
+                    <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold text-lg text-blue-900">{slot.subject.name}</h4>
+                          <p className="text-sm text-blue-700">{slot.teacher.firstName} {slot.teacher.lastName}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-blue-700 font-medium">{slot.roomNumber}</p>
+                          {slot.buildingName && (
+                            <p className="text-xs text-blue-600">{slot.buildingName}</p>
+                          )}
+                        </div>
+                      </div>
+                      {slot.topics.length > 0 && (
+                        <div className="mt-3">
+                          <Badge variant="outline" className="text-xs bg-blue-200 text-blue-800 border-blue-300">
+                            {slot.topics.length} topic{slot.topics.length > 1 ? 's' : ''} available
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-gray-400 text-sm bg-gray-50 rounded-xl text-center">
+                      No class scheduled
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-sm">
+      <CardHeader className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-t-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <CalendarIcon className="w-6 h-6" />
+              Calendar View
+            </CardTitle>
+            <CardDescription className="text-blue-100">
+              {childName}'s timetable in calendar format
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-white/20 overflow-hidden">
+              <Button
+                size="sm"
+                variant={viewMode === "month" ? "default" : "ghost"}
+                onClick={() => setViewMode("month")}
+                className="rounded-none bg-white/10 hover:bg-white/20 text-white border-0"
+              >
+                Month
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "week" ? "default" : "ghost"}
+                onClick={() => setViewMode("week")}
+                className="rounded-none bg-white/10 hover:bg-white/20 text-white border-0"
+              >
+                Week
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "day" ? "default" : "ghost"}
+                onClick={() => setViewMode("day")}
+                className="rounded-none bg-white/10 hover:bg-white/20 text-white border-0"
+              >
+                Day
+              </Button>
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="p-6">
+        {/* Navigation }
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (viewMode === "month") navigateMonth("prev");
+                else if (viewMode === "week") navigateWeek("prev");
+                else if (viewMode === "day") navigateDay("prev");
+              }}
+              className="shadow-sm border-2 border-gray-200 rounded-xl hover:border-blue-500"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            
+            <h2 className="text-lg font-semibold text-gray-800">
+              {viewMode === "month" 
+                ? currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                : viewMode === "week"
+                ? `Week of ${currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                : currentDate.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    month: 'long', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                  })
+              }
+            </h2>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (viewMode === "month") navigateMonth("next");
+                else if (viewMode === "week") navigateWeek("next");
+                else if (viewMode === "day") navigateDay("next");
+              }}
+              className="shadow-sm border-2 border-gray-200 rounded-xl hover:border-blue-500"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
           </div>
           
-          {timetables.filter((t: any) => {
-            const classDateTime = new Date(t.fullDate + 'T' + new Date(t.startTime).toTimeString().split(' ')[0]);
-            return classDateTime > new Date();
-          }).slice(0, 5).length > 0 ? (
-            <div className="p-4 space-y-3">
-              {timetables
-                .filter((t: any) => {
-                  const classDateTime = new Date(t.fullDate + 'T' + new Date(t.startTime).toTimeString().split(' ')[0]);
-                  return classDateTime > new Date();
-                })
-                .slice(0, 5)
-                .map((timetable: any) => (
-                  <div
-                    key={timetable.id}
-                    onClick={() => {
-                      setSelectedTimetable(timetable);
-                      setShowTopicViewer(true);
-                    }}
-                    className="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">{timetable.subject.name}</div>
-                      <div className="text-sm text-gray-600">
-                        {timetable.teacher.firstName} {timetable.teacher.lastName} • Room {timetable.roomNumber}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-medium text-gray-900">
-                        {new Date(timetable.fullDate).toLocaleDateString("en-US", { 
-                          month: "short", 
-                          day: "numeric" 
-                        })}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {formatTime(timetable.startTime)}
-                      </div>
-                    </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentDate(new Date())}
+            className="shadow-sm border-2 border-gray-200 rounded-xl hover:border-blue-500"
+          >
+            Today
+          </Button>
+        </div>
+
+        {/* Calendar Content }
+        <div className="overflow-x-auto">
+          {viewMode === "month" && renderMonthView()}
+          {viewMode === "week" && renderWeekView()}
+          {viewMode === "day" && renderDayView()}
+        </div>
+
+        {/* Selected Date Details }
+        {selectedDate && (
+          <div className="mt-6 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+            <h3 className="font-semibold text-lg mb-4 text-gray-800">
+              {selectedDate.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                month: 'long', 
+                day: 'numeric', 
+                year: 'numeric' 
+              })}
+            </h3>
+            <div className="space-y-3">
+              {getSlotsForDate(selectedDate).map((slot) => (
+                <div key={slot.id} className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <Clock className="w-5 h-5 text-blue-500" />
+                    <span className="text-sm font-medium">
+                      {new Date(slot.startTime).toLocaleTimeString()} - {new Date(slot.endTime).toLocaleTimeString()}
+                    </span>
+                    <BookOpen className="w-5 h-5 text-green-500" />
+                    <span className="text-sm font-semibold text-green-700">{slot.subject.name}</span>
+                    <User className="w-5 h-5 text-purple-500" />
+                    <span className="text-sm text-purple-700">{slot.teacher.firstName} {slot.teacher.lastName}</span>
+                    <MapPin className="w-5 h-5 text-orange-500" />
+                    <span className="text-sm text-orange-700">{slot.roomNumber}</span>
                   </div>
-                ))}
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                    {slot.topics.length} topic{slot.topics.length > 1 ? 's' : ''}
+                  </Badge>
+                </div>
+              ))}
+              {getSlotsForDate(selectedDate).length === 0 && (
+                <p className="text-gray-500 text-sm text-center py-4">No classes scheduled for this day</p>
+              )}
             </div>
-          ) : (
-            <div className="p-8 text-center">
-              <Image 
-                src="/calendar.png" 
-                alt="No upcoming classes" 
-                width={48} 
-                height={48} 
-                className="mx-auto mb-3 opacity-50"
-              />
-              <p className="text-gray-600">No upcoming classes this month</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* LEGEND */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-gray-900 mb-3">Calendar Legend</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-lamaSky rounded"></div>
-            <span>Scheduled Classes</span>
           </div>
-          {timeFilter === "current" && (
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-200 border-2 border-blue-500 rounded"></div>
-              <span>Today</span>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-gray-200 rounded"></div>
-            <span>No Classes</span>
-          </div>
-        </div>
-        <div className="mt-3 text-xs text-gray-600">
-          💡 Click on any class to view detailed lesson topics and teacher notes
-        </div>
-      </div>
-
-      {/* LESSON TOPIC VIEWER MODAL */}
-      {showTopicViewer && selectedTimetable && (
-        <LessonTopicViewer
-          timetable={selectedTimetable}
-          isReadOnly={true} // Parents always have read-only access
-          onClose={() => {
-            setShowTopicViewer(false);
-            setSelectedTimetable(null);
-          }}
-        />
-      )}
-    </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
 export default ParentTimetableCalendar;
+
+*/

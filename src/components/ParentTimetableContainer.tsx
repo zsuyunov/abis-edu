@@ -1,3 +1,4 @@
+/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -168,7 +169,7 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* HEADER */}
+      {/* HEADER }
       <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -187,10 +188,10 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
             </div>
             
             <div className="flex items-center gap-3">
-              {/* Notifications */}
+              {/* Notifications }
               <ParentTimetableNotifications parentId={parentId} children={children} />
               
-              {/* Calendar Sync */}
+              {/* Calendar Sync }
               <button
                 onClick={() => setShowCalendarSync(true)}
                 className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -199,7 +200,7 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
                 <Download className="w-5 h-5" />
               </button>
               
-              {/* Settings */}
+              {/* Settings }
               <button
                 onClick={() => setShowSettings(!showSettings)}
                 className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
@@ -208,7 +209,7 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
                 <Settings className="w-5 h-5" />
               </button>
               
-              {/* Time Filter Toggle */}
+              {/* Time Filter Toggle }
               <div className="flex bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => setTimeFilter("current")}
@@ -237,9 +238,9 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* MAIN CONTROLS */}
+        {/* MAIN CONTROLS }
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-6">
-          {/* Child Selector */}
+          {/* Child Selector }
           {children.length > 0 && (
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
@@ -307,7 +308,7 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
             </div>
           )}
 
-          {/* View Selector */}
+          {/* View Selector }
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-blue-600" />
@@ -354,7 +355,7 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
             </div>
           </div>
 
-          {/* Filters */}
+          {/* Filters }
           <ParentTimetableFilters
             filters={filters}
             onFilterChange={setFilters}
@@ -368,7 +369,7 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
           />
         </div>
 
-        {/* CONTENT */}
+        {/* CONTENT }
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
           {currentView === "weekly" && selectedChildId && (
             <ParentWeeklyTimetable
@@ -427,7 +428,7 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
             </div>
           )}
 
-          {/* Fallback for unsupported views */}
+          {/* Fallback for unsupported views }
           {!selectedChildId && currentView !== "multi-child" && (
             <div className="text-center py-16">
               <div className="max-w-md mx-auto">
@@ -455,7 +456,7 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
         </div>
       </div>
 
-      {/* CALENDAR SYNC MODAL */}
+      {/* CALENDAR SYNC MODAL }
       {showCalendarSync && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -486,3 +487,6 @@ const ParentTimetableContainer = ({ parentId }: ParentTimetableContainerProps) =
 };
 
 export default ParentTimetableContainer;
+
+
+*/

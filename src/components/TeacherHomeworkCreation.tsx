@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 
 interface TeacherHomeworkCreationProps {
   teacherId: string;
   teacherData: any;
   onHomeworkCreated: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
+  isMobile?: boolean;
+  editHomeworkId?: number | null;
 }
 
 const TeacherHomeworkCreation = ({
@@ -15,14 +17,19 @@ const TeacherHomeworkCreation = ({
   teacherData,
   onHomeworkCreated,
   onCancel,
+  isMobile,
+  editHomeworkId,
 }: TeacherHomeworkCreationProps) => {
   const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(!!editHomeworkId);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     instructions: "",
     assignedDate: new Date().toISOString().split('T')[0],
+    assignedTime: "09:00",
     dueDate: "",
+    dueTime: "23:59",
     branchId: teacherData?.teacher?.branch?.id || "",
     academicYearId: "",
     classId: "",
@@ -32,20 +39,107 @@ const TeacherHomeworkCreation = ({
     allowLateSubmission: true,
     latePenalty: "",
   });
+  const [attachments, setAttachments] = useState<File[]>([]);
+
+  // Load homework data for editing
+  useEffect(() => {
+    if (editHomeworkId && isEditMode) {
+      fetchHomeworkForEdit();
+    }
+  }, [editHomeworkId, isEditMode]);
+
+  const fetchHomeworkForEdit = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/teacher-homework?id=${editHomeworkId}`, {
+        headers: {
+          'x-user-id': teacherId,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const homework = data.homework[0]; // Assuming single homework response
+        
+        if (homework) {
+          const assignedDateTime = homework.assignedDate ? new Date(homework.assignedDate) : new Date();
+          const dueDateTime = homework.dueDate ? new Date(homework.dueDate) : new Date();
+          
+          setFormData({
+            title: homework.title || "",
+            description: homework.description || "",
+            instructions: homework.instructions || "",
+            assignedDate: assignedDateTime.toISOString().split('T')[0],
+            assignedTime: assignedDateTime.toTimeString().slice(0, 5),
+            dueDate: dueDateTime.toISOString().split('T')[0],
+            dueTime: dueDateTime.toTimeString().slice(0, 5),
+            branchId: homework.branchId?.toString() || "",
+            academicYearId: homework.academicYearId?.toString() || "",
+            classId: homework.classId?.toString() || "",
+            subjectId: homework.subjectId?.toString() || "",
+            totalPoints: homework.totalPoints?.toString() || "",
+            passingGrade: homework.passingGrade?.toString() || "",
+            allowLateSubmission: homework.allowLateSubmission ?? true,
+            latePenalty: homework.latePenalty?.toString() || "",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching homework for edit:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const response = await fetch("/api/teacher-homework", {
-        method: "POST",
+      // First upload attachments if any
+      let uploadedAttachments: any[] = [];
+      
+      if (attachments.length > 0) {
+        const formDataForUpload = new FormData();
+        attachments.forEach((file, index) => {
+          formDataForUpload.append(`attachments`, file);
+        });
+        formDataForUpload.append('teacherId', teacherId);
+        
+        const uploadResponse = await fetch('/api/upload-attachments', {
+          method: 'POST',
+          headers: {
+            'x-user-id': teacherId,
+          },
+          body: formDataForUpload,
+        });
+        
+        if (uploadResponse.ok) {
+          const uploadResult = await uploadResponse.json();
+          uploadedAttachments = uploadResult.attachments || [];
+          console.log('Attachments uploaded successfully:', uploadedAttachments);
+        } else {
+          const uploadError = await uploadResponse.json();
+          console.error('Failed to upload attachments:', uploadError);
+          alert(`Failed to upload attachments: ${uploadError.error || 'Unknown error'}`);
+          return; // Don't proceed if attachment upload fails
+        }
+      }
+
+      const url = isEditMode ? `/api/teacher-homework?id=${editHomeworkId}` : "/api/teacher-homework";
+      const method = isEditMode ? "PUT" : "POST";
+      
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
+          "x-user-id": teacherId,
         },
         body: JSON.stringify({
           ...formData,
           teacherId,
+          assignedDate: new Date(`${formData.assignedDate}T${formData.assignedTime}:00`).toISOString(),
+          dueDate: new Date(`${formData.dueDate}T${formData.dueTime}:00`).toISOString(),
           branchId: parseInt(formData.branchId),
           academicYearId: parseInt(formData.academicYearId),
           classId: parseInt(formData.classId),
@@ -53,17 +147,21 @@ const TeacherHomeworkCreation = ({
           totalPoints: formData.totalPoints ? parseFloat(formData.totalPoints) : null,
           passingGrade: formData.passingGrade ? parseFloat(formData.passingGrade) : null,
           latePenalty: formData.latePenalty ? parseFloat(formData.latePenalty) : null,
+          attachments: uploadedAttachments,
         }),
       });
 
       if (response.ok) {
+        const result = await response.json();
+        console.log('Homework creation successful:', result);
         onHomeworkCreated();
       } else {
         const error = await response.json();
-        console.error("Error creating homework:", error);
+        console.error(`Error ${isEditMode ? 'updating' : 'creating'} homework:`, error);
+        alert(`Failed to ${isEditMode ? 'update' : 'create'} homework: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error("Error creating homework:", error);
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} homework:`, error);
     } finally {
       setLoading(false);
     }
@@ -77,6 +175,15 @@ const TeacherHomeworkCreation = ({
     }));
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, fileType: string) => {
+    const files = Array.from(e.target.files || []);
+    setAttachments(prev => [...prev, ...files]);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200">
       <div className="p-6 border-b border-gray-200">
@@ -86,8 +193,12 @@ const TeacherHomeworkCreation = ({
               <Image src="/create.png" alt="Create" width={20} height={20} className="invert" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Create New Homework</h3>
-              <p className="text-sm text-gray-600">Design engaging homework assignments for your students</p>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {isEditMode ? 'Edit Homework' : 'Create New Homework'}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {isEditMode ? 'Update your homework assignment' : 'Design engaging homework assignments for your students'}
+              </p>
             </div>
           </div>
           <button
@@ -217,7 +328,7 @@ const TeacherHomeworkCreation = ({
                 <option value="">Select Class</option>
                 {teacherData?.assignedClasses?.map((cls: any) => (
                   <option key={cls.id} value={cls.id}>
-                    {cls.name} ({cls.students.length} students)
+                    {cls.name} ({cls.students?.length || 0} students)
                   </option>
                 ))}
               </select>
@@ -287,6 +398,21 @@ const TeacherHomeworkCreation = ({
             </div>
 
             <div>
+              <label htmlFor="assignedTime" className="block text-sm font-medium text-gray-700 mb-2">
+                Start Time *
+              </label>
+              <input
+                type="time"
+                id="assignedTime"
+                name="assignedTime"
+                value={formData.assignedTime}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
               <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-2">
                 Due Date *
               </label>
@@ -295,6 +421,21 @@ const TeacherHomeworkCreation = ({
                 id="dueDate"
                 name="dueDate"
                 value={formData.dueDate}
+                onChange={handleInputChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="dueTime" className="block text-sm font-medium text-gray-700 mb-2">
+                End Time *
+              </label>
+              <input
+                type="time"
+                id="dueTime"
+                name="dueTime"
+                value={formData.dueTime}
                 onChange={handleInputChange}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -352,21 +493,88 @@ const TeacherHomeworkCreation = ({
         <div className="space-y-4">
           <h4 className="font-medium text-gray-900 flex items-center gap-2">
             <span>📎</span>
-            Attachments (Coming Soon)
+            Attachments
           </h4>
           
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-            <div className="text-gray-400 mb-2">
-              <Image src="/upload.png" alt="Upload" width={48} height={48} className="mx-auto opacity-50" />
+          <div className="space-y-4">
+            {/* Image Attachments */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                📷 Attach Images
+              </label>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => handleFileUpload(e, 'image')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
-            <p className="text-gray-500 text-sm">
-              Multimedia attachment support (images, documents, audio, video) will be available soon.
-            </p>
+
+            {/* Document Attachments */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                📄 Attach Files (PDF, DOC, etc.)
+              </label>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx"
+                onChange={(e) => handleFileUpload(e, 'document')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Voice Message Attachments */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                🎤 Attach Voice Messages
+              </label>
+              <input
+                type="file"
+                multiple
+                accept="audio/*"
+                onChange={(e) => handleFileUpload(e, 'audio')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Show Selected Files */}
+            {attachments.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h5 className="font-medium text-blue-900 mb-3">Selected Files ({attachments.length})</h5>
+                <div className="space-y-2">
+                  {attachments.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">
+                          {file.type.startsWith('image/') ? '🖼️' : 
+                           file.type.startsWith('audio/') ? '🎤' : '📄'}
+                        </span>
+                        <div>
+                          <div className="text-sm font-medium">{file.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(index)}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Form Actions */}
-        <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
+        <div className="flex items-center justify-between pt-4">
           <button
             type="button"
             onClick={onCancel}
@@ -377,9 +585,9 @@ const TeacherHomeworkCreation = ({
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50 transition-colors"
+            className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? "Creating..." : "Create Homework"}
+            {loading ? (isEditMode ? "Updating..." : "Creating...") : (isEditMode ? "Update Homework" : "Create Homework")}
           </button>
         </div>
       </form>

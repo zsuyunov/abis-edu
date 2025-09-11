@@ -1,197 +1,125 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
-    const session = AuthService.verifyToken(token);
-    if (!session?.id) {
+    // Get authenticated user from header
+    const userId = request.headers.get('x-user-id');
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const url = new URL(request.url);
-    const teacherId = url.searchParams.get("teacherId") || session.id;
-    const requestedBranchId = url.searchParams.get("branchId");
     const academicYearId = url.searchParams.get("academicYearId");
+    const branchId = url.searchParams.get("branchId");
     const classId = url.searchParams.get("classId");
     const subjectId = url.searchParams.get("subjectId");
-    const startDate = url.searchParams.get("startDate");
-    const endDate = url.searchParams.get("endDate");
-    const view = url.searchParams.get("view") || "weekly"; // weekly, monthly, yearly
 
-    // Verify teacher can only access their own data
-    if (session.id !== teacherId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
-
-    // Get teacher information with branch assignment
-    const teacher = await prisma.teacher.findUnique({
-      where: { id: teacherId },
+    // Get teacher's assignments to determine access
+    const teacherAssignments = await prisma.teacherAssignment.findMany({
+      where: {
+        teacherId: userId,
+        status: "ACTIVE",
+      },
       include: {
-        branch: true,
-        subjects: true,
-        classes: {
-          include: {
-            academicYear: true,
-            branch: true,
-          },
-        },
+        Branch: true,
+        AcademicYear: true,
+        Class: true,
+        Subject: true,
       },
     });
 
-    if (!teacher) {
-      return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
+    if (teacherAssignments.length === 0) {
+      return NextResponse.json({ error: "No teaching assignments found" }, { status: 403 });
     }
 
-    // Ensure teacher can only access data from their assigned branch
-    const teacherBranchId = teacher.branchId;
-    
-    // If a specific branch is requested, verify it matches teacher's branch
-    if (requestedBranchId && parseInt(requestedBranchId) !== teacherBranchId) {
-      return NextResponse.json({ error: "Access denied to this branch" }, { status: 403 });
+    // Get academic year
+    let targetAcademicYearId = academicYearId;
+    if (!targetAcademicYearId) {
+      const currentYear = await prisma.academicYear.findFirst({
+        where: { isCurrent: true, status: "ACTIVE" },
+      });
+      targetAcademicYearId = currentYear?.id?.toString() || null;
     }
 
-    // Build filter conditions with mandatory branch restriction
-    const where: any = {
-      teacherId,
-      branchId: teacherBranchId, // Always filter by teacher's assigned branch
-      status: "ACTIVE",
+    if (!targetAcademicYearId) {
+      return NextResponse.json({ error: "No academic year available" }, { status: 404 });
+    }
+
+    // Build where clause for timetables
+    const whereClause: any = {
+      academicYearId: parseInt(targetAcademicYearId),
+      isActive: true,
     };
 
-    if (academicYearId) where.academicYearId = parseInt(academicYearId);
-    if (classId) where.classId = parseInt(classId);
-    if (subjectId) where.subjectId = parseInt(subjectId);
+    // Filter by teacher's assignments
+    const assignedClassIds = teacherAssignments.map(ta => ta.classId);
+    const assignedSubjectIds = teacherAssignments.map(ta => ta.subjectId).filter(id => id !== null);
 
-    // Date filtering
-    if (startDate && endDate) {
-      where.fullDate = {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
-      };
+    if (classId) {
+      whereClause.classId = parseInt(classId);
+    } else {
+      whereClause.classId = { in: assignedClassIds };
     }
 
-    // Get timetables with related data
+    if (subjectId) {
+      whereClause.subjectId = parseInt(subjectId);
+    } else if (assignedSubjectIds.length > 0) {
+      whereClause.subjectId = { in: assignedSubjectIds };
+    }
+
+    if (branchId) {
+      whereClause.branchId = parseInt(branchId);
+    }
+
+    // Get timetables
     const timetables = await prisma.timetable.findMany({
-      where,
+      where: whereClause,
       include: {
-        class: {
-          include: {
-            supervisor: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
-          },
-        },
         subject: true,
-        teacher: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        branch: true,
-        academicYear: true,
-        topics: {
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-        attendances: {
-          select: {
-            id: true,
-            date: true,
-            status: true,
-          },
-        },
-      },
-      orderBy: [
-        { fullDate: "asc" },
-        { startTime: "asc" },
-      ],
-    });
-
-    // Check if teacher is supervisor for any classes in their branch
-    const supervisedClasses = await prisma.class.findMany({
-      where: {
-        supervisorId: teacherId,
-        branchId: teacherBranchId, // Only classes in teacher's branch
-      },
-      select: {
-        id: true,
-        name: true,
-      },
-    });
-
-    // Get all timetables for supervised classes (for supervisor view)
-    const supervisedTimetables = supervisedClasses.length > 0 ? await prisma.timetable.findMany({
-      where: {
-        classId: {
-          in: supervisedClasses.map(c => c.id),
-        },
-        branchId: teacherBranchId, // Ensure branch consistency
-        status: "ACTIVE",
-        ...(startDate && endDate && {
-          fullDate: {
-            gte: new Date(startDate),
-            lte: new Date(endDate),
-          },
-        }),
-      },
-      include: {
         class: true,
-        subject: true,
-        teacher: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
         branch: true,
         academicYear: true,
-        topics: {
-          where: {
-            teacherId, // Only show topics created by current teacher
-          },
-          orderBy: {
-            createdAt: "desc",
+      },
+      orderBy: {
+        startTime: "asc",
+      },
+    });
+
+    // Get available academic years
+    const availableAcademicYears = await prisma.academicYear.findMany({
+      where: {
+        TeacherAssignment: {
+          some: {
+            teacherId: userId,
+            status: "ACTIVE",
           },
         },
       },
-      orderBy: [
-        { fullDate: "asc" },
-        { startTime: "asc" },
-      ],
-    }) : [];
+      orderBy: { startDate: "desc" },
+    });
+
+    // Transform timetables to include fullDate field
+    const transformedTimetables = timetables.map(timetable => ({
+      ...timetable,
+      fullDate: new Date().toISOString().split('T')[0], // Use current date as fallback
+      startTime: timetable.startTime?.toISOString() || timetable.startTime,
+      endTime: timetable.endTime?.toISOString() || timetable.endTime,
+    }));
 
     return NextResponse.json({
-      timetables,
-      supervisedTimetables,
-      supervisedClasses,
-      teacher: {
-        id: teacher.id,
-        firstName: teacher.firstName,
-        lastName: teacher.lastName,
-        branch: teacher.branch,
+      timetables: transformedTimetables,
+      teacherAssignments,
+      availableAcademicYears,
+      filters: {
+        academicYearId: targetAcademicYearId,
+        branchId: branchId || null,
+        classId: classId || null,
+        subjectId: subjectId || null,
       },
-      view,
     });
-
   } catch (error) {
     console.error("Error fetching teacher timetables:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch teacher timetables" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

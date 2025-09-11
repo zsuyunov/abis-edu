@@ -48,6 +48,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ notifications: [] });
     }
 
+    if (!student.classId) {
+      return NextResponse.json({ error: "Student class information is missing" }, { status: 400 });
+    }
+
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -60,20 +64,14 @@ export async function GET(request: NextRequest) {
       where: {
         classId: student.classId,
         academicYearId: currentAcademicYear.id,
-        status: "ACTIVE",
-        fullDate: {
+        isActive: true,
+        startTime: {
           gte: now,
           lte: tomorrow,
         },
       },
       include: {
         subject: true,
-        teacher: {
-          select: {
-            firstName: true,
-            lastName: true,
-          },
-        },
       },
       orderBy: {
         startTime: "asc",
@@ -102,63 +100,16 @@ export async function GET(request: NextRequest) {
       notifications.push({
         id: `upcoming-${timetable.id}`,
         type: "upcoming",
-        title: `Upcoming: ${timetable.subject.name}`,
-        message: `${message} with ${timetable.teacher.firstName} ${timetable.teacher.lastName}`,
-        timestamp: new Date(),
+        title: `Upcoming: ${timetable.subject?.name || 'Unknown Subject'}`,
+        message: `${message}`,
+        timestamp: timetable.startTime,
         read: false,
         timetableId: timetable.id,
-        subjectName: timetable.subject.name,
+        subjectName: timetable.subject?.name || 'Unknown Subject',
       });
     });
 
-    // 2. Recently added topics (last 7 days)
-    const weekAgo = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-
-    const recentTopics = await prisma.timetableTopic.findMany({
-      where: {
-        timetable: {
-          classId: student.classId,
-          academicYearId: currentAcademicYear.id,
-        },
-        createdAt: {
-          gte: weekAgo,
-        },
-        status: {
-          in: ["COMPLETED", "IN_PROGRESS"],
-        },
-      },
-      include: {
-        timetable: {
-          include: {
-            subject: true,
-          },
-        },
-        teacher: {
-          select: {
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 10,
-    });
-
-    recentTopics.forEach((topic) => {
-      notifications.push({
-        id: `topic-${topic.id}`,
-        type: "new_topic",
-        title: `New Topic: ${topic.title}`,
-        message: `Added by ${topic.teacher.firstName} ${topic.teacher.lastName}`,
-        timestamp: topic.createdAt,
-        read: false,
-        timetableId: topic.timetableId,
-        subjectName: topic.timetable.subject.name,
-      });
-    });
+    // 2. Recently added topics - functionality removed (model doesn't exist)
 
     // 3. Timetable changes (last 3 days)
     const threeDaysAgo = new Date(now);
@@ -171,7 +122,7 @@ export async function GET(request: NextRequest) {
         updatedAt: {
           gte: threeDaysAgo,
         },
-        fullDate: {
+        startTime: {
           gte: now, // Only future classes
         },
       },
@@ -191,12 +142,12 @@ export async function GET(request: NextRequest) {
         notifications.push({
           id: `change-${timetable.id}`,
           type: "change",
-          title: `Schedule Updated: ${timetable.subject.name}`,
-          message: `Class details have been updated for ${new Date(timetable.fullDate).toLocaleDateString()}`,
+          title: `Schedule Updated: ${timetable.subject?.name || 'Unknown Subject'}`,
+          message: `Class details have been updated for ${timetable.startTime.toLocaleDateString()}`,
           timestamp: timetable.updatedAt,
           read: false,
           timetableId: timetable.id,
-          subjectName: timetable.subject.name,
+          subjectName: timetable.subject?.name || 'Unknown Subject',
         });
       }
     });
@@ -211,13 +162,10 @@ export async function GET(request: NextRequest) {
       where: {
         classId: student.classId,
         academicYearId: currentAcademicYear.id,
-        status: "ACTIVE",
-        fullDate: {
-          gte: today,
-          lte: endOfToday,
-        },
+        isActive: true,
         startTime: {
           gte: now, // Only future classes today
+          lte: endOfToday,
         },
       },
       include: {

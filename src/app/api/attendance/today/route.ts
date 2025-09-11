@@ -1,46 +1,65 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
 
+const prisma = new PrismaClient();
+
+// GET - Fetch today's attendance statistics
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const branchIdParam = searchParams.get("branchId");
-    const classIdParam = searchParams.get("classId");
-    const studentId = searchParams.get("studentId");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-
-    const where: any = {
-      date: {
-        gte: todayStart,
-        lte: todayEnd,
+    // Get today's attendance records
+    const todayAttendance = await prisma.attendance.findMany({
+      where: {
+        date: {
+          gte: today,
+          lt: tomorrow
+        }
       },
-    };
-
-    if (branchIdParam) where.branchId = Number(branchIdParam);
-    if (classIdParam) where.classId = Number(classIdParam);
-    if (studentId) where.studentId = studentId;
-
-    const attendances = await prisma.attendance.findMany({
-      where,
       include: {
-        student: { select: { id: true, firstName: true, lastName: true, studentId: true } },
-        subject: { select: { id: true, name: true } },
-        class: { select: { id: true, name: true} },
-        teacher: { select: { id: true, firstName: true, lastName: true } },
-        timetable: { select: { id: true, fullDate: true, startTime: true, endTime: true } },
-      },
-      orderBy: { date: "desc" },
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            studentId: true
+          }
+        }
+      }
     });
 
-    return NextResponse.json({ success: true, data: attendances });
+    // Calculate statistics
+    const totalStudents = await prisma.student.count({
+      where: {
+        status: 'ACTIVE'
+      }
+    });
+
+    const presentCount = todayAttendance.filter(record => record.status === 'PRESENT').length;
+    const absentCount = todayAttendance.filter(record => record.status === 'ABSENT').length;
+    const lateCount = todayAttendance.filter(record => record.status === 'LATE').length;
+    const excusedCount = todayAttendance.filter(record => record.status === 'EXCUSED').length;
+
+    const attendanceRate = totalStudents > 0 ? (presentCount / totalStudents) * 100 : 0;
+
+    return NextResponse.json({
+      date: today.toISOString().split('T')[0],
+      statistics: {
+        totalStudents,
+        present: presentCount,
+        absent: absentCount,
+        late: lateCount,
+        excused: excusedCount,
+        attendanceRate: Math.round(attendanceRate * 100) / 100
+      },
+      records: todayAttendance
+    });
   } catch (error) {
-    console.error("attendance/today error:", error);
-    return NextResponse.json({ success: false, error: "Failed to fetch today's attendance" }, { status: 500 });
+    console.error('Error fetching today\'s attendance:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-
-

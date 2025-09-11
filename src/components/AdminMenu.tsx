@@ -67,7 +67,7 @@ const adminMenuItems = [
       {
         icon: "/lesson.png",
         label: "Timetables",
-        href: "/admin/list/timetables",
+        href: "/admin/timetables",
       },
       {
         icon: "/exam.png",

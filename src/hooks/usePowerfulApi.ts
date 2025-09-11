@@ -196,7 +196,6 @@ export const usePowerUsers = (filters: Record<string, string> = {}) => {
     retry: 1,
     refetchOnWindowFocus: false,
     placeholderData: fallbackUsers,
-    keepPreviousData: true, // Smooth transitions
   });
 };
 

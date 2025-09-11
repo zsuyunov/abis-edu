@@ -1,3 +1,4 @@
+/*
 'use client';
 
 import React from 'react';
@@ -179,3 +180,4 @@ const ParentHomeworkFilters: React.FC<ParentHomeworkFiltersProps> = ({
 };
 
 export default ParentHomeworkFilters;
+*/

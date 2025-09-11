@@ -36,7 +36,8 @@ export type FormContainerProps = {
     | "resetPassword"
     | "sendMessage"
     | "assign"
-    | "unassign";
+    | "unassign"
+    | "transfer";
   data?: any;
   id?: number | string;
   currentUserId?: string;

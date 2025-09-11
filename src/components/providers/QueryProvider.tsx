@@ -22,15 +22,13 @@ export default function QueryProvider({
             refetchOnMount: true, // Refetch on mount for latest data
             refetchInterval: false, // No automatic refetching
             refetchIntervalInBackground: false,
-            suspense: false,
             networkMode: 'online', // Use network first for fresh data
             // PERFORMANCE OPTIMIZATIONS
-            placeholderData: (previousData) => previousData, // Keep previous data while loading
+            placeholderData: (previousData: any) => previousData, // Keep previous data while loading
             structuralSharing: true, // Enable for better performance
             notifyOnChangeProps: ['data', 'error'], // Notify on data and error changes
             // DATA ACCESS
             initialData: undefined, // Start with no data
-            keepPreviousData: true, // Keep previous data while loading
           },
           mutations: {
             retry: 0, // No retries - instant feedback

@@ -132,7 +132,7 @@ export const useOptimisticAttendance = () => {
             if (existingIndex >= 0) {
               // Update existing record
               const updated = [...oldData];
-              updated[existingIndex] = { ...updated[existingIndex], ...newItem };
+              updated[existingIndex] = { ...(updated[existingIndex] || {}), ...(newItem || {}) };
               return updated;
             } else {
               // Add new record
@@ -184,7 +184,7 @@ export const useOptimisticHomework = () => {
             );
             if (existingIndex >= 0) {
               const updated = [...oldData];
-              updated[existingIndex] = { ...updated[existingIndex], ...newItem };
+              updated[existingIndex] = { ...(updated[existingIndex] || {}), ...(newItem || {}) };
               return updated;
             } else {
               return [newItem, ...oldData];
@@ -238,7 +238,7 @@ export const useOptimisticGrades = () => {
             );
             if (existingIndex >= 0) {
               const updated = [...oldData];
-              updated[existingIndex] = { ...updated[existingIndex], ...newItem };
+              updated[existingIndex] = { ...(updated[existingIndex] || {}), ...(newItem || {}) };
               return updated;
             } else {
               return [newItem, ...oldData];
