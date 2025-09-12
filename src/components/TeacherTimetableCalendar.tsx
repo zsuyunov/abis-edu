@@ -64,28 +64,11 @@ const TeacherTimetableCalendar = ({ teacherId, teacherData, relatedData, filters
   const fetchTimetableData = async () => {
     try {
       setLoading(true);
-      const queryParams = new URLSearchParams({
-        teacherId,
-        view,
-        startDate: dateRange.start.toISOString().split('T')[0],
-        endDate: dateRange.end.toISOString().split('T')[0],
-        ...filters
-      });
-
-      const response = await fetch(`/api/teacher-timetables?${queryParams}`, {
-        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setTimetables(data.timetables || []);
-      } else {
-        console.error("Failed to fetch timetables:", response.statusText);
-        setTimetables([]);
-      }
+      const response = await fetch(`/api/teacher-timetables?teacherId=${teacherId}&view=${view}&startDate=${dateRange.start.toISOString()}&endDate=${dateRange.end.toISOString()}`);
+      const data = await response.json();
+      setTimetables(data.timetables || []);
     } catch (error) {
       console.error("Error fetching timetable data:", error);
-      setTimetables([]);
     } finally {
       setLoading(false);
     }
