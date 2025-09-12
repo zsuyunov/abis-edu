@@ -53,6 +53,7 @@ const TeacherPage = async () => {
           id: teacher?.id?.toString() || "",
           firstName: teacher?.firstName || "",
           lastName: teacher?.lastName || "",
+          phone: teacher?.phone || "",
           TeacherAssignment: (teacher?.TeacherAssignment || []).map(assignment => ({
             ...assignment,
             id: assignment.id.toString(),

@@ -23,18 +23,18 @@ const LanguageSelector: React.FC = () => {
 
   return (
     <div className="relative">
-      {/* Language Selector Button */}
+      {/* Language Selector Button - Small and Mobile-friendly */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-2xl px-4 py-2 shadow-md border border-white/30 hover:shadow-lg hover:scale-105 transition-all duration-300"
+        className="flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-lg px-2 py-1.5 shadow-sm border border-white/30 hover:shadow-md transition-all duration-200"
       >
-        <span className="text-2xl">{currentLanguage?.flag}</span>
-        <span className="text-sm font-medium text-gray-700 hidden sm:block">
+        <span className="text-lg">{currentLanguage?.flag}</span>
+        <span className="text-xs font-medium text-gray-700 hidden sm:block">
           {currentLanguage?.name}
         </span>
         <svg 
-          width="12" 
-          height="12" 
+          width="10" 
+          height="10" 
           viewBox="0 0 24 24" 
           fill="none" 
           className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
@@ -49,21 +49,21 @@ const LanguageSelector: React.FC = () => {
         </svg>
       </button>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown Menu - Smaller and Mobile-friendly */}
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-lg border border-gray-200 py-2 z-50">
+        <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
           {languages.map((lang) => (
             <button
               key={lang.code}
               onClick={() => handleLanguageChange(lang.code)}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-200 ${
+              className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 transition-colors duration-200 ${
                 language === lang.code ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
               }`}
             >
-              <span className="text-xl">{lang.flag}</span>
-              <span className="text-sm font-medium">{lang.name}</span>
+              <span className="text-lg">{lang.flag}</span>
+              <span className="text-xs font-medium">{lang.name}</span>
               {language === lang.code && (
-                <span className="ml-auto text-blue-600">✓</span>
+                <span className="ml-auto text-blue-600 text-xs">✓</span>
               )}
             </button>
           ))}

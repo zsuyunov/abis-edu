@@ -52,6 +52,7 @@ const GradeModal: React.FC<GradeModalProps> = ({
 
   useEffect(() => {
     if (isOpen && lessonData) {
+      console.log('GradeModal - useEffect triggered:', { isOpen, lessonData });
       fetchStudents();
     }
   }, [isOpen, lessonData]);
@@ -79,6 +80,8 @@ const GradeModal: React.FC<GradeModalProps> = ({
         
         if (studentsData.length === 0) {
           console.warn('GradeModal - No students found for class:', lessonData.classId);
+          // Show a message to the user
+          alert('No students found for this class. Please check if the class has students assigned.');
         }
         
         setStudents(studentsData);

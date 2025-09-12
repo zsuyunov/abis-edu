@@ -25,7 +25,7 @@ import {
 import ClassworkTopicsModal from "./ClassworkTopicsModal";
 import AttendanceForm from "./AttendanceForm";
 import GradeModal from "./GradeModal";
-import HomeworkModal from "./HomeworkModal";
+import TeacherHomeworkCreationForm from "./TeacherHomeworkCreationForm";
 // Remove any potential import conflicts
 // import HomeworkAssignmentModal from "./HomeworkAssignmentModal";
 
@@ -606,16 +606,39 @@ const TeacherWeeklyTimetable = ({
         />
       )}
 
-      {/* Homework Modal */}
+      {/* Homework Creation Form */}
       {showHomeworkModal && selectedHomeworkSlot && (
-        <HomeworkModal
-          isOpen={showHomeworkModal}
+        <TeacherHomeworkCreationForm
+          teacherId={teacherId}
+          timetable={{
+            id: selectedHomeworkSlot.id,
+            class: { 
+              id: selectedHomeworkSlot.classId, 
+              name: selectedHomeworkSlot.className,
+              academicYear: { id: parseInt(selectedHomeworkSlot.academicYearId) }
+            },
+            subject: { 
+              id: selectedHomeworkSlot.subjectId, 
+              name: selectedHomeworkSlot.subjectName 
+            },
+            branch: { 
+              id: selectedHomeworkSlot.branchId, 
+              shortName: "Branch" // You might want to get this from the data
+            },
+            fullDate: selectedHomeworkSlot.date,
+            startTime: selectedHomeworkSlot.startTime,
+            endTime: selectedHomeworkSlot.endTime
+          }}
           onClose={() => {
             setShowHomeworkModal(false);
             setSelectedHomeworkSlot(null);
           }}
-          lessonData={selectedHomeworkSlot}
-          teacherId={teacherId}
+          onHomeworkCreated={() => {
+            setShowHomeworkModal(false);
+            setSelectedHomeworkSlot(null);
+            // Refresh timetables if needed
+            fetchTimetables();
+          }}
         />
       )}
     </div>

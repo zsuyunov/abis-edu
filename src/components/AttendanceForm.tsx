@@ -48,6 +48,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
 
   useEffect(() => {
     if (isOpen && lessonData) {
+      console.log('AttendanceForm - useEffect triggered:', { isOpen, lessonData });
       fetchStudents();
     }
   }, [isOpen, lessonData]);
@@ -75,6 +76,8 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
         
         if (studentsData.length === 0) {
           console.warn('AttendanceForm - No students found for class:', lessonData.classId);
+          // Show a message to the user
+          alert('No students found for this class. Please check if the class has students assigned.');
         }
         
         setStudents(studentsData);

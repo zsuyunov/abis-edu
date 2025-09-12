@@ -6,10 +6,12 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Calendar, Clock, MapPin, BookOpen, Users, BarChart3, ChevronLeft, ChevronRight,
-  Edit3, CheckCircle, AlertCircle, PlayCircle
+  Edit3, CheckCircle, AlertCircle, PlayCircle, User, Settings
 } from "lucide-react";
 import { useOptimizedQuery, useOptimizedMutation, usePrefetch, useMemoizedSelector } from "@/hooks/useOptimizedQuery";
 import { TeacherHomeworkContainerLazy, AttendanceFormLazy, GradeInputFormLazy } from "@/components/lazy/LazyComponents";
+import TeacherHomeworkCreationForm from "./TeacherHomeworkCreationForm";
+import ProfileUpdateModal from "./ProfileUpdateModal";
 import SkeletonLoader from "@/components/ui/SkeletonLoader";
 import FastLoader from "@/components/ui/FastLoader";
 import TeacherSpeedLoader from "@/components/ui/TeacherSpeedLoader";
@@ -45,6 +47,7 @@ interface TeacherScheduleDashboardProps {
     id: string;
     firstName: string;
     lastName: string;
+    phone?: string;
     TeacherAssignment: TeacherAssignment[];
   };
 }
@@ -64,6 +67,11 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string>("");
+  const [students, setStudents] = useState<any[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [attendanceData, setAttendanceData] = useState<Record<string, 'present' | 'absent' | 'late'>>({});
+  const [gradeData, setGradeData] = useState<Record<string, number>>({});
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const { prefetchQuery } = usePrefetch();
 
   // Memoized branches and roles
@@ -280,6 +288,44 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const formatTime = useCallback((time: string) => time.substring(0, 5), []);
   const getLessonNumber = useCallback((index: number) => index + 1, []);
 
+  // Fetch students for a class
+  const fetchStudents = useCallback(async (classId: string) => {
+    setLoadingStudents(true);
+    try {
+      const response = await fetch(`/api/students/by-class?classId=${classId}`);
+      if (response.ok) {
+        const studentData = await response.json();
+        setStudents(studentData);
+        // Initialize attendance and grade data
+        const initialAttendance: Record<string, 'present' | 'absent' | 'late'> = {};
+        const initialGrades: Record<string, number> = {};
+        studentData.forEach((student: any) => {
+          initialAttendance[student.id] = 'present';
+          initialGrades[student.id] = 0;
+        });
+        setAttendanceData(initialAttendance);
+        setGradeData(initialGrades);
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error);
+    } finally {
+      setLoadingStudents(false);
+    }
+  }, []);
+
+  // Handle modal opening
+  const handleOpenAttendanceModal = useCallback((timetable: TimetableEntry) => {
+    setSelectedTimetable(timetable);
+    setShowAttendanceModal(true);
+    fetchStudents(timetable.class.id);
+  }, [fetchStudents]);
+
+  const handleOpenGradeModal = useCallback((timetable: TimetableEntry) => {
+    setSelectedTimetable(timetable);
+    setShowGradeModal(true);
+    fetchStudents(timetable.class.id);
+  }, [fetchStudents]);
+
   const getLessonStatus = useCallback((timetable: TimetableEntry) => {
     const now = new Date();
     const lessonDate = new Date(timetable.fullDate);
@@ -331,12 +377,11 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     
     await new Promise(resolve => setTimeout(resolve, 150));
     
-    setSelectedTimetable(timetable);
-    setShowGradeModal(true);
+    handleOpenGradeModal(timetable);
     
     setIsActionLoading(false);
     setLoadingAction("");
-  }, []);
+  }, [handleOpenGradeModal]);
 
   const handleOpenAttendance = useCallback(async (timetable: TimetableEntry) => {
     setIsActionLoading(true);
@@ -344,12 +389,11 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     
     await new Promise(resolve => setTimeout(resolve, 150));
     
-    setSelectedTimetable(timetable);
-    setShowAttendanceModal(true);
+    handleOpenAttendanceModal(timetable);
     
     setIsActionLoading(false);
     setLoadingAction("");
-  }, []);
+  }, [handleOpenAttendanceModal]);
 
   const handleSaveTopic = useCallback(() => {
     if (!selectedTimetable || !newTopic.trim()) return;
@@ -359,6 +403,90 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
       description: newTopicDescription.trim(),
     });
   }, [selectedTimetable, newTopic, newTopicDescription, topicMutation]);
+
+  // Save attendance handler
+  const handleSaveAttendance = useCallback(async () => {
+    if (!selectedTimetable || students.length === 0) return;
+    
+    try {
+      const response = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId
+        },
+        body: JSON.stringify({
+          timetableId: selectedTimetable.id,
+          classId: selectedTimetable.class.id,
+          subjectId: selectedTimetable.subject.id,
+          date: selectedTimetable.fullDate,
+          attendance: Object.entries(attendanceData)
+            .filter(([studentId, status]) => studentId && !isNaN(parseInt(studentId)) && status)
+            .map(([studentId, status]) => ({
+              studentId: parseInt(studentId),
+              status: status.toUpperCase()
+            }))
+        })
+      });
+
+      if (response.ok) {
+        setShowAttendanceModal(false);
+        setAttendanceData({});
+        // Show success message or refresh data
+        console.log('Attendance saved successfully');
+      } else {
+        console.error('Failed to save attendance');
+      }
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+    }
+  }, [selectedTimetable, students, attendanceData, teacherId]);
+
+  // Save grades handler
+  const handleSaveGrades = useCallback(async () => {
+    if (!selectedTimetable || students.length === 0) return;
+    
+    const requestData = {
+      timetableId: selectedTimetable.id,
+      classId: selectedTimetable.class.id,
+      subjectId: selectedTimetable.subject.id,
+      date: selectedTimetable.fullDate,
+      grades: Object.entries(gradeData)
+        .filter(([studentId, points]) => studentId && !isNaN(parseInt(studentId)))
+        .map(([studentId, points]) => ({
+          studentId: parseInt(studentId),
+          points: points || 0
+        }))
+    };
+    
+    console.log("Sending grades data:", requestData);
+    console.log("Grade data state:", gradeData);
+    console.log("Students data:", students);
+    
+    try {
+      const response = await fetch('/api/grades', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (response.ok) {
+        setShowGradeModal(false);
+        setGradeData({});
+        // Show success message or refresh data
+        console.log('Grades saved successfully');
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to save grades:', errorData);
+        alert(`Failed to save grades: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error saving grades:', error);
+    }
+  }, [selectedTimetable, students, gradeData, teacherId]);
 
   const currentAssignments = useMemoizedSelector(
     teacherData.TeacherAssignment,
@@ -450,6 +578,16 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                 ))}
               </select>
             )}
+
+            {/* Profile Update Button - Next to branch selector */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowProfileModal(true)}
+              className="flex items-center justify-center w-8 h-8 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors text-xs font-medium border border-blue-200"
+              title="Update Profile"
+            >
+              <Settings className="w-3 h-3" />
+            </motion.button>
           </div>
         </div>
 
@@ -758,84 +896,37 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         )}
       </AnimatePresence>
 
-      {/* Homework Modal */}
+      {/* Homework Creation Form */}
       <AnimatePresence>
         {showHomeworkModal && selectedTimetable && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          >
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Homework Manager</h3>
-                <button
-                  onClick={() => setShowHomeworkModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-2">
-                    {selectedTimetable.class.name} • {selectedTimetable.subject.name}
-                  </h4>
-                  <p className="text-sm text-blue-700">
-                    {formatTime(selectedTimetable.startTime)} – {formatTime(selectedTimetable.endTime)}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Homework Title
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter homework title"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                    rows={4}
-                    placeholder="Enter homework description"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Due Date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => setShowHomeworkModal(false)}
-                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors"
-                  >
-                    Assign Homework
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
+          <TeacherHomeworkCreationForm
+            teacherId={teacherId}
+            timetable={{
+              id: selectedTimetable.id,
+              class: { 
+                id: selectedTimetable.class.id, 
+                name: selectedTimetable.class.name,
+                academicYear: { id: parseInt(selectedTimetable.academicYear?.id || "1") }
+              },
+              subject: { 
+                id: selectedTimetable.subject.id, 
+                name: selectedTimetable.subject.name 
+              },
+              branch: { 
+                id: selectedTimetable.branch.id, 
+                shortName: selectedTimetable.branch.shortName 
+              },
+              fullDate: selectedTimetable.fullDate,
+              startTime: selectedTimetable.startTime,
+              endTime: selectedTimetable.endTime
+            }}
+            onClose={() => setShowHomeworkModal(false)}
+            onHomeworkCreated={() => {
+              setShowHomeworkModal(false);
+              // Refresh data if needed
+              window.location.reload();
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -846,13 +937,13 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
           >
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] overflow-y-auto"
+              className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-lg shadow-xl max-h-[70vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Grade Book</h3>
@@ -872,42 +963,57 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     {formatTime(selectedTimetable.startTime)} – {formatTime(selectedTimetable.endTime)}
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Grade Type
-                    </label>
-                    <select className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500">
-                      <option>Daily Grade</option>
-                      <option>Weekly Test</option>
-                      <option>Monthly Exam</option>
-                      <option>Final Exam</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Max Points
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="100"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="Grade description"
-                  />
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-2">Students will be listed here for grade input</p>
-                  <div className="text-xs text-gray-500">Loading student list...</div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900">Student Grades</h4>
+                  {loadingStudents ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mx-auto"></div>
+                      <p className="text-sm text-gray-500 mt-2">Loading students...</p>
+                    </div>
+                  ) : students.length > 0 ? (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {students.map((student) => (
+                        <div key={student.id} className="flex items-center justify-between p-2 sm:p-3 bg-white border border-gray-200 rounded-lg">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs sm:text-sm font-medium text-purple-700">
+                                {student.firstName[0]}{student.lastName[0]}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm sm:text-base font-medium text-gray-900 truncate">
+                                {student.firstName} {student.lastName}
+                              </p>
+                              <p className="text-xs text-gray-500">ID: {student.studentId}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={gradeData[student.id] || 0}
+                              onChange={(e) => {
+                                const newGradeData = {
+                                  ...gradeData,
+                                  [student.id]: parseInt(e.target.value) || 0
+                                };
+                                console.log("Updating grade data:", newGradeData, "for student:", student.id);
+                                setGradeData(newGradeData);
+                              }}
+                              className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center"
+                              placeholder="0"
+                            />
+                            <span className="text-xs sm:text-sm text-gray-500">/100</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-500">No students found for this class</p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button
@@ -917,6 +1023,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     Cancel
                   </button>
                   <button
+                    onClick={handleSaveGrades}
                     className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors"
                   >
                     Save Grades
@@ -935,13 +1042,13 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
           >
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] overflow-y-auto"
+              className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-lg shadow-xl max-h-[70vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Take Attendance</h3>
@@ -961,9 +1068,50 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     {formatTime(selectedTimetable.startTime)} – {formatTime(selectedTimetable.endTime)}
                   </p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-2">Student attendance will be listed here</p>
-                  <div className="text-xs text-gray-500">Loading student list...</div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900">Student Attendance</h4>
+                  {loadingStudents ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500 mx-auto"></div>
+                      <p className="text-sm text-gray-500 mt-2">Loading students...</p>
+                    </div>
+                  ) : students.length > 0 ? (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {students.map((student) => (
+                        <div key={student.id} className="flex items-center justify-between p-2 sm:p-3 bg-white border border-gray-200 rounded-lg">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs sm:text-sm font-medium text-green-700">
+                                {student.firstName[0]}{student.lastName[0]}
+                              </span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm sm:text-base font-medium text-gray-900 truncate">
+                                {student.firstName} {student.lastName}
+                              </p>
+                              <p className="text-xs text-gray-500">ID: {student.studentId}</p>
+                            </div>
+                          </div>
+                          <select
+                            value={attendanceData[student.id] || 'present'}
+                            onChange={(e) => setAttendanceData(prev => ({
+                              ...prev,
+                              [student.id]: e.target.value as 'present' | 'absent' | 'late'
+                            }))}
+                            className="px-2 py-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent flex-shrink-0"
+                          >
+                            <option value="present">Present</option>
+                            <option value="absent">Absent</option>
+                            <option value="late">Late</option>
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-500">No students found for this class</p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button
@@ -973,6 +1121,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     Cancel
                   </button>
                   <button
+                    onClick={handleSaveAttendance}
                     className="flex-1 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"
                   >
                     Save Attendance
@@ -983,6 +1132,18 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Profile Update Modal */}
+      <ProfileUpdateModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        teacherId={teacherId}
+        currentPhone={teacherData.phone || ""}
+        onUpdateSuccess={() => {
+          // Optionally refresh data or show success message
+          console.log("Profile updated successfully");
+        }}
+      />
     </motion.div>
   );
 };

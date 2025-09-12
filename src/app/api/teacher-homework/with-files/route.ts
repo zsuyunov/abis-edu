@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import path from "path";
 import { existsSync } from "fs";
 
 export async function POST(request: NextRequest) {
@@ -171,6 +172,11 @@ export async function POST(request: NextRequest) {
       if (file.size > 0) {
         const fileName = `img_${Date.now()}_${file.name}`;
         
+        // Save file to filesystem
+        const filePath = path.join(uploadDir, fileName);
+        const fileBuffer = new Uint8Array(await file.arrayBuffer());
+        await writeFile(filePath, fileBuffer);
+        
         const attachment = await prisma.homeworkAttachment.create({
           data: {
             homeworkId: homework.id,
@@ -193,6 +199,11 @@ export async function POST(request: NextRequest) {
       if (file.size > 0) {
         const fileName = `doc_${Date.now()}_${file.name}`;
         
+        // Save file to filesystem
+        const filePath = path.join(uploadDir, fileName);
+        const fileBuffer = new Uint8Array(await file.arrayBuffer());
+        await writeFile(filePath, fileBuffer);
+        
         const attachment = await prisma.homeworkAttachment.create({
           data: {
             homeworkId: homework.id,
@@ -214,6 +225,17 @@ export async function POST(request: NextRequest) {
     for (const file of voiceFiles) {
       if (file.size > 0) {
         const fileName = `voice_${Date.now()}_${file.name}`;
+        
+        // Create directory for this homework if it doesn't exist
+        const homeworkDir = path.join(process.cwd(), 'public', 'uploads', 'homework', homework.id.toString());
+        if (!existsSync(homeworkDir)) {
+          await mkdir(homeworkDir, { recursive: true });
+        }
+        
+        // Save file to filesystem
+        const filePath = path.join(homeworkDir, fileName);
+        const fileBuffer = new Uint8Array(await file.arrayBuffer());
+        await writeFile(filePath, fileBuffer);
         
         const attachment = await prisma.homeworkAttachment.create({
           data: {

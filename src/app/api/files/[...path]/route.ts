@@ -11,8 +11,15 @@ export async function GET(
     const filePath = params.path.join('/');
     const fullPath = join(process.cwd(), 'public', 'uploads', filePath);
 
+    console.log('File serving request:', {
+      requestedPath: filePath,
+      fullPath: fullPath,
+      exists: existsSync(fullPath)
+    });
+
     // Check if file exists
     if (!existsSync(fullPath)) {
+      console.log('File not found:', fullPath);
       return new NextResponse('File not found', { status: 404 });
     }
 
@@ -33,6 +40,9 @@ export async function GET(
       'gif': 'image/gif',
       'mp3': 'audio/mpeg',
       'wav': 'audio/wav',
+      'webm': 'audio/webm',
+      'ogg': 'audio/ogg',
+      'm4a': 'audio/mp4',
       'mp4': 'video/mp4',
       'txt': 'text/plain'
     };

@@ -10,6 +10,8 @@ interface TeacherHomeworkCreationFormProps {
     subject: { id: string; name: string };
     branch: { id: string; shortName: string };
     fullDate: string;
+    startTime: string;
+    endTime: string;
   };
   onClose: () => void;
   onHomeworkCreated: () => void;
@@ -92,18 +94,32 @@ const TeacherHomeworkCreationForm = ({
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Voice recording is not supported on this device. Please use the file upload option instead.');
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        } 
+      });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       mediaRecorderRef.current = mediaRecorder;
 
       const chunks: BlobPart[] = [];
       mediaRecorder.ondataavailable = (event) => {
-        chunks.push(event.data);
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/wav' });
-        const file = new File([blob], `voice-message-${Date.now()}.wav`, { type: 'audio/wav' });
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
         setAttachments(prev => ({
           ...prev,
           voiceMessages: [...prev.voiceMessages, file]
@@ -111,7 +127,7 @@ const TeacherHomeworkCreationForm = ({
         stream.getTracks().forEach(track => track.stop());
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(1000); // Collect data every second
       setIsRecording(true);
       setRecordingTime(0);
 
@@ -120,7 +136,17 @@ const TeacherHomeworkCreationForm = ({
       }, 1000);
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      alert('Could not access microphone. Please check permissions.');
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          alert('Microphone access denied. Please allow microphone access and try again.');
+        } else if (error.name === 'NotFoundError') {
+          alert('No microphone found. Please check your device and try again.');
+        } else {
+          alert('Could not access microphone. Please check permissions and try again.');
+        }
+      } else {
+        alert('Could not access microphone. Please check permissions and try again.');
+      }
     }
   };
 
@@ -223,8 +249,9 @@ const TeacherHomeworkCreationForm = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100">
-      <div className="p-6 border-b border-gray-200">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 pb-20 md:pb-4" style={{ paddingBottom: 'max(80px, env(safe-area-inset-bottom))' }}>
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[85vh] md:max-h-[90vh] shadow-2xl border border-gray-100 flex flex-col">
+      <div className="p-6 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Create Homework</h2>
@@ -259,7 +286,8 @@ const TeacherHomeworkCreationForm = ({
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
         {/* Title */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -451,8 +479,9 @@ const TeacherHomeworkCreationForm = ({
               type="file"
               accept="image/*"
               multiple
+              capture="environment"
               onChange={(e) => handleFileUpload('images', e.target.files)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
             {attachments.images.length > 0 && (
               <div className="mt-2 space-y-1">
@@ -482,7 +511,7 @@ const TeacherHomeworkCreationForm = ({
               accept=".pdf,.doc,.docx,.txt,.rtf"
               multiple
               onChange={(e) => handleFileUpload('files', e.target.files)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
             {attachments.files.length > 0 && (
               <div className="mt-2 space-y-1">
@@ -509,30 +538,30 @@ const TeacherHomeworkCreationForm = ({
             </label>
             
             {/* Recording Controls */}
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-3">
               {!isRecording ? (
                 <button
                   type="button"
                   onClick={startRecording}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors font-medium"
                 >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
                   </svg>
                   Record Voice Message
                 </button>
               ) : (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-full">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="font-mono text-sm">{formatRecordingTime(recordingTime)}</span>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="flex items-center justify-center gap-2 px-4 py-3 bg-red-100 text-red-700 rounded-full">
+                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                    <span className="font-mono text-sm font-medium">{formatRecordingTime(recordingTime)}</span>
                   </div>
                   <button
                     type="button"
                     onClick={stopRecording}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors"
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors font-medium"
                   >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
                     </svg>
                     Stop Recording
@@ -547,8 +576,9 @@ const TeacherHomeworkCreationForm = ({
               type="file"
               accept="audio/*"
               multiple
+              capture="user"
               onChange={(e) => handleFileChange(e, 'voiceMessages')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             />
             
             {attachments.voiceMessages.length > 0 && (
@@ -578,19 +608,24 @@ const TeacherHomeworkCreationForm = ({
           </div>
         </div>
 
-        {/* Submit Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+        </form>
+      </div>
+
+      {/* Fixed Footer with Buttons */}
+      <div className="flex-shrink-0 p-4 md:p-6 border-t border-gray-200 bg-gray-50 sticky bottom-0 z-10">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-center font-medium"
           >
             Cancel
           </button>
           <button
-            type="submit"
+            type="button"
+            onClick={handleSubmit}
             disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:shadow-lg flex items-center gap-2 font-medium"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:shadow-lg flex items-center justify-center gap-2 font-medium"
           >
             {loading && (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -598,7 +633,8 @@ const TeacherHomeworkCreationForm = ({
             {loading ? "Creating..." : "Create Homework"}
           </button>
         </div>
-      </form>
+      </div>
+      </div>
     </div>
   );
 };
