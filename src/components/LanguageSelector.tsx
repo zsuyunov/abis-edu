@@ -26,15 +26,15 @@ const LanguageSelector: React.FC = () => {
       {/* Language Selector Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 bg-white/80 backdrop-blur-sm rounded-2xl px-4 py-2 shadow-md border border-white/30 hover:shadow-lg hover:scale-105 transition-all duration-300"
+        className="flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-lg px-2 py-1.5 shadow-sm border border-white/30 hover:shadow-md transition-all duration-200"
       >
-        <span className="text-2xl">{currentLanguage?.flag}</span>
-        <span className="text-sm font-medium text-gray-700 hidden sm:block">
-          {currentLanguage?.name}
+        <span className="text-lg">{currentLanguage?.flag}</span>
+        <span className="text-xs font-medium text-gray-700 hidden sm:block">
+          {currentLanguage?.code.toUpperCase()}
         </span>
         <svg 
-          width="12" 
-          height="12" 
+          width="10" 
+          height="10" 
           viewBox="0 0 24 24" 
           fill="none" 
           className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
