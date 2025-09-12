@@ -53,20 +53,28 @@ export async function GET(request: NextRequest) {
     const hasNext = page < totalPages;
     const hasPrev = page > 1;
 
-    // Get summary statistics
-    const summary = await prisma.student.groupBy({
-      by: ['status'],
-      where: branchId ? { branchId: parseInt(branchId) } : {},
-      _count: {
-        id: true,
-      },
-    });
+    // Get summary statistics with error handling
+    let summaryStats = { active: 0, inactive: 0, total: 0 };
+    
+    try {
+      const summary = await prisma.student.groupBy({
+        by: ['status'],
+        where: branchId ? { branchId: parseInt(branchId) } : {},
+        _count: {
+          id: true,
+        },
+      });
 
-    const summaryStats = {
-      active: summary.find(s => s.status === 'ACTIVE')?._count.id || 0,
-      inactive: summary.find(s => s.status === 'INACTIVE')?._count.id || 0,
-      total: summary.reduce((acc, s) => acc + s._count.id, 0),
-    };
+      summaryStats = {
+        active: summary.find(s => s.status === 'ACTIVE')?._count.id || 0,
+        inactive: summary.find(s => s.status === 'INACTIVE')?._count.id || 0,
+        total: summary.reduce((acc, s) => acc + s._count.id, 0),
+      };
+    } catch (error) {
+      console.error("Error fetching student summary statistics:", error);
+      // Use fallback values if groupBy fails
+      summaryStats = { active: 0, inactive: 0, total: 0 };
+    }
 
     const response = NextResponse.json({
       success: true,

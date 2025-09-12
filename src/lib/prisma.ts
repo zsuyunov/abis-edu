@@ -6,6 +6,12 @@ const prismaClientSingleton = () => {
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     // Performance optimizations
     errorFormat: 'minimal',
+    // Connection management for static generation
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
   })
 }
 
@@ -15,8 +21,8 @@ declare const globalThis: {
 
 const prisma = globalThis.prismaGlobal ?? prismaClientSingleton()
 
-// Optimize Prisma for production
-if (process.env.NODE_ENV === 'production') {
+// Optimize Prisma for production and static generation
+if (process.env.NODE_ENV === 'production' || process.env.NEXT_PHASE === 'phase-production-build') {
   // Enable connection pooling and warm up connections
   prisma.$connect().then(() => {
     console.log('✅ Database connected with connection pooling')
