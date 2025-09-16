@@ -43,7 +43,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if teacher is assigned to this timetable
-    if (!timetable.teacherIds || !timetable.teacherIds.includes(teacherId)) {
+    if (!timetable.teacherIds ||
+        !Array.isArray(timetable.teacherIds) ||
+        !timetable.teacherIds.includes(teacherId)) {
       return NextResponse.json({ error: "Access denied to this timetable" }, { status: 403 });
     }
 
