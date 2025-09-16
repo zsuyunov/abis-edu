@@ -58,11 +58,10 @@ interface Timetable {
   dayOfWeek: string;
   subjectId: number | null;
   teacherIds: string[];
-  startTime: string;
-  endTime: string;
+  startTime: string | Date;
+  endTime: string | Date;
   roomNumber: string | null;
   buildingName: string | null;
-  isElective: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -88,7 +87,6 @@ const TimetableManagementPage: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
-  const [bellTimes, setBellTimes] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   
@@ -98,6 +96,7 @@ const TimetableManagementPage: React.FC = () => {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<number | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
 
   // UI State
   const [loading, setLoading] = useState(false);
@@ -126,10 +125,10 @@ const TimetableManagementPage: React.FC = () => {
 
   useEffect(() => {
     fetchTimetables();
-    fetchBellTimes();
     fetchSubjects();
     fetchTeachers();
   }, [selectedBranch, selectedClass, selectedAcademicYear, showInactive]);
+
 
   useEffect(() => {
     applyFilters();
@@ -145,10 +144,14 @@ const TimetableManagementPage: React.FC = () => {
       if (branchesRes.ok) {
         const branchesData = await branchesRes.json();
         setBranches(Array.isArray(branchesData) ? branchesData : []);
-        // Auto-select the first branch (SuzukOta) to match saved timetables
+        // Auto-select the first branch to match saved timetables
         if (branchesData.length > 0) {
-          const suzukOtaBranch = branchesData.find((b: Branch) => b.shortName === 'SuzukOta') || branchesData[0];
-          setSelectedBranch(suzukOtaBranch.id);
+          // Look for branch with shortName "85" (with or without trailing space) first
+          const branch85 = branchesData.find((b: Branch) => 
+            b.shortName === '85' || b.shortName === '85 ' || b.shortName.trim() === '85'
+          ) || branchesData[0];
+          setSelectedBranch(branch85.id);
+          console.log('Auto-selected branch:', branch85.id, branch85.shortName);
         }
       } else {
         setBranches([]);
@@ -199,14 +202,43 @@ const TimetableManagementPage: React.FC = () => {
       // This allows us to show both active and inactive based on showInactive toggle
 
       console.log('Fetching timetables with params:', params.toString());
-      const response = await fetch(`/api/admin/timetables?${params}`);
+      console.log('Selected filters:', { selectedBranch, selectedClass, selectedAcademicYear });
+      
+      // If no filters are selected, fetch all timetables to show something
+      const url = params.toString() ? `/api/admin/timetables?${params}` : '/api/admin/timetables';
+      const response = await fetch(url);
       console.log('Timetables response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
         console.log('Timetables data received:', data);
-        setTimetables(Array.isArray(data) ? data : []);
+        console.log('Number of timetables found:', data.timetables?.length || 0);
+        
+        // Debug the first timetable's time fields
+        if (data.timetables?.length > 0) {
+          const firstTimetable = data.timetables[0];
+          console.log('🔍 First timetable time fields:');
+          console.log('  startTime:', firstTimetable.startTime, 'type:', typeof firstTimetable.startTime);
+          console.log('  endTime:', firstTimetable.endTime, 'type:', typeof firstTimetable.endTime);
+        }
+        
+        // Filter timetables on frontend if specific filters are applied
+        let filteredTimetables = Array.isArray(data.timetables) ? data.timetables : [];
+        
+        if (selectedBranch || selectedClass || selectedAcademicYear) {
+          filteredTimetables = filteredTimetables.filter((timetable: any) => {
+            const branchMatch = !selectedBranch || timetable.branchId === selectedBranch;
+            const classMatch = !selectedClass || timetable.classId === selectedClass;
+            const yearMatch = !selectedAcademicYear || timetable.academicYearId === selectedAcademicYear;
+            return branchMatch && classMatch && yearMatch;
+          });
+        }
+        
+        console.log('Filtered timetables count:', filteredTimetables.length);
+        setTimetables(filteredTimetables);
       } else {
+        const errorText = await response.text();
+        console.error('Timetables fetch failed:', errorText);
         setTimetables([]);
         setError('Failed to fetch timetables');
       }
@@ -219,23 +251,6 @@ const TimetableManagementPage: React.FC = () => {
     }
   };
 
-  const fetchBellTimes = async () => {
-    try {
-      // Determine year range based on selected class
-      const yearRange = '7-13'; // Default, could be dynamic based on class
-      const response = await fetch(`/api/admin/bell-times?yearRange=${yearRange}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setBellTimes(Array.isArray(data) ? data : []);
-      } else {
-        setBellTimes([]);
-      }
-    } catch (error) {
-      console.error('Error fetching bell times:', error);
-      setBellTimes([]);
-    }
-  };
 
   const fetchSubjects = async () => {
     try {
@@ -295,14 +310,71 @@ const TimetableManagementPage: React.FC = () => {
   };
 
   // Helper functions
-  const formatTime = (time: string) => {
-    return time.substring(0, 5); // Remove seconds if present
+  const formatTime = (time: string | Date) => {
+    if (!time) return '';
+    
+    console.log('🔍 formatTime called with:', time, 'type:', typeof time);
+    
+    try {
+      let date: Date;
+      
+      if (typeof time === 'string') {
+        // Handle different string formats
+        if (time.includes('T')) {
+          // ISO string format
+          date = new Date(time);
+        } else if (time.includes(':')) {
+          // Time format like "08:20" - convert to full date
+          date = new Date(`1970-01-01T${time}:00Z`);
+        } else {
+          // Try direct conversion
+          date = new Date(time);
+        }
+      } else {
+        // Already a Date object
+        date = time;
+      }
+      
+      console.log('🔍 date object:', date, 'isValid:', !isNaN(date.getTime()));
+      
+      if (isNaN(date.getTime())) {
+        console.error('❌ Invalid date:', time);
+        return 'Invalid';
+      }
+      
+      // Since we're storing times as UTC in the database, we need to convert to local time
+      // The times are stored as 1970-01-01T08:20:00Z (UTC) but we want to display 08:20 (local)
+      const hours = date.getUTCHours().toString().padStart(2, '0');
+      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+      
+      const result = `${hours}:${minutes}`;
+      console.log('🔍 formatted result:', result);
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Error in formatTime:', error, 'for input:', time);
+      return 'Error';
+    }
   };
 
-  const getSubjectName = (subjectId: number | null) => {
-    if (!subjectId) return 'No subject';
-    const subject = subjects.find(s => s.id === subjectId);
-    return subject ? subject.name : `Subject ${subjectId}`;
+  const convertDayOfWeek = (day: string) => {
+    // Convert database format (TUESDAY) to grid format (Tuesday)
+    const dayMap: { [key: string]: string } = {
+      'MONDAY': 'Monday',
+      'TUESDAY': 'Tuesday', 
+      'WEDNESDAY': 'Wednesday',
+      'THURSDAY': 'Thursday',
+      'FRIDAY': 'Friday'
+    };
+    return dayMap[day.toUpperCase()] || day;
+  };
+
+  const getSubjectNames = (subjectIds: number[] | null) => {
+    if (!subjectIds || subjectIds.length === 0) return 'No subjects';
+    return subjectIds.map(id => {
+      const subject = subjects.find(s => s.id === id);
+      return subject ? subject.name : `Subject ${id}`;
+    }).join(', ');
   };
 
   const getTeacherNames = (teacherIds: string[]) => {
@@ -442,71 +514,58 @@ const TimetableManagementPage: React.FC = () => {
   const generateTimetableGrid = (): TimetableGrid => {
     const grid: TimetableGrid = {};
     
-    console.log('Generating timetable grid with filteredTimetables:', filteredTimetables);
-    console.log('Using bell times:', bellTimes);
+    console.log('🔍 Generating timetable grid with filteredTimetables:', filteredTimetables.length);
+    console.log('📅 Sample timetable data:', filteredTimetables.slice(0, 2));
     
-    // Get all bell times (lessons and breaks) and sort by start time
-    const allBellTimes = bellTimes.length > 0 ? bellTimes : [
-      { startTime: '07:30', endTime: '07:55', eventName: 'Breakfast', isBreak: true },
-      { startTime: '08:00', endTime: '08:45', eventName: 'Lesson 1', isBreak: false },
-      { startTime: '08:50', endTime: '09:35', eventName: 'Lesson 2', isBreak: false },
-      { startTime: '09:40', endTime: '09:55', eventName: 'Snack Time', isBreak: true },
-      { startTime: '10:00', endTime: '10:45', eventName: 'Lesson 3', isBreak: false },
-      { startTime: '10:50', endTime: '11:35', eventName: 'Lesson 4', isBreak: false },
-      { startTime: '11:40', endTime: '12:00', eventName: 'Rest Time', isBreak: true },
-      { startTime: '12:05', endTime: '12:50', eventName: 'Lunch', isBreak: true },
-      { startTime: '12:55', endTime: '13:40', eventName: 'Lesson 5', isBreak: false },
-      { startTime: '13:45', endTime: '14:30', eventName: 'Lesson 6', isBreak: false }
-    ];
-
-    // Sort bell times by start time to ensure correct order
-    const sortedBellTimes = allBellTimes.sort((a, b) => {
-      return a.startTime.localeCompare(b.startTime);
-    });
-
-    // Add any custom timetable time slots that don't match bell times
-    const customTimeSlots = new Set<string>();
+    // Create time slots based on timetables AND meal times
+    const timeSlots = new Set<string>();
+    
+    // Collect all unique time slots from timetables
     filteredTimetables.forEach(timetable => {
-      const timeSlot = `${timetable.startTime}-${timetable.endTime}`;
-      const matchesBellTime = sortedBellTimes.some(bt => 
-        `${bt.startTime.substring(0, 5)}-${bt.endTime.substring(0, 5)}` === timeSlot
-      );
-      if (!matchesBellTime) {
-        customTimeSlots.add(timeSlot);
-      }
+      const startTime = formatTime(timetable.startTime);
+      const endTime = formatTime(timetable.endTime);
+      const timeSlot = `${startTime}-${endTime}`;
+      timeSlots.add(timeSlot);
     });
-
-    // Initialize grid with bell time slots
-    sortedBellTimes.forEach(bellTime => {
-      const timeSlot = `${bellTime.startTime.substring(0, 5)}-${bellTime.endTime.substring(0, 5)}`;
+    
+    
+    console.log('⏰ Found time slots from timetables and meals:', Array.from(timeSlots));
+    
+    // Sort time slots by start time
+    const sortedTimeSlots = Array.from(timeSlots).sort((a, b) => {
+      const [aStart] = a.split('-');
+      const [bStart] = b.split('-');
+      return aStart.localeCompare(bStart);
+    });
+    
+    console.log('📋 Sorted time slots:', sortedTimeSlots);
+    
+    // Initialize grid with time slots from actual timetables and meals
+    sortedTimeSlots.forEach(timeSlot => {
       grid[timeSlot] = {
-        bellTime: bellTime, // Store bell time info for break display
         ...Object.fromEntries(DAYS_OF_WEEK.map(day => [day, null]))
       };
     });
 
-    // Add custom time slots to grid
-    Array.from(customTimeSlots).sort().forEach(timeSlot => {
-      if (!grid[timeSlot]) {
-        grid[timeSlot] = {};
-        DAYS_OF_WEEK.forEach(day => {
-          grid[timeSlot][day] = null;
-        });
-      }
-    });
-
     // Fill grid with actual timetables
     filteredTimetables.forEach(timetable => {
-      const timeSlot = `${timetable.startTime}-${timetable.endTime}`;
-      console.log(`Placing timetable in grid: ${timetable.dayOfWeek} at ${timeSlot}`);
+      const startTime = formatTime(timetable.startTime);
+      const endTime = formatTime(timetable.endTime);
+      const timeSlot = `${startTime}-${endTime}`;
+      const dayOfWeek = convertDayOfWeek(timetable.dayOfWeek);
+      
+      console.log(`Placing timetable in grid: ${timetable.dayOfWeek} -> ${dayOfWeek} at ${timeSlot}`);
+      
       if (grid[timeSlot]) {
-        grid[timeSlot][timetable.dayOfWeek] = timetable;
+        grid[timeSlot][dayOfWeek] = timetable;
+        console.log(`✅ Successfully placed timetable in grid slot: ${timeSlot} for ${dayOfWeek}`);
       } else {
-        console.warn(`Time slot ${timeSlot} not found in grid for timetable:`, timetable);
+        console.error(`❌ Time slot ${timeSlot} not found in grid for timetable:`, timetable);
       }
     });
 
-    console.log('Final grid with bell times:', grid);
+
+    console.log('Final grid with timetables and meals:', grid);
     return grid;
   };
 
@@ -514,6 +573,7 @@ const TimetableManagementPage: React.FC = () => {
     const selectedClassData = classes.find(c => c.id === selectedClass);
     return selectedClassData ? selectedClassData.name : 'All Classes';
   };
+
 
   const timetableGrid = generateTimetableGrid();
 
@@ -533,13 +593,6 @@ const TimetableManagementPage: React.FC = () => {
           >
             <Plus className="w-4 h-4" />
             Create Timetable
-          </button>
-          <button 
-            onClick={() => window.location.href = '/admin/timetables/bell-times'}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
-          >
-            <Clock className="w-4 h-4" />
-            Bell Times
           </button>
         </div>
       </div>
@@ -576,6 +629,7 @@ const TimetableManagementPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -704,7 +758,13 @@ const TimetableManagementPage: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ) : Object.entries(timetableGrid).map(([timeSlot, daySlots], index) => (
+                ) : Object.entries(timetableGrid)
+                  .sort(([a], [b]) => {
+                    const [aStart] = a.split('-');
+                    const [bStart] = b.split('-');
+                    return aStart.localeCompare(bStart);
+                  })
+                  .map(([timeSlot, daySlots], index) => (
                   <tr key={timeSlot} className="hover:bg-gray-25 transition-colors">
                     <td className="px-2 py-2 text-xs font-medium text-gray-700 border-r border-gray-100 text-center">
                       {index + 1}
@@ -715,75 +775,60 @@ const TimetableManagementPage: React.FC = () => {
                     </td>
                     {DAYS_OF_WEEK.map(day => {
                       const timetable = daySlots[day];
-                      const bellTime = (daySlots as any).bellTime;
                       
                       return (
                         <td key={day} className="px-1 py-2 border-r border-gray-100 min-h-[60px]">
                           {timetable ? (
-                            <div className="p-2 rounded-md bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 min-h-[55px] shadow-sm hover:shadow-md transition-shadow">
+                            <div className="p-2 rounded-md min-h-[55px] shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
                               <div className="font-semibold text-gray-900 mb-1 text-center text-xs leading-tight">
-                                {getSubjectName(timetable.subjectId)}
+                                {getSubjectNames(timetable.subjectId ? [timetable.subjectId] : null)}
                               </div>
-                              <div className="text-[10px] text-gray-600 mb-1 text-center">
-                                {getTeacherNames(timetable.teacherIds)}
-                              </div>
-                              {(timetable.roomNumber || timetable.buildingName) && (
-                                <div className="text-[10px] text-gray-500 mb-1 text-center">
-                                  {timetable.roomNumber && `R: ${timetable.roomNumber}`}
-                                  {timetable.buildingName && ` (${timetable.buildingName})`}
-                                </div>
-                              )}
-                              {timetable.isElective && (
-                                <div className="text-[9px] bg-purple-100 text-purple-700 px-1 py-0.5 rounded text-center mb-1">
-                                  Elective
-                                </div>
-                              )}
-                              <div className="flex items-center justify-center gap-1 mt-1">
-                                <button
-                                  onClick={() => handleEdit(timetable)}
-                                  className="p-0.5 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded transition-colors"
-                                  title="Edit"
-                                >
-                                  <Edit className="w-2.5 h-2.5" />
-                                </button>
-                                {timetable.isActive ? (
-                                  <button
-                                    onClick={() => handleArchive(timetable.id)}
-                                    className="p-0.5 text-orange-600 hover:text-orange-800 hover:bg-orange-100 rounded transition-colors"
-                                    title="Archive"
-                                  >
-                                    <Archive className="w-2.5 h-2.5" />
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleRestore(timetable.id)}
-                                    className="p-0.5 text-green-600 hover:text-green-800 hover:bg-green-100 rounded transition-colors"
-                                    title="Restore"
-                                  >
-                                    <RotateCcw className="w-2.5 h-2.5" />
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => handleDelete(timetable.id)}
-                                  className="p-0.5 text-red-600 hover:text-red-800 hover:bg-red-100 rounded transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="w-2.5 h-2.5" />
-                                </button>
-                              </div>
-                            </div>
-                          ) : bellTime && bellTime.isBreak ? (
-                            <div className="h-[55px] flex items-center justify-center bg-gradient-to-br from-orange-50 to-yellow-50 border border-orange-200 rounded-md shadow-sm">
-                              <div className="text-center">
-                                <div className="font-semibold text-orange-800 text-xs mb-1">
-                                  {bellTime.eventName}
-                                </div>
-                                {bellTime.notes && (
-                                  <div className="text-[9px] text-orange-600">
-                                    {bellTime.notes}
+                              {(
+                                <>
+                                  <div className="text-[10px] text-gray-600 mb-1 text-center">
+                                    {getTeacherNames(timetable.teacherIds)}
                                   </div>
-                                )}
-                              </div>
+                                  {(timetable.roomNumber || timetable.buildingName) && (
+                                    <div className="text-[10px] text-gray-500 mb-1 text-center">
+                                      {timetable.roomNumber && `R: ${timetable.roomNumber}`}
+                                      {timetable.buildingName && ` (${timetable.buildingName})`}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center justify-center gap-1 mt-1">
+                                    <button
+                                      onClick={() => handleEdit(timetable)}
+                                      className="p-0.5 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded transition-colors"
+                                      title="Edit"
+                                    >
+                                      <Edit className="w-2.5 h-2.5" />
+                                    </button>
+                                    {timetable.isActive ? (
+                                      <button
+                                        onClick={() => handleArchive(timetable.id)}
+                                        className="p-0.5 text-orange-600 hover:text-orange-800 hover:bg-orange-100 rounded transition-colors"
+                                        title="Archive"
+                                      >
+                                        <Archive className="w-2.5 h-2.5" />
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleRestore(timetable.id)}
+                                        className="p-0.5 text-green-600 hover:text-green-800 hover:bg-green-100 rounded transition-colors"
+                                        title="Restore"
+                                      >
+                                        <RotateCcw className="w-2.5 h-2.5" />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleDelete(timetable.id)}
+                                      className="p-0.5 text-red-600 hover:text-red-800 hover:bg-red-100 rounded transition-colors"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="w-2.5 h-2.5" />
+                                    </button>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           ) : (
                             <div className="h-[55px] flex items-center justify-center bg-gray-25 rounded-md border border-gray-150 hover:bg-gray-50 transition-colors">

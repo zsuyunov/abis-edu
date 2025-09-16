@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,8 @@ import {
   Calendar,
   Clock,
   Plus,
-  Trash2
+  Trash2,
+  RefreshCw
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,8 +36,8 @@ interface RecurrenceFormData {
   branchId: string;
   classId: string;
   academicYearId: string;
-  subjectId: string;
-  teacherId: string;
+  subjectIds: string[];
+  teacherIds: string[];
   startDate: string;
   endDate: string;
   roomNumber: string;
@@ -64,8 +65,8 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
     branchId: "",
     classId: "",
     academicYearId: "",
-    subjectId: "",
-    teacherId: "",
+    subjectIds: [],
+    teacherIds: [],
     startDate: "",
     endDate: "",
     roomNumber: "",
@@ -80,6 +81,8 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
   });
 
   const [loading, setLoading] = useState(false);
+  const [filteredTeachers, setFilteredTeachers] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Reset form when component mounts
   React.useEffect(() => {
@@ -87,8 +90,8 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
       branchId: "",
       classId: "",
       academicYearId: "",
-      subjectId: "",
-      teacherId: "",
+      subjectIds: [],
+      teacherIds: [],
       startDate: "",
       endDate: "",
       roomNumber: "",
@@ -103,13 +106,18 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
     });
   }, []);
 
+  // Initialize filtered teachers when relatedData changes
+  useEffect(() => {
+    setFilteredTeachers(relatedData?.teachers || []);
+  }, [relatedData?.teachers]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const enabledSchedules = formData.weekdaySchedules.filter(schedule => schedule.enabled);
     
     if (!formData.branchId || !formData.classId || !formData.academicYearId || 
-        !formData.subjectId || !formData.teacherId || !formData.startDate || 
+        formData.subjectIds.length === 0 || formData.teacherIds.length === 0 || !formData.startDate || 
         !formData.endDate || !formData.roomNumber || enabledSchedules.length === 0) {
       toast.error("Please fill in all required fields and enable at least one day");
       return;
@@ -134,8 +142,8 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
           branchId: parseInt(formData.branchId),
           classId: parseInt(formData.classId),
           academicYearId: parseInt(formData.academicYearId),
-          subjectId: parseInt(formData.subjectId),
-          teacherId: formData.teacherId,
+          subjectIds: formData.subjectIds.map(id => parseInt(id)),
+          teacherIds: formData.teacherIds,
           startDate: formData.startDate,
           endDate: formData.endDate,
           roomNumber: formData.roomNumber,
@@ -163,6 +171,69 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
 
   const handleInputChange = (field: keyof RecurrenceFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const fetchTeachersForSubjects = async (subjectIds: string[], classId: string, academicYearId: string) => {
+    if (subjectIds.length === 0) {
+      setFilteredTeachers(relatedData?.teachers || []);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/teachers/by-subjects?subjectIds=${subjectIds.join(',')}&classId=${classId}&academicYearId=${academicYearId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFilteredTeachers(data);
+      } else {
+        setFilteredTeachers(relatedData?.teachers || []); // Fallback to all teachers
+      }
+    } catch (error) {
+      console.error('Error fetching teachers for subjects:', error);
+      setFilteredTeachers(relatedData?.teachers || []); // Fallback to all teachers
+    }
+  };
+
+  const handleSubjectChange = (subjectId: string, checked: boolean) => {
+    const newSubjectIds = checked 
+      ? [...formData.subjectIds, subjectId]
+      : formData.subjectIds.filter(id => id !== subjectId);
+    
+    setFormData(prev => ({
+      ...prev,
+      subjectIds: newSubjectIds,
+      teacherIds: [] // Reset teachers when subjects change
+    }));
+
+    // Filter teachers based on selected subjects
+    if (formData.branchId && formData.classId && formData.academicYearId) {
+      fetchTeachersForSubjects(newSubjectIds, formData.classId, formData.academicYearId);
+    }
+  };
+
+  const handleTeacherChange = (teacherId: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      teacherIds: checked 
+        ? [...prev.teacherIds, teacherId]
+        : prev.teacherIds.filter(id => id !== teacherId)
+    }));
+  };
+
+  const refreshData = async () => {
+    setRefreshing(true);
+    try {
+      // Refresh subjects and teachers from relatedData
+      // This would typically involve calling parent component's refresh function
+      // For now, we'll just re-filter teachers based on current subjects
+      if (formData.subjectIds.length > 0 && formData.branchId && formData.classId && formData.academicYearId) {
+        await fetchTeachersForSubjects(formData.subjectIds, formData.classId, formData.academicYearId);
+      }
+      setFilteredTeachers(relatedData?.teachers || []);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const toggleDay = (dayValue: string) => {
@@ -197,9 +268,24 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
             <Repeat className="h-5 w-5 text-blue-600" />
             <h2 className="text-xl font-semibold">Create Recurring Timetables</h2>
           </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={refreshData}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
+          </div>
         </div>
 
         {/* Form */}
@@ -262,36 +348,56 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="subjectId">Subject *</Label>
-                  <select
-                    value={formData.subjectId}
-                    onChange={(e) => handleInputChange("subjectId", e.target.value)}
-                    className="w-full h-9 px-3 border border-gray-300 rounded-md text-sm"
-                  >
-                    <option value="">Select subject</option>
+                  <Label>Subjects * (Select one or more)</Label>
+                  <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2 space-y-1">
                     {relatedData?.subjects?.map((subject: any) => (
-                      <option key={subject.id} value={subject.id.toString()}>
-                        {subject.name}
-                      </option>
+                      <label key={subject.id} className="flex items-center space-x-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={formData.subjectIds.includes(subject.id.toString())}
+                          onChange={(e) => handleSubjectChange(subject.id.toString(), e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        <span>{subject.name}</span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
+                  {formData.subjectIds.length > 0 && (
+                    <div className="text-xs text-gray-600">
+                      Selected: {formData.subjectIds.length} subject(s)
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="teacherId">Teacher *</Label>
-                <select
-                  value={formData.teacherId}
-                  onChange={(e) => handleInputChange("teacherId", e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 rounded-md text-sm"
-                >
-                  <option value="">Select teacher</option>
-                  {relatedData?.teachers?.map((teacher: any) => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.firstName} {teacher.lastName}
-                    </option>
-                  ))}
-                </select>
+                <Label>Teachers * (Select one or more)</Label>
+                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2 space-y-1">
+                  {filteredTeachers.length > 0 ? (
+                    filteredTeachers.map((teacher: any) => (
+                      <label key={teacher.id} className="flex items-center space-x-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={formData.teacherIds.includes(teacher.id)}
+                          onChange={(e) => handleTeacherChange(teacher.id, e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        <span>{teacher.firstName} {teacher.lastName}</span>
+                      </label>
+                    ))
+                  ) : (
+                    <div className="text-sm text-gray-500 italic">
+                      {formData.subjectIds.length === 0 
+                        ? "Please select subjects first" 
+                        : "No teachers assigned to selected subjects"}
+                    </div>
+                  )}
+                </div>
+                {formData.teacherIds.length > 0 && (
+                  <div className="text-xs text-gray-600">
+                    Selected: {formData.teacherIds.length} teacher(s)
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

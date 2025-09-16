@@ -115,55 +115,71 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     async () => {
       if (!selectedBranchId) return [];
       
-      const response = await fetch(
-        `/api/teacher-timetables?teacherId=${teacherId}&startDate=${formattedDate}&endDate=${formattedDate}&branchId=${selectedBranchId}&mode=${selectedRole.toLowerCase()}`,
-        { 
-          headers: { 'x-user-id': teacherId },
-          cache: 'force-cache' // Aggressive browser caching
-        }
-      );
-      
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
-      
-      const data = await response.json();
-      
-      // Process and transform data
-      const filteredTimetables = (data.timetables || []).filter((timetable: any) => {
-        const timetableDate = typeof timetable.fullDate === 'string' 
-          ? timetable.fullDate.split('T')[0] 
-          : new Date(timetable.fullDate).toISOString().split('T')[0];
-        return timetableDate === formattedDate;
-      });
+      try {
+        // Calculate weekly date range for recurring timetables
+        const today = new Date(formattedDate);
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+        
+        const startDate = startOfWeek.toISOString().split('T')[0];
+        const endDate = endOfWeek.toISOString().split('T')[0];
+        
+        const response = await fetch(
+          `/api/teacher-timetables?teacherId=${teacherId}&startDate=${startDate}&endDate=${endDate}&branchId=${selectedBranchId}&mode=${selectedRole.toLowerCase()}`,
+          { 
+            headers: { 'x-user-id': teacherId },
+            cache: 'force-cache' // Aggressive browser caching
+          }
+        );
+        
+        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+        
+        const data = await response.json();
+        
+        // Ensure data.timetables is an array
+        const rawTimetables = Array.isArray(data.timetables) ? data.timetables : [];
+        
+        // Process and transform data - filter by day of week for recurring timetables
+        const selectedDay = new Date(formattedDate).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+        const filteredTimetables = rawTimetables.filter((timetable: any) => {
+          if (!timetable || typeof timetable !== 'object') return false;
+          // For recurring timetables, match by dayOfWeek instead of fullDate
+          return timetable.dayOfWeek === selectedDay;
+        });
 
-      const uniqueTimetables = filteredTimetables.filter((timetable: any, index: number, array: any[]) => {
-        const uniqueKey = `${timetable.classId}-${timetable.subjectId}-${timetable.startTime}-${timetable.endTime}`;
-        return array.findIndex((t: any) => 
-          `${t.classId}-${t.subjectId}-${t.startTime}-${t.endTime}` === uniqueKey
-        ) === index;
-      });
-      
-      return uniqueTimetables.map((timetable: any) => ({
-        id: timetable.id,
-        fullDate: typeof timetable.fullDate === 'string' 
-          ? timetable.fullDate.split('T')[0] 
-          : new Date(timetable.fullDate).toISOString().split('T')[0],
-        startTime: timetable.startTime ? new Date(timetable.startTime).toLocaleTimeString('en-US', { 
-          hour12: false, hour: '2-digit', minute: '2-digit' 
-        }) : "00:00",
-        endTime: timetable.endTime ? new Date(timetable.endTime).toLocaleTimeString('en-US', { 
-          hour12: false, hour: '2-digit', minute: '2-digit' 
-        }) : "00:00",
-        lessonNumber: timetable.lessonNumber || 1,
-        classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
-        class: {
-          ...timetable.class,
-          academicYear: timetable.class.academicYear || timetable.academicYear || { id: 1, name: "Default" }
-        },
-        subject: timetable.subject,
-        branch: timetable.branch,
-        topics: timetable.topics || [],
-        homework: timetable.homework || []
-      }));
+        const uniqueTimetables = filteredTimetables.filter((timetable: any, index: number, array: any[]) => {
+          const uniqueKey = `${timetable.classId}-${timetable.subjectId}-${timetable.startTime}-${timetable.endTime}`;
+          return array.findIndex((t: any) => 
+            `${t.classId}-${t.subjectId}-${t.startTime}-${t.endTime}` === uniqueKey
+          ) === index;
+        });
+        
+        return uniqueTimetables.map((timetable: any) => ({
+          id: timetable.id,
+          fullDate: formattedDate,
+          startTime: timetable.startTime ? new Date(timetable.startTime).toLocaleTimeString('en-US', { 
+            hour12: false, hour: '2-digit', minute: '2-digit' 
+          }) : "00:00",
+          endTime: timetable.endTime ? new Date(timetable.endTime).toLocaleTimeString('en-US', { 
+            hour12: false, hour: '2-digit', minute: '2-digit' 
+          }) : "00:00",
+          lessonNumber: timetable.lessonNumber || 1,
+          classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
+          class: {
+            ...timetable.class,
+            academicYear: timetable.class.academicYear || timetable.academicYear || { id: 1, name: "Default" }
+          },
+          subject: timetable.subject,
+          branch: timetable.branch,
+          topics: timetable.topics || [],
+          homework: timetable.homework || []
+        }));
+      } catch (error) {
+        console.error('Error fetching timetables:', error);
+        return []; // Return empty array on error
+      }
     },
     {
       enabled: !!selectedBranchId,
@@ -194,8 +210,18 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           prefetchQuery(
             ['teacher-timetables', teacherId, date, selectedBranchId, selectedRole],
             async () => {
+              // Calculate weekly date range for recurring timetables
+              const today = new Date(date);
+              const startOfWeek = new Date(today);
+              startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+              const endOfWeek = new Date(startOfWeek);
+              endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+              
+              const startDate = startOfWeek.toISOString().split('T')[0];
+              const endDate = endOfWeek.toISOString().split('T')[0];
+              
               const response = await fetch(
-                `/api/teacher-timetables?teacherId=${teacherId}&startDate=${date}&endDate=${date}&branchId=${selectedBranchId}&mode=${selectedRole.toLowerCase()}`,
+                `/api/teacher-timetables?teacherId=${teacherId}&startDate=${startDate}&endDate=${endDate}&branchId=${selectedBranchId}&mode=${selectedRole.toLowerCase()}`,
                 { headers: { 'x-user-id': teacherId } }
               );
               if (!response.ok) throw new Error(`Failed to prefetch: ${response.status}`);
@@ -698,7 +724,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
             isLoading={true} 
             message="Loading your schedule..."
           />
-        ) : timetables.length === 0 ? (
+        ) : !Array.isArray(timetables) || timetables.length === 0 ? (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -710,7 +736,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           </motion.div>
         ) : (
           <motion.div className="space-y-3">
-            {timetables.map((timetable: any, index: number) => {
+            {(Array.isArray(timetables) ? timetables : []).map((timetable: any, index: number) => {
               const lessonStatus = getLessonStatus(timetable);
               
               let cardStyles = "";

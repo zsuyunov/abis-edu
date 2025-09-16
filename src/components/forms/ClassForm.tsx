@@ -23,7 +23,6 @@ const ClassForm = ({
 }) => {
   const {
     register,
-    handleSubmit,
     formState: { errors },
     watch,
   } = useForm<ClassSchema>({
@@ -48,6 +47,7 @@ const ClassForm = ({
     {
       success: false,
       error: false,
+      message: "",
     }
   );
 
@@ -70,12 +70,12 @@ const ClassForm = ({
         
         if (branchesRes.ok) {
           const branchData = await branchesRes.json();
-          setBranches(branchData.branches || []);
+          setBranches(Array.isArray(branchData) ? branchData : (branchData.branches || []));
         }
-        
+
         if (academicYearsRes.ok) {
           const yearData = await academicYearsRes.json();
-          setAcademicYears(yearData.academicYears || []);
+          setAcademicYears(Array.isArray(yearData) ? yearData : (yearData.academicYears || []));
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
@@ -88,10 +88,14 @@ const ClassForm = ({
   // Supervisor selection moved to Teacher Assignments workflow
 
   useEffect(() => {
+    console.log("Class form state:", state);
     if (state.success) {
       toast(`Class has been ${type === "create" ? "created" : "updated"}!`);
       setOpen(false);
       router.refresh();
+    }
+    if (state.error) {
+      console.log("Class form error:", state.message);
     }
   }, [state, router, type, setOpen]);
 
@@ -114,13 +118,8 @@ const ClassForm = ({
     { value: "HIGH", label: "High School" },
   ];
 
-  const onSubmit = handleSubmit((data) => {
-    console.log(data);
-    formAction(data);
-  });
-
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-8">
+    <form action={formAction} className="flex flex-col gap-8">
       <h1 className="text-xl font-semibold">
         {type === "create" ? "Create a new class" : "Update the class"}
       </h1>
@@ -277,7 +276,9 @@ const ClassForm = ({
       )}
 
       {state.error && (
-        <span className="text-red-500">Something went wrong!</span>
+        <span className="text-red-500">
+          {state.message || "Something went wrong!"}
+        </span>
       )}
 
       <div className="flex justify-end gap-4">

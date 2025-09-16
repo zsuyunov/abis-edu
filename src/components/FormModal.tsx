@@ -174,7 +174,7 @@ const GradeForm = dynamic(() => import("./forms/GradeForm"), {
 const forms: {
   [key: string]: (
     setOpen: Dispatch<SetStateAction<boolean>>,
-    type: "create" | "update" | "delete" | "archive" | "restore" | "assign" | "resetPassword" | "sendMessage",
+    type: "create" | "update" | "delete" | "archive" | "restore" | "assign" | "unassign" | "resetPassword" | "sendMessage",
     data?: any,
     relatedData?: any,
     currentUserId?: string
@@ -289,14 +289,13 @@ const forms: {
         />
       );
     }
-    if (type === "delete") {
+    if (type === "delete" || type === "unassign") {
       return (
-        <ArchiveCommentForm
-          userId={data.id}
-          userName={`Teacher Assignment ${data.id}`}
-          action="DELETE"
-          currentUserId={currentUserId || ""}
+        <TeacherAssignmentForm
+          type="delete"
+          data={data}
           setOpen={setOpen}
+          relatedData={relatedData}
         />
       );
     }
@@ -332,7 +331,7 @@ const forms: {
         />
       );
     }
-    if (type === "delete") {
+    if (type === "delete" || type === "unassign") {
       return (
         <ArchiveCommentForm
           userId={data.id}
@@ -596,7 +595,7 @@ const forms: {
         />
       );
     }
-    if (type === "delete") {
+    if (type === "delete" || type === "unassign") {
       return (
         <ArchiveCommentForm
           userId={data.id}
@@ -1019,7 +1018,33 @@ const FormModal = ({
       const handleSubmit = async (formData: FormData) => {
         console.log("🚀 Unassign form submitted:", formData);
         console.log("🚀 Action being used:", unassignAction);
-        unassignFormAction();
+
+        // For teacher assignments, use the API route instead of server action
+        if (table === 'teacherAssignment') {
+          try {
+            const response = await fetch('/api/teacher-assignments', {
+              method: 'DELETE',
+              body: formData,
+            });
+
+            const result = await response.json();
+            console.log("🗑️ Teacher assignment delete result:", result);
+
+            if (result.success) {
+              toast.success(result.message || "Teacher assignment removed successfully!");
+              setOpen(false);
+              router.refresh();
+            } else {
+              toast.error(result.message || "Failed to remove assignment");
+            }
+          } catch (error) {
+            console.error("Delete error:", error);
+            toast.error("Failed to remove assignment");
+          }
+        } else {
+          // Use server action for other unassign types
+          unassignFormAction();
+        }
       };
 
       return (
@@ -1036,6 +1061,7 @@ const FormModal = ({
               <input type="hidden" name="classId" value={data?.class?.id || data?.classId || ""} />
               <input type="hidden" name="subjectId" value={data?.subject?.id || data?.subjectId || ""} />
               <input type="hidden" name="branchId" value={data?.branch?.id || data?.branchId || data?.class?.branch?.id || ""} />
+              <input type="hidden" name="academicYearId" value={data?.academicYear?.id || data?.academicYearId || ""} />
             </>
           ) : isParent ? (
             <>

@@ -10,7 +10,7 @@ import TableSearch from "@/components/TableSearch";
 import AssignmentStatusFilter from "@/components/AssignmentStatusFilter";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface StudentListClientProps {
   initialData: any[];
@@ -31,7 +31,32 @@ export default function StudentListClient({
 }: StudentListClientProps) {
   const [data, setData] = useState(initialData);
   const [count, setCount] = useState(totalCount);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Function to fetch students data
+  const fetchStudents = async () => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams(searchParams);
+      const response = await fetch(`/api/students?${params}`);
+      if (response.ok) {
+        const result = await response.json();
+        setData(result.students || []);
+        setCount(result.totalCount || 0);
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Refetch data when search parameters change
+  useEffect(() => {
+    fetchStudents();
+  }, [searchParams]);
 
   const columns = [
     {
@@ -87,7 +112,7 @@ export default function StudentListClient({
         <div className="flex flex-col">
           <h3 className="font-semibold">{item.firstName} {item.lastName}</h3>
           <p className="text-xs text-gray-500">{item.phone}</p>
-          <p className="text-xs text-gray-500">Born: {item.dateOfBirth ? item.dateOfBirth.toLocaleDateString() : 'Not provided'}</p>
+          <p className="text-xs text-gray-500">Born: {item.dateOfBirth ? new Date(item.dateOfBirth).toLocaleDateString() : 'Not provided'}</p>
         </div>
       </td>
       <td className="hidden md:table-cell">
@@ -136,59 +161,56 @@ export default function StudentListClient({
               <Image src="/view.png" alt="" width={16} height={16} />
             </button>
           </Link>
-          {role === "admin" && (
-            <>
-              <FormContainer
-                table="parentAssign"
-                type="assign"
-                data={{ 
-                  studentId: item.id, 
-                  studentName: `${item.firstName} ${item.lastName}`,
-                  firstName: item.firstName,
-                  lastName: item.lastName
-                }}
-                currentUserId={currentUserId}
-              />
-              <FormContainer
-                table="student"
-                type="update"
-                data={item}
-                currentUserId={currentUserId}
-              />
-              <SmallResetPasswordModal
-                studentId={item.id}
-                studentName={`${item.firstName} ${item.lastName}`}
-                currentUserId={currentUserId}
-              />
-              <SmallSendMessageModal
-                studentId={item.id}
-                studentName={`${item.firstName} ${item.lastName}`}
-                currentUserId={currentUserId}
-              />
-              <FormContainer table="studentAssignment" type="create" data={item} />
-              {item.status === "ACTIVE" ? (
-                <FormContainer
-                  table="student"
-                  type="archive"
-                  data={item}
-                  currentUserId={currentUserId}
-                />
-              ) : (
-                <FormContainer
-                  table="student"
-                  type="restore"
-                  data={item}
-                  currentUserId={currentUserId}
-                />
-              )}
-              <FormContainer
-                table="student"
-                type="delete"
-                data={item}
-                currentUserId={currentUserId}
-              />
-            </>
+          {/* Debug: Always show buttons for testing */}
+          <FormContainer
+            table="parentAssign"
+            type="assign"
+            data={{ 
+              studentId: item.id, 
+              studentName: `${item.firstName} ${item.lastName}`,
+              firstName: item.firstName,
+              lastName: item.lastName
+            }}
+            currentUserId={currentUserId}
+          />
+          <FormContainer
+            table="student"
+            type="update"
+            data={item}
+            currentUserId={currentUserId}
+          />
+          <SmallResetPasswordModal
+            studentId={item.id}
+            studentName={`${item.firstName} ${item.lastName}`}
+            currentUserId={currentUserId}
+          />
+          <SmallSendMessageModal
+            studentId={item.id}
+            studentName={`${item.firstName} ${item.lastName}`}
+            currentUserId={currentUserId}
+          />
+          <FormContainer table="studentAssignment" type="create" data={item} />
+          {item.status === "ACTIVE" ? (
+            <FormContainer
+              table="student"
+              type="archive"
+              data={item}
+              currentUserId={currentUserId}
+            />
+          ) : (
+            <FormContainer
+              table="student"
+              type="restore"
+              data={item}
+              currentUserId={currentUserId}
+            />
           )}
+          <FormContainer
+            table="student"
+            type="delete"
+            data={item}
+            currentUserId={currentUserId}
+          />
         </div>
       </td>
     </tr>
@@ -201,7 +223,10 @@ export default function StudentListClient({
       <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
         {/* TOP */}
         <div className="flex items-center justify-between">
-          <h1 className="hidden md:block text-lg font-semibold">All Students</h1>
+          <div>
+            <h1 className="hidden md:block text-lg font-semibold">All Students</h1>
+            <p className="text-xs text-gray-500">Role: {role || "No role"} | User ID: {currentUserId || "No ID"}</p>
+          </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             <TableSearch />
             <AssignmentStatusFilter />
@@ -212,14 +237,18 @@ export default function StudentListClient({
               <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
                 <Image src="/sort.png" alt="" width={14} height={14} />
               </button>
-              {role === "admin" && (
-                <FormContainer table="student" type="create" />
-              )}
+              <FormContainer table="student" type="create" />
             </div>
           </div>
         </div>
         {/* LIST */}
-        <Table columns={columns} renderRow={renderRow} data={data} />
+        {isLoading ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lamaSky"></div>
+          </div>
+        ) : (
+          <Table columns={columns} renderRow={renderRow} data={data} />
+        )}
         {/* PAGINATION */}
         <Pagination page={currentPage} count={count} />
       </div>

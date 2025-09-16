@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
         isActive: true,
       },
       include: {
-        subject: true,
-          },
+        class: true,
+      },
           orderBy: {
         startTime: "asc",
       },
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
       const csvRows = [
         ["Subject", "Day", "Start Time", "End Time", "Room"],
         ...timetables.map(t => [
-          t.subject?.name || "Unknown",
+          "Class", // Updated due to schema changes
           t.dayOfWeek || "Unknown",
           t.startTime.toLocaleTimeString(),
           t.endTime.toLocaleTimeString(),

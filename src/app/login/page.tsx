@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
+import { Eye, EyeOff, Phone, Lock, GraduationCap } from "lucide-react";
+import Image from "next/image";
 
 const LoginPage = () => {
   const [phone, setPhone] = useState("");
@@ -9,10 +11,18 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const router = useRouter();
 
   // Clear any existing auth tokens on page load
   React.useEffect(() => {
+    // Check for error parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('error');
+    if (errorParam === 'unsupported_role') {
+      setError('Your user role is not supported. Please contact administrator.');
+    }
+    
     // Clear all authentication-related cookies
     const cookiesToClear = [
       "auth_token",
@@ -58,7 +68,7 @@ const LoginPage = () => {
           support_hr: "/support-hr",
           main_admission: "/main-admission",
           support_admission: "/support-admission"
-        };
+        }
         const target = roleRouteMap[role] || `/${role}`;
         router.push(target);
       } else {
@@ -70,78 +80,136 @@ const LoginPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-lamaSkyLight">
-      <div className="bg-white p-12 rounded-md shadow-2xl flex flex-col gap-2">
-        <h2 className="text-gray-400">Sign in to your account</h2>
-        
-        {error && (
-          <div className="text-sm text-red-400 bg-red-50 p-2 rounded">
-            {error}
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-gray-500">Phone Number</label>
-            <input
-              type="tel"
-              required
-              placeholder="+998901234567"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="p-2 rounded-md ring-1 ring-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
-              disabled={isLoading}
-            />
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-orange-50 flex items-center justify-center p-4">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+      
+      <div className="relative w-full max-w-md">
+        {/* Login Card */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8 space-y-8">
           
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-gray-500">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="p-2 pr-10 rounded-md ring-1 ring-gray-300 focus:ring-2 focus:ring-blue-500 outline-none w-full"
-                disabled={isLoading}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-              >
-                {showPassword ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/>
-                    <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" strokeWidth="2"/>
-                  </svg>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" fill="currentColor"/>
-                  </svg>
-                )}
-              </button>
+          {/* Header Section */}
+          <div className="text-center space-y-4">
+            {/* Beruniy Logo */}
+            <div className="mx-auto w-40 h-40 flex items-center justify-center my-8">
+              {!imageError ? (
+                <Image 
+                  src="/beruniy-logo-remove-bg.png" 
+                  alt="Beruniy Logo" 
+                  width={160} 
+                  height={160}
+                  className="object-contain"
+                  priority
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                <div className="w-40 h-40 bg-gradient-to-br from-purple-500 to-red-500 rounded-full flex items-center justify-center">
+                  <GraduationCap className="w-20 h-20 text-white" />
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center space-x-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <span>{error}</span>
+            </div>
+          )}
           
-          <button
-            type="submit"
-            disabled={isLoading}
-            className={`text-white my-1 rounded-md text-sm p-[10px] ${
-              isLoading 
-                ? "bg-gray-400 cursor-not-allowed" 
-                : "bg-blue-500 hover:bg-blue-600"
-            }`}
-          >
-            {isLoading ? "Signing In..." : "Sign In"}
-          </button>
-        </form>
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Phone Number Field */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center space-x-2">
+                <Phone className="w-4 h-4 text-purple-500" />
+                <span>Phone Number</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  required
+                  placeholder="+998901234567"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-4 py-3 pl-12 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all duration-200 disabled:opacity-50"
+                  disabled={isLoading}
+                />
+                <Phone className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>
+            </div>
+            
+            {/* Password Field */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center space-x-2">
+                <Lock className="w-4 h-4 text-purple-500" />
+                <span>Password</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 pl-12 pr-12 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all duration-200 disabled:opacity-50"
+                  disabled={isLoading}
+                />
+                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+            
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`w-full py-3 px-4 rounded-xl font-medium text-white transition-all duration-200 transform ${
+                isLoading 
+                  ? "bg-gray-400 cursor-not-allowed" 
+                  : "bg-gradient-to-r from-purple-500 to-red-500 hover:from-purple-600 hover:to-red-600 hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
+              }`}
+            >
+              {isLoading ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Signing In...</span>
+                </div>
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
+          
+          {/* Footer */}
+          <div className="text-center pt-4 border-t border-gray-100">
+            <p className="text-xs text-gray-500 flex items-center justify-center space-x-1">
+              <GraduationCap className="w-3 h-3" />
+              <span>Secure School Management System</span>
+            </p>
+          </div>
+        </div>
+        
+        {/* Decorative Elements */}
+        <div className="absolute -top-4 -right-4 w-24 h-24 bg-gradient-to-br from-purple-400 to-orange-400 rounded-full opacity-20 blur-xl"></div>
+        <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-gradient-to-br from-orange-400 to-purple-400 rounded-full opacity-10 blur-2xl"></div>
       </div>
     </div>
   );
-};
+}
 
 export default LoginPage;

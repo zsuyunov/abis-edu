@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,10 +32,9 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Filter timetables where teacherId is in the teacherIds array
+    // Filter timetables where teacherId matches
     const todayTimetables = allTodayTimetables.filter(timetable => {
-      const teacherIds = Array.isArray(timetable.teacherIds) ? timetable.teacherIds : [];
-      return teacherIds.includes(teacherId);
+      return timetable.teacherIds && timetable.teacherIds.includes(teacherId);
     });
 
     // Transform the data

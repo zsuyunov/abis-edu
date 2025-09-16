@@ -1,6 +1,6 @@
-import prisma from "@/lib/prisma";
 import BigCalendar from "./BigCalender";
 import { adjustScheduleToCurrentWeek } from "@/lib/utils";
+import prisma from "@/lib/prisma";
 
 const BigCalendarContainer = async ({
   type,
@@ -11,7 +11,7 @@ const BigCalendarContainer = async ({
 }) => {
   const whereClause =
     type === "teacherId"
-      ? { teacherId: String(id) }
+      ? { teacherIds: { has: String(id) } }
       : { classId: typeof id === "number" ? id : parseInt(String(id), 10) };
 
   const dataRes = await prisma.timetable.findMany({

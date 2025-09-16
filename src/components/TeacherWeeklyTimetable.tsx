@@ -33,6 +33,7 @@ interface TimetableEntry {
   id: number;
   fullDate: string;
   day: string;
+  dayOfWeek?: string;
   startTime: string;
   endTime: string;
   roomNumber: string;
@@ -85,12 +86,17 @@ const TeacherWeeklyTimetable = ({
   const [viewMode, setViewMode] = useState<"own" | "supervised">("own");
   const [selectedSupervisedClass, setSelectedSupervisedClass] = useState("");
 
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
   const timeSlots = [
     "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", 
     "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
     "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00"
   ];
+
+  // Function to format day names for display
+  const formatDayName = (day: string) => {
+    return day.charAt(0) + day.slice(1).toLowerCase();
+  };
 
   useEffect(() => {
     fetchTimetables();
@@ -100,26 +106,50 @@ const TeacherWeeklyTimetable = ({
     try {
       setLoading(true);
       const queryParams = new URLSearchParams({
-        teacherId,
         ...filters,
         startDate: dateRange.start.toISOString().split('T')[0],
         endDate: dateRange.end.toISOString().split('T')[0],
-        view: "weekly",
-        mode: viewMode,
-        ...(selectedSupervisedClass && { supervisedClassId: selectedSupervisedClass })
+        mode: viewMode === 'supervised' ? 'supervisor' : 'teacher',
+        ...(filters.branchId && { branchId: filters.branchId }),
+        ...(filters.classId && { classId: filters.classId }),
+        ...(filters.subjectId && { subjectId: filters.subjectId }),
+        ...(selectedSupervisedClass && { classId: selectedSupervisedClass })
       });
 
+      console.log('Fetching timetables with params:', queryParams.toString());
+      
       const response = await fetch(`/api/teacher-timetables?${queryParams}`, {
-        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId
+        }
       });
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Received timetables data:', data);
+        
+        // Transform the data to match the expected format
+        const formattedTimetables = (data.timetables || []).map((timetable: any) => ({
+          ...timetable,
+          day: timetable.dayOfWeek, // Use the dayOfWeek from API response
+          subject: timetable.subject || { id: 'none', name: 'General' },
+          class: timetable.class || { id: 0, name: 'Unknown Class' },
+          branch: timetable.branch || { id: 'none', shortName: 'N/A' },
+          teacher: timetable.teacher || { id: teacherId, firstName: 'Teacher', lastName: '' },
+          status: 'scheduled',
+          roomNumber: timetable.roomNumber || 'TBD',
+          academicYear: timetable.class?.academicYear || { id: 1, name: '2023-2024' }
+        }));
+        
         if (viewMode === "own") {
-        setTimetables(data.timetables || []);
+          setTimetables(formattedTimetables);
         } else {
-        setSupervisedTimetables(data.supervisedTimetables || []);
+          setSupervisedTimetables(formattedTimetables);
         }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to fetch timetables:', response.status, errorData);
       }
     } catch (error) {
       console.error("Failed to fetch timetables:", error);
@@ -132,7 +162,8 @@ const TeacherWeeklyTimetable = ({
     const currentTimetables = viewMode === "own" ? timetables : supervisedTimetables;
     
     const result = currentTimetables.find(entry => {
-      const entryDay = new Date(entry.fullDate).toLocaleDateString('en-US', { weekday: 'long' });
+      // Use the dayOfWeek field directly from the API response
+      const entryDay = entry.dayOfWeek || entry.day;
       const entryStartTime = new Date(entry.startTime);
       const entryEndTime = new Date(entry.endTime);
       
@@ -236,7 +267,7 @@ const TeacherWeeklyTimetable = ({
   };
 
   const isToday = (day: string) => {
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
     return day === today;
   };
 
@@ -341,7 +372,7 @@ const TeacherWeeklyTimetable = ({
                   ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-200" 
                   : "bg-gradient-to-r from-slate-100 to-gray-100 text-gray-700"
               }`}>
-                {day}
+                {formatDayName(day)}
                 {isToday(day) && (
                   <span className="block text-xs font-normal text-blue-600">Today</span>
                 )}
@@ -502,7 +533,7 @@ const TeacherWeeklyTimetable = ({
             }`}>
               <div className="flex items-center justify-between mb-3">
                 <h4 className={`font-semibold ${isToday(day) ? "text-blue-700" : "text-gray-700"}`}>
-                  {day}
+                  {formatDayName(day)}
                 </h4>
                 <span className={`text-xs px-2 py-1 rounded-md ${
                   dayTimetables.length > 0 

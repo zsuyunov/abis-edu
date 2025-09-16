@@ -6,23 +6,29 @@ export const classSchema = z.object({
   capacity: z.coerce.number().min(1, { message: "Capacity is required!" }),
   branchId: z.coerce.number().min(1, { message: "Branch is required!" }),
   academicYearId: z.coerce.number().min(1, { message: "Academic year is required!" }),
-  language: z.enum([
-    "UZBEK", 
-    "RUSSIAN", 
-    "ENGLISH", 
-    "CHINESE", 
-    "ARABIC", 
-    "KOREAN", 
-    "JAPANESE", 
-    "FRENCH", 
-    "GERMAN"
-  ]).optional(),
-  educationType: z.enum([
-    "KINDERGARTEN", 
-    "PRIMARY", 
-    "SECONDARY", 
-    "HIGH"
-  ]).optional(),
+  language: z.preprocess(
+    (val) => val === "" ? undefined : val,
+    z.enum([
+      "UZBEK", 
+      "RUSSIAN", 
+      "ENGLISH", 
+      "CHINESE", 
+      "ARABIC", 
+      "KOREAN", 
+      "JAPANESE", 
+      "FRENCH", 
+      "GERMAN"
+    ]).optional()
+  ),
+  educationType: z.preprocess(
+    (val) => val === "" ? undefined : val,
+    z.enum([
+      "KINDERGARTEN", 
+      "PRIMARY", 
+      "SECONDARY", 
+      "HIGH"
+    ]).optional()
+  ),
   // Supervisor is assigned later via Teacher Assignments workflow
   supervisorId: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE"], { message: "Status is required!" }),
@@ -661,11 +667,9 @@ export const examSchema = z.object({
   examDay: z.string().min(1, { message: "Exam day is required!" }),
   startTime: z.string().min(1, { message: "Start time is required!" }),
   endTime: z.string().min(1, { message: "End time is required!" }),
-  roomNumber: z.string().min(1, { message: "Room number is required!" })
-    .max(50, { message: "Room number cannot exceed 50 characters!" }),
-  fullMarks: z.coerce.number().min(1, { message: "Full marks must be at least 1!" })
-    .max(1000, { message: "Full marks cannot exceed 1000!" }),
-  passingMarks: z.coerce.number().min(0, { message: "Passing marks cannot be negative!" }),
+  roomNumber: z.string().optional().or(z.literal("")),
+  fullMarks: z.coerce.number().optional().or(z.literal(0)),
+  passingMarks: z.coerce.number().optional().or(z.literal(0)),
   status: z.enum(["SCHEDULED", "COMPLETED", "CANCELLED"]).default("SCHEDULED"),
   
   // Relations
@@ -675,7 +679,10 @@ export const examSchema = z.object({
   subjectId: z.coerce.number().optional(),
   teacherId: z.string().optional(),
 }).refine((data) => {
-  return data.passingMarks <= data.fullMarks;
+  if (data.passingMarks && data.fullMarks) {
+    return data.passingMarks <= data.fullMarks;
+  }
+  return true;
 }, {
   message: "Passing marks cannot be greater than full marks",
   path: ["passingMarks"],
@@ -742,7 +749,7 @@ export const examConflictSchema = z.object({
   startTime: z.string(),
   endTime: z.string(),
   classId: z.coerce.number(),
-  roomNumber: z.string(),
+  roomNumber: z.string().optional().or(z.literal("")),
   excludeExamId: z.coerce.number().optional(), // For update operations
 });
 

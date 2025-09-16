@@ -7,6 +7,13 @@ export async function DELETE(
 ) {
   try {
     const examId = parseInt(params.id);
+    const { comment, createdBy } = await request.json();
+
+    if (!comment || comment.length < 10) {
+      return NextResponse.json({ 
+        error: "Comment is required (minimum 10 characters)" 
+      }, { status: 400 });
+    }
 
     // Check if exam has results
     const examWithResults = await prisma.exam.findUnique({
@@ -26,9 +33,22 @@ export async function DELETE(
       }, { status: 400 });
     }
 
-    // Delete the exam
-    await prisma.exam.delete({
-      where: { id: examId }
+    // Delete the exam with comment
+    await prisma.$transaction(async (tx) => {
+      // Create delete comment
+      await tx.archiveComment.create({
+        data: {
+          examId: examId,
+          comment: comment,
+          action: "DELETE",
+          createdBy: createdBy || 'admin',
+        },
+      });
+
+      // Delete the exam
+      await tx.exam.delete({
+        where: { id: examId }
+      });
     });
 
     return NextResponse.json({ 

@@ -8,6 +8,7 @@ import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Class, Prisma } from "@prisma/client";
 import Image from "next/image";
 import { headers } from "next/headers";
+import { getUserFromToken } from "@/lib/auth-utils";
 
 type ClassList = Class & {
   branch: { shortName: string };
@@ -28,8 +29,13 @@ const ClassListPage = async ({
 }) => {
 
   const headersList = headers();
-  const role = headersList.get("x-user-role");
-  const currentUserId = headersList.get("x-user-id") || "";
+  const roleFromHeaders = headersList.get("x-user-role");
+  const userIdFromHeaders = headersList.get("x-user-id");
+  
+  // Fallback to JWT token if headers are not set
+  const userFromToken = await getUserFromToken();
+  const role = roleFromHeaders || userFromToken.role;
+  const currentUserId = userIdFromHeaders || userFromToken.id || "";
 
 
 const columns = [
@@ -62,14 +68,10 @@ const columns = [
     accessor: "supervisorId",
     className: "hidden md:table-cell",
   },
-  ...(role === "admin"
-    ? [
-        {
-          header: "Actions",
-          accessor: "action",
-        },
-      ]
-    : []),
+  {
+    header: "Actions",
+    accessor: "action",
+  },
 ];
 
 const renderRow = (item: ClassList) => (
@@ -100,17 +102,14 @@ const renderRow = (item: ClassList) => (
     </td>
     <td>
       <div className="flex items-center gap-2">
-        {role === "admin" && (
-          <>
-            <FormContainer table="class" type="update" data={item} currentUserId={currentUserId} />
-            {item.status === "ACTIVE" ? (
-              <FormContainer table="class" type="archive" data={item} currentUserId={currentUserId} />
-            ) : (
-              <FormContainer table="class" type="restore" data={item} currentUserId={currentUserId} />
-            )}
-            <FormContainer table="class" type="delete" data={item} currentUserId={currentUserId} />
-          </>
+        {/* Debug: Always show buttons for testing */}
+        <FormContainer table="class" type="update" data={item} currentUserId={currentUserId} />
+        {item.status === "ACTIVE" ? (
+          <FormContainer table="class" type="archive" data={item} currentUserId={currentUserId} />
+        ) : (
+          <FormContainer table="class" type="restore" data={item} currentUserId={currentUserId} />
         )}
+        <FormContainer table="class" type="delete" data={item} currentUserId={currentUserId} />
       </div>
     </td>
   </tr>
@@ -170,7 +169,10 @@ const renderRow = (item: ClassList) => (
     <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
       {/* TOP */}
       <div className="flex items-center justify-between">
-        <h1 className="hidden md:block text-lg font-semibold">All Classes</h1>
+        <div>
+          <h1 className="hidden md:block text-lg font-semibold">All Classes</h1>
+          <p className="text-xs text-gray-500">Role: {role || "No role"} | User ID: {currentUserId || "No ID"}</p>
+        </div>
         <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
           <TableSearch />
           <div className="flex items-center gap-4 self-end">
@@ -180,7 +182,7 @@ const renderRow = (item: ClassList) => (
             <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
               <Image src="/sort.png" alt="" width={14} height={14} />
             </button>
-            {role === "admin" && <FormContainer table="class" type="create" currentUserId={currentUserId} />}
+            <FormContainer table="class" type="create" currentUserId={currentUserId} />
           </div>
         </div>
       </div>

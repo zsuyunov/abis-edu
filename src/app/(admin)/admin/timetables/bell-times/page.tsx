@@ -1,6 +1,6 @@
 import BellTimesManagement from "@/components/admin/BellTimesManagement";
 
-const BellTimesPage = async () => {
+const BellTimesPage = () => {
   return (
     <div className="p-6">
       <BellTimesManagement />

@@ -52,17 +52,31 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const timetablesBySubject = await prisma.timetable.groupBy({
-      by: ['subjectId'],
+    // Get all timetables and group by subjectId
+    const allTimetables = await prisma.timetable.findMany({
       where: {
         academicYearId: parseInt(targetAcademicYearId),
         isActive: true,
         classId: { in: teacherAssignments.map(ta => ta.classId) },
       },
-      _count: {
-        id: true,
+      select: {
+        subjectId: true,
       },
     });
+
+    // Group by subjectId
+    const subjectCounts: Record<string, number> = {};
+    allTimetables.forEach(timetable => {
+      if (timetable.subjectId) {
+        const key = String(timetable.subjectId);
+        subjectCounts[key] = (subjectCounts[key] || 0) + 1;
+      }
+    });
+
+    const timetablesBySubject = Object.entries(subjectCounts).map(([subjectId, count]) => ({
+      subjectId: subjectId,
+      _count: { id: count },
+    }));
 
     const timetablesByDay = await prisma.timetable.groupBy({
       by: ['dayOfWeek'],

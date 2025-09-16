@@ -8,26 +8,25 @@ export async function GET(request: NextRequest) {
 
     // Build query conditions
     const where: any = {
-      isActive: true,
+      status: "ACTIVE",
     };
-    
-    if (branchId) {
-      where.branchId = parseInt(branchId);
-    }
 
-    // Unassigned: no active timetable rows (no current assignments)
-    // Get all timetables and extract teacher IDs from the JSON array
-    const timetables = await prisma.timetable.findMany({
-      where: { isActive: true, ...(branchId ? { branchId: parseInt(branchId) } : {}) },
-      select: { teacherIds: true },
+    // Note: Teachers don't have direct branch relationship
+    // Branch filtering is handled through TeacherAssignment
+
+    // Unassigned: no active teacher assignments
+    // Get all active teacher assignments
+    const teacherAssignments = await prisma.teacherAssignment.findMany({
+      where: { 
+        status: "ACTIVE",
+        ...(branchId ? { branchId: parseInt(branchId) } : {})
+      },
+      select: { teacherId: true },
     });
 
-    // Extract all teacher IDs from the JSON arrays
+    // Extract all assigned teacher IDs
     const assignedTeacherIds = new Set(
-      timetables.flatMap((t) => {
-        const teacherIds = Array.isArray(t.teacherIds) ? t.teacherIds : [];
-        return teacherIds;
-      })
+      teacherAssignments.map(ta => ta.teacherId)
     );
 
     const unassignedTeachers = await prisma.teacher.findMany({
@@ -40,7 +39,6 @@ export async function GET(request: NextRequest) {
         firstName: true,
         lastName: true,
         teacherId: true,
-        // branch relation removed; could derive via other logic later
       },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });

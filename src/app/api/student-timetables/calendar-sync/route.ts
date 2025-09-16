@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
         isActive: true,
       },
       include: {
-        subject: true,
+        class: true,
       },
       orderBy: [
         { startTime: "asc" },
@@ -107,7 +107,7 @@ function generateICSContent(timetables: any[], student: any, academicYear: any):
   const icsLines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//School Management System//Student Timetable//EN",
+    "PRODID:-//ABIS EDU//Student Timetable//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${student.firstName} ${student.lastName} - ${academicYear.name} Timetable`,
@@ -124,9 +124,9 @@ function generateICSContent(timetables: any[], student: any, academicYear: any):
     };
 
     const uid = `timetable-${timetable.id}@school-system.com`;
-    const summary = `${timetable.subject.name}`;
+    const summary = `Class ${timetable.class.name}`; // Updated due to schema changes
     const description = [
-      `Teacher: ${timetable.teacher.firstName} ${timetable.teacher.lastName}`,
+      `Teacher: TBA`, // Updated due to schema changes
       `Room: ${timetable.room || 'TBA'}`,
       `Class: ${student.class.name}`,
     ];
@@ -150,7 +150,7 @@ function generateICSContent(timetables: any[], student: any, academicYear: any):
       `SUMMARY:${summary}`,
       `DESCRIPTION:${description.join('\\n')}`,
       `LOCATION:${timetable.room || 'TBA'}`,
-      `ORGANIZER;CN=${timetable.teacher.firstName} ${timetable.teacher.lastName}:MAILTO:${timetable.teacher.email || 'noreply@school.com'}`,
+      `ORGANIZER;CN=Teacher:MAILTO:noreply@school.com`, // Updated due to schema changes
       "STATUS:CONFIRMED",
       "TRANSP:OPAQUE",
       "END:VEVENT"

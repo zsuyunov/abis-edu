@@ -91,12 +91,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { createExam } = await import("@/lib/actions");
+    const { createExam, updateExam } = await import("@/lib/actions");
     
-    const result = await createExam({ success: false, error: false }, body);
+    // Check if this is an update operation (has id) or create operation
+    const isUpdate = body.id !== undefined && body.id !== null;
+    
+    const result = isUpdate 
+      ? await updateExam({ success: false, error: false }, body)
+      : await createExam({ success: false, error: false }, body);
     
     if (result.success) {
-      return NextResponse.json({ message: "Exam created successfully" });
+      return NextResponse.json({ 
+        message: isUpdate ? "Exam updated successfully" : "Exam created successfully" 
+      });
     } else if (result.conflicts) {
       return NextResponse.json(
         { error: "Scheduling conflicts detected", conflicts: result.conflicts },
@@ -104,14 +111,14 @@ export async function POST(request: NextRequest) {
       );
     } else {
       return NextResponse.json(
-        { error: "Failed to create exam" },
+        { error: isUpdate ? "Failed to update exam" : "Failed to create exam" },
         { status: 400 }
       );
     }
   } catch (error) {
-    console.error("Error creating exam:", error);
+    console.error("Error processing exam:", error);
     return NextResponse.json(
-      { error: "Failed to create exam" },
+      { error: "Failed to process exam" },
       { status: 500 }
     );
   }

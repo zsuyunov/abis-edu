@@ -8,6 +8,7 @@ interface Student {
   id: string;
   firstName: string;
   lastName: string;
+  studentId: string;
 }
 
 interface AttendanceFormProps {
@@ -62,11 +63,15 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
         setStudents(studentsData);
         
         // Initialize attendance records
-        const initialAttendance = studentsData.map((student: Student) => ({
-          studentId: student.id,
-          status: 'present' as const,
-          notes: ''
-        }));
+        const initialAttendance = studentsData.map((student: Student) => {
+          // Use the numeric studentId field instead of the string id
+          const studentId = student.studentId ? parseInt(student.studentId.replace('S', '')) : parseInt(student.id);
+          return {
+            studentId: studentId, // Use the numeric student ID
+            status: 'present' as const,
+            notes: ''
+          };
+        });
         setAttendance(initialAttendance);
       } else {
         const errorData = await response.text();
@@ -82,9 +87,10 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
   };
 
   const updateAttendance = (studentId: string, field: 'status' | 'notes', value: string) => {
-    setAttendance(prev => 
-      prev.map(record => 
-        record.studentId === studentId 
+    const numericStudentId = parseInt(studentId.replace('S', ''));
+    setAttendance(prev =>
+      prev.map(record =>
+        record.studentId === numericStudentId.toString()
           ? { ...record, [field]: value }
           : record
       )
@@ -100,6 +106,21 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
   const handleSave = async () => {
     try {
       setSaving(true);
+      
+      // Validate attendance data
+      if (attendance.length === 0) {
+        alert('❌ No attendance records to save. Please mark attendance for at least one student.');
+        return;
+      }
+
+      console.log('Saving attendance with data:', {
+        timetableId: data?.id,
+        classId: data?.classId,
+        subjectId: data?.subjectId,
+        date: data?.date,
+        attendance: attendance
+      });
+
       const response = await fetch('/api/attendance', {
         method: 'POST',
         headers: {
@@ -110,23 +131,28 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
           timetableId: data?.id,
           classId: data?.classId,
           subjectId: data?.subjectId,
-          academicYearId: data?.academicYearId,
-          branchId: data?.branchId,
           date: data?.date,
-          attendanceData: attendance
+          attendance: attendance // Fixed: was attendanceData
         }),
       });
 
+      const result = await response.json();
+
       if (response.ok) {
-        alert('Attendance saved successfully!');
+        // Success popup
+        alert(`✅ Success! Attendance saved successfully!\n\n📊 Saved ${result.savedRecords || attendance.length} attendance records`);
         onSave?.(); // Trigger refresh callback
         setOpen(false);
       } else {
-        const error = await response.json();
-        alert(`Failed to save attendance: ${error.error || 'Unknown error'}`);
+        // Error popup with details
+        const errorMessage = result.details 
+          ? `❌ Failed to save attendance:\n\n${result.error}\n\nDetails: ${result.details}`
+          : `❌ Failed to save attendance:\n\n${result.error || 'Unknown error'}`;
+        alert(errorMessage);
       }
     } catch (error) {
-      alert('An error occurred while saving attendance. Please try again.');
+      console.error('Attendance save error:', error);
+      alert('💥 An error occurred while saving attendance.\n\nPlease check your internet connection and try again.');
     } finally {
       setSaving(false);
     }

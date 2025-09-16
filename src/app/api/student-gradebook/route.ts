@@ -252,10 +252,11 @@ export async function GET(request: NextRequest) {
     // Get subjects for filter options (scoped by student's branch)
     const subjects = await prisma.subject.findMany({
       where: {
-        timetables: {
+        TeacherAssignment: {
           some: {
             classId: student.classId || 0, // Handle null classId
             branchId: studentBranchId, // Ensure subjects are from student's branch
+            status: "ACTIVE",
           },
         },
       },

@@ -10,6 +10,11 @@ export async function GET(request: NextRequest) {
     const academicYearId = searchParams.get("academicYearId");
     const subjectId = searchParams.get("subjectId");
     const role = searchParams.get("role");
+    
+    // Pagination parameters
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "50");
+    const skip = (page - 1) * limit;
 
     // Get the most recent active academic year if none specified
     let targetAcademicYearId = academicYearId;
@@ -24,22 +29,32 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build assignments directly from TeacherAssignment table
+    // Build where clause for filtering
+    const whereClause = {
+      status: "ACTIVE",
+      ...(branchId ? { branchId: parseInt(branchId) } : {}),
+      ...(targetAcademicYearId ? { academicYearId: parseInt(targetAcademicYearId) } : {}),
+      ...(subjectId ? { subjectId: parseInt(subjectId) } : {}),
+      ...(role ? { role: role as "TEACHER" | "SUPERVISOR" } : {}),
+    };
+
+    // Get total count for pagination
+    const totalCount = await prisma.teacherAssignment.count({
+      where: whereClause,
+    });
+
+    // Build assignments directly from TeacherAssignment table with pagination
     const teacherAssignments = await prisma.teacherAssignment.findMany({
-      where: {
-        status: "ACTIVE",
-        ...(branchId ? { branchId: parseInt(branchId) } : {}),
-        ...(targetAcademicYearId ? { academicYearId: parseInt(targetAcademicYearId) } : {}),
-        ...(subjectId ? { subjectId: parseInt(subjectId) } : {}),
-        ...(role ? { role: role as "TEACHER" | "SUPERVISOR" } : {}),
-      },
+      where: whereClause,
       include: {
         Teacher: { select: { id: true, firstName: true, lastName: true, teacherId: true } },
-        Class: { select: { id: true, name: true, branch: { select: { shortName: true } } } },
+        Class: { select: { id: true, name: true, branch: { select: { id: true, shortName: true } } } },
         Subject: { select: { id: true, name: true } },
         AcademicYear: { select: { id: true, name: true, isCurrent: true } },
       },
       orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
     });
 
     const assignments = teacherAssignments.map((ta) => ({
@@ -49,16 +64,29 @@ export async function GET(request: NextRequest) {
       class: {
         id: ta.Class.id,
         name: ta.Class.name,
-        branch: { shortName: ta.Class.branch.shortName },
+        branch: { 
+          id: ta.Class.branch.id,
+          shortName: ta.Class.branch.shortName 
+        },
       },
       subject: ta.Subject,
       academicYear: ta.AcademicYear,
       createdAt: ta.createdAt,
     }));
 
+    const totalPages = Math.ceil(totalCount / limit);
+    
     const res = NextResponse.json({
       success: true,
       assignments,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
     });
     res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120");
     return res;
@@ -129,6 +157,80 @@ export async function POST(request: NextRequest) {
     console.error("Create teacher assignment error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const formData = await request.formData();
+
+    const teacherId = formData.get("teacherId") as string;
+    const classId = formData.get("classId") as string;
+    const subjectId = formData.get("subjectId") as string;
+    const comment = formData.get("comment") as string;
+    const currentUserId = formData.get("currentUserId") as string;
+    const academicYearId = formData.get("academicYearId") as string;
+
+    console.log("DELETE teacher assignment:", {
+      teacherId,
+      classId,
+      subjectId,
+      comment,
+      currentUserId,
+      academicYearId
+    });
+
+    // Validate required fields
+    if (!teacherId || !classId) {
+      return NextResponse.json({ success: false, message: "Missing required fields: teacherId or classId" }, { status: 400 });
+    }
+
+    // Find and delete the assignment
+    const assignment = await prisma.teacherAssignment.findFirst({
+      where: {
+        teacherId,
+        classId: Number(classId),
+        ...(subjectId ? { subjectId: Number(subjectId) } : {}),
+        academicYearId: Number(academicYearId),
+      },
+    });
+
+    if (!assignment) {
+      return NextResponse.json({ success: false, message: "Assignment not found" }, { status: 404 });
+    }
+
+    // Create archive comment if comment provided and currentUserId exists
+    if (comment && comment.trim() && currentUserId) {
+      await prisma.archiveComment.create({
+        data: {
+          userId: currentUserId,
+          teacherId,
+          classId: Number(classId),
+          subjectId: subjectId ? Number(subjectId) : null,
+          academicYearId: Number(academicYearId),
+          timetableId: null,
+          comment: `Teacher assignment removed: ${comment.trim()}`,
+          action: "DELETE",
+          createdBy: currentUserId,
+        },
+      });
+    }
+
+    // Delete the assignment
+    await prisma.teacherAssignment.delete({
+      where: { id: assignment.id },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Teacher assignment removed successfully"
+    });
+  } catch (error) {
+    console.error("Delete teacher assignment error:", error);
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
       { status: 500 }
     );
   }

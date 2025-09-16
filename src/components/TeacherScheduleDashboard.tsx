@@ -3,25 +3,10 @@
 import { useState, useEffect } from "react";
 import { format, addDays, subDays, isToday, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Calendar, 
-  Clock, 
-  MapPin, 
-  BookOpen, 
-  Users, 
-  BarChart3, 
-  ChevronLeft, 
-  ChevronRight,
-  Edit3,
-  CheckCircle,
-  AlertCircle,
-  PlayCircle
-} from "lucide-react";
 import TeacherHomeworkContainer from "./TeacherHomeworkContainer";
 import TeacherHomeworkCreationForm from "./TeacherHomeworkCreationForm";
 import HomeworkAssignmentModal from "./HomeworkAssignmentModal";
-import AttendanceForm from "./forms/AttendanceForm";
+import AttendanceForm from "./AttendanceForm";
 import GradeInputForm from "./GradeInputForm";
 
 interface TeacherAssignment {
@@ -60,10 +45,6 @@ interface TimetableEntry {
   class: {
     id: string;
     name: string;
-    academicYear?: {
-      id: number;
-      name: string;
-    };
   };
   subject: {
     id: string;
@@ -113,6 +94,18 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [gradeInputFormOpen, setGradeInputFormOpen] = useState(false);
   const [selectedTimetable, setSelectedTimetable] = useState<TimetableEntry | null>(null);
+  const [lessonData, setLessonData] = useState<{
+    id: string;
+    classId: string;
+    subjectId: string;
+    academicYearId: string;
+    branchId: string;
+    className: string;
+    subjectName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+  } | null>(null);
   const [homeworkContainerOpen, setHomeworkContainerOpen] = useState(false);
   const [homeworkCreationOpen, setHomeworkCreationOpen] = useState(false);
   const [homeworkRefreshKey, setHomeworkRefreshKey] = useState(0);
@@ -182,19 +175,11 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
         console.log('Comparing:', timetableDate, 'with selected:', startDate);
         return timetableDate === startDate;
       });
-
-      // Remove duplicates based on unique combination of class, subject, and time
-      const uniqueTimetables = filteredTimetables.filter((timetable: any, index: number, array: any[]) => {
-        const uniqueKey = `${timetable.classId}-${timetable.subjectId}-${timetable.startTime}-${timetable.endTime}`;
-        return array.findIndex((t: any) => 
-          `${t.classId}-${t.subjectId}-${t.startTime}-${t.endTime}` === uniqueKey
-        ) === index;
-      });
       
       console.log('Filtered timetables count:', filteredTimetables.length);
       
-      // Transform the unique data to match our interface
-      const transformedTimetables = uniqueTimetables.map((timetable: any) => {
+      // Transform the filtered data to match our interface
+      const transformedTimetables = filteredTimetables.map((timetable: any) => {
         console.log('Processing timetable:', timetable);
         
         // Use the original date from database
@@ -219,7 +204,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
           classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
           class: {
             ...timetable.class,
-            academicYear: timetable.class.academicYear || timetable.academicYear || { id: 1, name: "Default" }
+            academicYear: timetable.academicYear || { id: 1 }
           },
           subject: timetable.subject,
           branch: timetable.branch,
@@ -232,6 +217,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
       setTimetables(transformedTimetables);
     } catch (error) {
       console.error("Error fetching schedule data:", error);
+      setTimetables([]); // Ensure timetables is always an array
     } finally {
       setLoading(false);
     }
@@ -289,12 +275,26 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
   };
 
   const handleAttendance = (timetable: TimetableEntry) => {
-    if (!timetable.class.academicYear?.id) {
-      alert("Academic year information is missing for this timetable entry.");
+    const status = getLessonStatus(timetable);
+
+    if (status !== 'in-progress') {
       return;
     }
-    
-    setSelectedTimetable(timetable);
+
+    const lessonData = {
+      id: timetable.id,
+      classId: timetable.class.id,
+      subjectId: timetable.subject.id,
+      academicYearId: timetable.academicYear?.id || "",
+      branchId: timetable.branch.id,
+      className: timetable.class.name,
+      subjectName: timetable.subject.name,
+      date: timetable.fullDate,
+      startTime: timetable.startTime,
+      endTime: timetable.endTime
+    };
+
+    setLessonData(lessonData);
     setAttendanceModalOpen(true);
   };
 
@@ -459,7 +459,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
   };
 
   const getCurrentAssignments = () => {
-    return teacherData.TeacherAssignment.filter(a => 
+    return teacherData.TeacherAssignment.filter((a: TeacherAssignment) =>
       a.role === selectedRole && a.Branch.id === selectedBranchId
     );
   };
@@ -468,439 +468,386 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
   const isSupervisorMode = selectedRole === "SUPERVISOR";
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
-    >
-      {/* Header with Teacher Info */}
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200/50"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold flex items-center justify-center text-lg shadow-lg">
-              {teacherData.firstName[0]}{teacherData.lastName[0]}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                {teacherData.firstName} {teacherData.lastName}
-              </h1>
-              <p className="text-sm text-gray-600">
-                {selectedRole === "TEACHER" ? "Subject Teacher" : "Supervisor"}
-              </p>
-            </div>
-          </div>
-
-          {/* Role and Branch Selectors */}
-          <div className="flex flex-col sm:flex-row gap-2">
-            {/* Role Selector */}
-            {(hasTeacherRole && hasSupervisorRole) && (
-              <div className="flex bg-gray-100 rounded-xl p-1">
-                <button
-                  onClick={() => setSelectedRole("TEACHER")}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    selectedRole === "TEACHER"
-                      ? "bg-white text-blue-600 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Teacher
-                </button>
-                <button
-                  onClick={() => setSelectedRole("SUPERVISOR")}
-                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    selectedRole === "SUPERVISOR"
-                      ? "bg-white text-blue-600 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Supervisor
-                </button>
+    <div className="bg-white/80 backdrop-blur-sm border border-white/20 rounded-2xl p-6 shadow-xl">
+      {/* Header with Teacher Info and Selectors */}
+      <div className="mb-6">
+        <div className="flex flex-col gap-4 mb-4">
+          {/* Title and Teacher Info Row */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <h1 className="text-2xl font-bold text-gray-900">{t('teacher.schedule.title')}</h1>
+            
+            {/* Teacher Info Card */}
+            <div className="flex items-center gap-3 bg-white rounded-lg p-3 shadow-sm border">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold flex items-center justify-center">
+                {teacherData.firstName[0]}{teacherData.lastName[0]}
               </div>
-            )}
-
-            {/* Branch Selector */}
-            {branches.length > 1 && (
-              <select
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-              >
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.shortName}
-                  </option>
-                ))}
-              </select>
-            )}
+              <div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {teacherData.firstName} {teacherData.lastName}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {selectedRole === "TEACHER" ? "Subject Teacher" : "Supervisor"}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Class and Subject Info */}
-        <div className="flex flex-wrap gap-2 mt-4">
-          {currentAssignments.map((assignment, index) => (
-            <div key={index} className="flex flex-wrap gap-1">
-              <span className="px-2 py-1 rounded-lg text-xs bg-blue-50 text-blue-700 font-medium border border-blue-200">
-                {assignment.Class.name}
-              </span>
-              {assignment.Subject && (
-                <span className="px-2 py-1 rounded-lg text-xs bg-purple-50 text-purple-700 font-medium border border-purple-200">
-                  {assignment.Subject.name}
-                </span>
+          {/* Selectors and Class Info Row */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Class and Subject Info */}
+            <div className="flex flex-wrap gap-2">
+              {currentAssignments.map((assignment, index) => (
+                <div key={index} className="flex flex-wrap gap-1">
+                  <span className="px-3 py-1 rounded-md text-sm bg-blue-100 text-blue-700 font-medium">
+                    {assignment.Class.name}
+                  </span>
+                  {assignment.Subject && (
+                    <span className="px-3 py-1 rounded-md text-sm bg-purple-100 text-purple-700 font-medium">
+                      {assignment.Subject.name}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Role and Branch Selectors */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Role Selector */}
+              {(hasTeacherRole && hasSupervisorRole) && (
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setSelectedRole("TEACHER")}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      selectedRole === "TEACHER"
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    {t('teacher.schedule.subjectTeacher')}
+                  </button>
+                  <button
+                    onClick={() => setSelectedRole("SUPERVISOR")}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      selectedRole === "SUPERVISOR"
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    {t('teacher.schedule.supervisor')}
+                  </button>
+                </div>
+              )}
+
+              {/* Branch Selector */}
+              {branches.length > 1 && (
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.shortName}
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
-          ))}
+          </div>
         </div>
-      </motion.div>
 
-      {/* Weekly Calendar Navigation */}
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-gray-200/50"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigateWeek("prev")}
-            className="p-2 rounded-xl hover:bg-gray-100 transition-colors flex items-center justify-center"
-          >
-            <ChevronLeft size={20} className="text-gray-600" />
-          </motion.button>
-          
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {format(startOfWeek(currentWeek, { weekStartsOn: 1 }), "MMMM yyyy")}
-            </h2>
-            {!isSameDay(selectedDate, new Date()) && (
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={goToToday}
-                className="px-3 py-1 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200"
-              >
-                Today
-              </motion.button>
-            )}
+        {/* Weekly Calendar Navigation */}
+        <div className="bg-white rounded-lg p-4 shadow-sm border">
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => navigateWeek("prev")}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center"
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {format(startOfWeek(currentWeek, { weekStartsOn: 1 }), "MMMM yyyy")}
+              </h2>
+              {!isSameDay(selectedDate, new Date()) && (
+                <button
+                  onClick={goToToday}
+                  className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+            
+            <button
+              onClick={() => navigateWeek("next")}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center"
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
           
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigateWeek("next")}
-            className="p-2 rounded-xl hover:bg-gray-100 transition-colors flex items-center justify-center"
-          >
-            <ChevronRight size={20} className="text-gray-600" />
-          </motion.button>
+          {/* Week Days */}
+          <div className="grid grid-cols-7 gap-2">
+            {eachDayOfInterval({
+              start: startOfWeek(currentWeek, { weekStartsOn: 1 }),
+              end: endOfWeek(currentWeek, { weekStartsOn: 1 })
+            }).map((day) => {
+              const isSelected = isSameDay(day, selectedDate);
+              const isTodayDate = isToday(day);
+              
+              return (
+                <button
+                  key={day.toISOString()}
+                  onClick={() => selectDate(day)}
+                  className={`p-3 rounded-lg text-center transition-colors ${
+                    isSelected
+                      ? "bg-blue-500 text-white"
+                      : isTodayDate
+                        ? "bg-orange-100 text-orange-700 border-2 border-orange-300"
+                        : "hover:bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  <div className="text-xs font-medium mb-1">
+                    {format(day, "EEE")}
+                  </div>
+                  <div className="text-lg font-bold">
+                    {format(day, "d")}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        
-        {/* Week Days */}
-        <div className="grid grid-cols-7 gap-2">
-          {eachDayOfInterval({
-            start: startOfWeek(currentWeek, { weekStartsOn: 1 }),
-            end: endOfWeek(currentWeek, { weekStartsOn: 1 })
-          }).map((day) => {
-            const isSelected = isSameDay(day, selectedDate);
-            const isTodayDate = isToday(day);
+      </div>
+
+      {/* Schedule Content */}
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        </div>
+      ) : !Array.isArray(timetables) || timetables.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-6xl mb-4">🎉</div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('teacher.schedule.noLessons')}</h3>
+          <p className="text-gray-600">{t('teacher.schedule.enjoyFreeTime')}</p>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {(Array.isArray(timetables) ? timetables : []).map((timetable, index) => {
+            const lessonStatus = getLessonStatus(timetable);
+            
+            // Dynamic styles based on lesson status
+            let cardStyles = "";
+            let statusBadge = "";
+            let statusColor = "";
+            
+            switch (lessonStatus) {
+              case 'upcoming':
+                cardStyles = "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200";
+                statusBadge = t('teacher.schedule.status.upcoming');
+                statusColor = "bg-blue-100 text-blue-800";
+                break;
+              case 'in-progress':
+                cardStyles = "bg-gradient-to-r from-green-50 to-emerald-50 border-green-200";
+                statusBadge = t('teacher.schedule.status.inProgress');
+                statusColor = "bg-green-100 text-green-800";
+                break;
+              case 'completed':
+                cardStyles = "bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200";
+                statusBadge = t('teacher.schedule.status.completed');
+                statusColor = "bg-gray-100 text-gray-600";
+                break;
+            }
             
             return (
-              <motion.button
-                key={day.toISOString()}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => selectDate(day)}
-                className={`p-3 rounded-xl text-center transition-all duration-200 ${
-                  isSelected
-                    ? "bg-blue-500 text-white shadow-lg"
-                    : isTodayDate
-                      ? "bg-orange-50 text-orange-700 border-2 border-orange-200"
-                      : "hover:bg-gray-50 text-gray-700"
-                }`}
-              >
-                <div className="text-xs font-medium mb-1">
-                  {format(day, "EEE")}
+            <div
+              key={timetable.id}
+              className={`${cardStyles} rounded-2xl p-6 border shadow-sm hover:shadow-md transition-all duration-200`}
+            >
+              <div className="flex flex-col gap-4">
+                {/* Header with lesson number and location */}
+                <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
+                  {getLessonNumber(index)} {t('teacher.schedule.lesson')}, {timetable.branch.shortName} {t('teacher.schedule.room')}: {timetable.classroom}
                 </div>
-                <div className="text-lg font-bold">
-                  {format(day, "d")}
+                
+                {/* Main content */}
+                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                  {/* Left side - Lesson info */}
+                  <div className="flex-1">
+                    {/* Class and Subject */}
+                    <div className="text-xl font-bold text-gray-900 mb-2">
+                      {timetable.class.name}, {timetable.subject.name}
+                    </div>
+                    
+                    {/* Time */}
+                    <div className="text-sm text-gray-600 mb-2 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {formatTime(timetable.startTime)} – {formatTime(timetable.endTime)}
+                    </div>
+                    
+
+                    {/* Topic */}
+                    <div className="text-sm text-gray-600 mb-4">
+                      {timetable.topics.length > 0
+                        ? timetable.topics[0].title
+                        : t('teacher.schedule.noLessonTopic')
+                      }
+                    </div>
+
+                    {/* Status and Topics buttons */}
+                    <div className="flex items-center gap-3">
+                      <div className={`px-3 py-1 rounded-lg text-xs font-semibold ${statusColor}`}>
+                        {statusBadge}
+                      </div>
+                      <button
+                        onClick={() => handleEditTopic(timetable)}
+                        disabled={isSupervisorMode}
+                        className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        {t('teacher.schedule.editTopic')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right side - Action buttons */}
+                  {!isSupervisorMode && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleHomework(timetable)}
+                        disabled={isSupervisorMode}
+                        className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                        title={t('teacher.schedule.assignHomework')}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleAttendance(timetable)}
+                        disabled={isSupervisorMode || lessonStatus !== 'in-progress'}
+                        className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                          lessonStatus === 'in-progress' && !isSupervisorMode
+                            ? 'bg-green-500 text-white hover:bg-green-600'
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                        title={
+                          lessonStatus === 'upcoming'
+                            ? t('teacher.schedule.attendanceUpcoming')
+                            : lessonStatus === 'completed'
+                            ? t('teacher.schedule.attendanceCompleted')
+                            : t('teacher.schedule.attendanceAvailable')
+                        }
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleGradebook(timetable)}
+                        disabled={isSupervisorMode}
+                        className="p-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                        title={t('teacher.schedule.inputGrades')}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </motion.button>
+              </div>
+            </div>
             );
           })}
         </div>
-      </motion.div>
-
-      {/* Schedule Content */}
-      <AnimatePresence mode="wait">
-        {loading ? (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex items-center justify-center h-64"
-          >
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          </motion.div>
-        ) : timetables.length === 0 ? (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 text-center shadow-sm border border-gray-200/50"
-          >
-            <div className="text-6xl mb-4">🎉</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No classes today</h3>
-            <p className="text-gray-600">Enjoy your free time!</p>
-          </motion.div>
-        ) : (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="space-y-3"
-          >
-            {timetables.map((timetable, index) => {
-              const lessonStatus = getLessonStatus(timetable);
-              
-              // Dynamic styles based on lesson status
-              let cardStyles = "";
-              let statusIcon = null;
-              let statusColor = "";
-              
-              switch (lessonStatus) {
-                case 'upcoming':
-                  cardStyles = "bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border-blue-200/50";
-                  statusIcon = <AlertCircle size={16} />;
-                  statusColor = "bg-blue-100 text-blue-700 border-blue-200";
-                  break;
-                case 'in-progress':
-                  cardStyles = "bg-gradient-to-r from-green-50/80 to-emerald-50/80 border-green-200/50";
-                  statusIcon = <PlayCircle size={16} />;
-                  statusColor = "bg-green-100 text-green-700 border-green-200";
-                  break;
-                case 'completed':
-                  cardStyles = "bg-gradient-to-r from-gray-50/80 to-gray-100/80 border-gray-200/50";
-                  statusIcon = <CheckCircle size={16} />;
-                  statusColor = "bg-gray-100 text-gray-600 border-gray-200";
-                  break;
-              }
-              
-              return (
-                <motion.div
-                  key={timetable.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className={`${cardStyles} rounded-2xl p-4 border backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-200`}
-                >
-                  {/* Header */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-lg">
-                        #{getLessonNumber(index)}
-                      </span>
-                      <div className="flex items-center gap-1 text-xs text-gray-600">
-                        <MapPin size={12} />
-                        {timetable.branch.shortName} • {timetable.classroom}
-                      </div>
-                    </div>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border ${statusColor}`}>
-                      {statusIcon}
-                      {lessonStatus === 'upcoming' ? 'Upcoming' : lessonStatus === 'in-progress' ? 'Live' : 'Done'}
-                    </div>
-                  </div>
-
-                  {/* Main content */}
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    {/* Left side - Lesson info */}
-                    <div className="flex-1 min-w-0">
-                      {/* Class and Subject */}
-                      <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">
-                        {timetable.class.name} • {timetable.subject.name}
-                      </h3>
-                      
-                      {/* Time */}
-                      <div className="flex items-center gap-1 text-sm text-gray-600 mb-2">
-                        <Clock size={14} />
-                        {formatTime(timetable.startTime)} – {formatTime(timetable.endTime)}
-                      </div>
-
-                      {/* Topic */}
-                      <div className="text-sm text-gray-600 mb-3">
-                        {timetable.topics.length > 0 
-                          ? timetable.topics[0].title 
-                          : "No lesson topic set"
-                        }
-                      </div>
-
-                      {/* Topics button */}
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleEditTopic(timetable)}
-                        disabled={isSupervisorMode}
-                        className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Edit3 size={12} />
-                        Topics
-                      </motion.button>
-                    </div>
-
-                    {/* Right side - Action buttons */}
-                    {!isSupervisorMode && (
-                      <div className="flex items-center gap-2">
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleHomework(timetable)}
-                          className="p-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center shadow-sm"
-                          title="Assign Homework"
-                        >
-                          <BookOpen size={16} />
-                        </motion.button>
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleAttendance(timetable)}
-                          disabled={lessonStatus !== 'in-progress'}
-                          className={`p-2 rounded-xl transition-colors flex items-center justify-center shadow-sm ${
-                            lessonStatus === 'in-progress'
-                              ? 'bg-green-500 text-white hover:bg-green-600'
-                              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                          }`}
-                          title={
-                            lessonStatus === 'upcoming' 
-                              ? 'Available when lesson starts'
-                              : lessonStatus === 'completed'
-                              ? 'Lesson completed'
-                              : 'Take Attendance'
-                          }
-                        >
-                          <Users size={16} />
-                        </motion.button>
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleGradebook(timetable)}
-                          className="p-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors flex items-center justify-center shadow-sm"
-                          title="Input Grades"
-                        >
-                          <BarChart3 size={16} />
-                        </motion.button>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      )}
 
       {/* Topic Edit Modal */}
-      <AnimatePresence>
-        {showTopicModal && selectedTimetable && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          >
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl"
-            >
-              <h3 className="text-lg font-semibold mb-4 text-gray-900">Edit Lesson Topic</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Topic Title
-                  </label>
-                  <input
-                    type="text"
-                    value={newTopic}
-                    onChange={(e) => setNewTopic(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter lesson topic"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={newTopicDescription}
-                    onChange={(e) => setNewTopicDescription(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    rows={3}
-                    placeholder="Enter topic description"
-                  />
-                </div>
+      {showTopicModal && selectedTimetable && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold mb-4">Edit Lesson Topic</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Topic Title
+                </label>
+                <input
+                  type="text"
+                  value={newTopic}
+                  onChange={(e) => setNewTopic(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter lesson topic"
+                />
               </div>
-              <div className="flex gap-3 mt-6">
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowTopicModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleSaveTopic}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-                >
-                  Save
-                </motion.button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={newTopicDescription}
+                  onChange={(e) => setNewTopicDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Enter topic description"
+                />
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowTopicModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveTopic}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Homework Creation Form */}
-      <AnimatePresence>
-        {homeworkCreationOpen && selectedTimetable && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          >
-            <TeacherHomeworkCreationForm
-              teacherId={teacherId}
-              timetable={selectedTimetable}
-              onClose={() => setHomeworkCreationOpen(false)}
-              onHomeworkCreated={() => {
-                setHomeworkCreationOpen(false);
-                fetchScheduleData();
-                setHomeworkRefreshKey(prev => prev + 1);
-              }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {homeworkCreationOpen && selectedTimetable && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <TeacherHomeworkCreationForm
+            teacherId={teacherId}
+            timetable={selectedTimetable}
+            onClose={() => setHomeworkCreationOpen(false)}
+            onHomeworkCreated={() => {
+              setHomeworkCreationOpen(false);
+              fetchScheduleData(); // Refresh data
+              setHomeworkRefreshKey(prev => prev + 1); // Trigger homework container refresh
+            }}
+          />
+        </div>
+      )}
 
       {/* Attendance Form */}
-      {attendanceModalOpen && selectedTimetable && (
+      {attendanceModalOpen && lessonData && (
         <AttendanceForm
-          type="attendance"
-          data={{
-            id: selectedTimetable.id,
-            classId: selectedTimetable.class.id,
-            subjectId: selectedTimetable.subject.id,
-            academicYearId: selectedTimetable.class.academicYear?.id?.toString() || "",
-            branchId: selectedTimetable.branch.id,
-            className: selectedTimetable.class.name,
-            subjectName: selectedTimetable.subject.name,
-            date: selectedTimetable.fullDate,
-            startTime: selectedTimetable.startTime,
-            endTime: selectedTimetable.endTime,
-            teacherId: teacherId
+          isOpen={attendanceModalOpen}
+          onClose={() => {
+            setAttendanceModalOpen(false);
+            setLessonData(null);
           }}
-          setOpen={(open: boolean) => {
-            setAttendanceModalOpen(open);
-            if (!open) setSelectedTimetable(null);
-          }}
-          onSave={() => {
-            fetchScheduleData();
-          }}
+          lessonData={lessonData}
+          teacherId={teacherId}
         />
       )}
 
@@ -912,19 +859,16 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
             setGradeInputFormOpen(false);
             setSelectedTimetable(null);
           }}
-          timetableId={selectedTimetable.id.toString()}
-          classId={selectedTimetable.class.id.toString()}
-          subjectId={selectedTimetable.subject.id.toString()}
+          timetableId={selectedTimetable.id}
+          classId={selectedTimetable.class.id}
+          subjectId={selectedTimetable.subject.id}
           teacherId={teacherId}
           date={selectedTimetable.fullDate}
           className={selectedTimetable.class.name}
           subjectName={selectedTimetable.subject.name}
-          onSave={() => {
-            fetchScheduleData();
-          }}
         />
       )}
-    </motion.div>
+    </div>
   );
 };
 

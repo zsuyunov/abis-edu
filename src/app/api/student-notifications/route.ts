@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
         },
       },
       include: {
-        subject: true,
+        class: true,
       },
       orderBy: {
         startTime: "asc",
@@ -100,12 +100,12 @@ export async function GET(request: NextRequest) {
       notifications.push({
         id: `upcoming-${timetable.id}`,
         type: "upcoming",
-        title: `Upcoming: ${timetable.subject?.name || 'Unknown Subject'}`,
+        title: `Upcoming: Class ${timetable.class.name}`,
         message: `${message}`,
         timestamp: timetable.startTime,
         read: false,
         timetableId: timetable.id,
-        subjectName: timetable.subject?.name || 'Unknown Subject',
+        subjectName: 'Class', // Updated due to schema changes
       });
     });
 
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
         },
       },
       include: {
-        subject: true,
+        class: true,
       },
       orderBy: {
         updatedAt: "desc",
@@ -142,12 +142,12 @@ export async function GET(request: NextRequest) {
         notifications.push({
           id: `change-${timetable.id}`,
           type: "change",
-          title: `Schedule Updated: ${timetable.subject?.name || 'Unknown Subject'}`,
+          title: `Schedule Updated: Class ${timetable.class.name}`,
           message: `Class details have been updated for ${timetable.startTime.toLocaleDateString()}`,
           timestamp: timetable.updatedAt,
           read: false,
           timetableId: timetable.id,
-          subjectName: timetable.subject?.name || 'Unknown Subject',
+          subjectName: 'Class', // Updated due to schema changes
         });
       }
     });
@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
         },
       },
       include: {
-        subject: true,
+        class: true,
       },
       orderBy: {
         startTime: "asc",

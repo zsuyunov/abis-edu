@@ -12,8 +12,16 @@ import NavigationLoader from "@/components/ui/NavigationLoader";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Lama Dev School Management Dashboard",
-  description: "Next.js School Management System",
+  title: "ABIS EDU - School Management System",
+  description: "ABIS EDU School Management System",
+  icons: {
+    icon: [
+      { url: '/logo.png', type: 'image/png', sizes: '32x32' },
+      { url: '/logo.png', type: 'image/png', sizes: '16x16' },
+    ],
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -23,6 +31,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/logo.png" type="image/png" sizes="32x32" />
+        <link rel="icon" href="/logo.png" type="image/png" sizes="16x16" />
+        <link rel="apple-touch-icon" href="/logo.png" />
+      </head>
       <body className={inter.className}>
         <QueryProvider>
           <LoadingProvider>

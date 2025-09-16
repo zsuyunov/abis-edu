@@ -52,10 +52,10 @@ export async function GET(request: NextRequest) {
         classId: { in: teacherAssignments.map(ta => ta.classId) },
       },
       include: {
-        subject: true,
         class: true,
         branch: true,
         academicYear: true,
+        subject: true,
       },
           orderBy: {
         startTime: "asc",

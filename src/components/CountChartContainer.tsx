@@ -9,9 +9,9 @@ const CountChartContainer = async () => {
   // Skip database queries during static generation if no DATABASE_URL
   if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
     return (
-      <div className="bg-white rounded-xl w-full h-full p-4">
+      <div className="bg-white rounded-xl w-full h-full p-4 shadow-sm border border-gray-100">
         <div className="flex justify-between items-center">
-          <h1 className="text-lg font-semibold">Students</h1>
+          <h1 className="text-lg font-semibold text-gray-800">Students</h1>
           <Image src="/moreDark.png" alt="" width={20} height={20} />
         </div>
         <div className="flex justify-center items-center h-32">
@@ -40,10 +40,10 @@ const CountChartContainer = async () => {
   }
 
   return (
-    <div className="bg-white rounded-xl w-full h-full p-4">
+    <div className="bg-white rounded-xl w-full h-full p-4 shadow-sm border border-gray-100">
       {/* TITLE */}
       <div className="flex justify-between items-center">
-        <h1 className="text-lg font-semibold">Students</h1>
+        <h1 className="text-lg font-semibold text-gray-800">Students</h1>
         <Image src="/moreDark.png" alt="" width={20} height={20} />
       </div>
       {/* CHART */}
@@ -51,16 +51,16 @@ const CountChartContainer = async () => {
       {/* BOTTOM */}
       <div className="flex justify-center gap-16">
         <div className="flex flex-col gap-1">
-          <div className="w-5 h-5 bg-lamaSky rounded-full" />
-          <h1 className="font-bold">{boys}</h1>
-          <h2 className="text-xs text-gray-300">
+          <div className="w-5 h-5 bg-blue-500 rounded-full" />
+          <h1 className="font-bold text-gray-800">{boys}</h1>
+          <h2 className="text-xs text-gray-500">
             Boys ({Math.round((boys / (boys + girls)) * 100)}%)
           </h2>
         </div>
         <div className="flex flex-col gap-1">
-          <div className="w-5 h-5 bg-lamaYellow rounded-full" />
-          <h1 className="font-bold">{girls}</h1>
-          <h2 className="text-xs text-gray-300">
+          <div className="w-5 h-5 bg-cyan-400 rounded-full" />
+          <h1 className="font-bold text-gray-800">{girls}</h1>
+          <h2 className="text-xs text-gray-500">
             Girls ({Math.round((girls / (boys + girls)) * 100)}%)
           </h2>
         </div>

@@ -51,8 +51,58 @@ interface FilterData {
   academicYears: { id: number; name: string }[];
   classes: { id: number; name: string; branchId: number; academicYearId: number }[];
   subjects: { id: number; name: string }[];
-  teachers: { id: string; firstName: string; lastName: string; teacherId: string; branchId: number }[];
+  teachers: { id: string; firstName: string; lastName: string; teacherId: string }[];
 }
+
+// Helper function to format time from HH:MM:SS to 12-hour format
+const formatTime = (timeString: string) => {
+  if (!timeString) return '';
+  
+  
+  // If it's already in 12-hour format (contains AM/PM), return as is
+  if (timeString.includes('AM') || timeString.includes('PM')) {
+    return timeString;
+  }
+  
+  // Handle different time formats
+  let timeParts;
+  if (timeString.includes('T')) {
+    // Handle ISO datetime format
+    const timeOnly = timeString.split('T')[1]?.split('.')[0] || timeString.split('T')[1]?.split('Z')[0];
+    timeParts = timeOnly?.split(':');
+  } else {
+    // Handle HH:MM:SS format
+    timeParts = timeString.split(':');
+  }
+  
+  if (!timeParts || timeParts.length < 2) {
+    console.warn('Invalid time format:', timeString);
+    return timeString; // Return original if can't parse
+  }
+  
+  const hour24 = parseInt(timeParts[0]);
+  const min = parseInt(timeParts[1]);
+  
+  // Validate hour and minute values
+  if (isNaN(hour24) || isNaN(min) || hour24 < 0 || hour24 > 23 || min < 0 || min > 59) {
+    console.warn('Invalid time values:', { hour24, min, original: timeString });
+    return timeString; // Return original if invalid
+  }
+  
+  let hour12 = hour24;
+  let period = 'AM';
+  
+  if (hour24 === 0) {
+    hour12 = 12;
+  } else if (hour24 === 12) {
+    period = 'PM';
+  } else if (hour24 > 12) {
+    hour12 = hour24 - 12;
+    period = 'PM';
+  }
+  
+  return `${hour12}:${min.toString().padStart(2, '0')} ${period}`;
+};
 
 const ExamsManagementPage = () => {
   const [filterData, setFilterData] = useState<FilterData>({
@@ -82,6 +132,11 @@ const ExamsManagementPage = () => {
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [viewingExam, setViewingExam] = useState<Exam | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
+  const [archiveComment, setArchiveComment] = useState("");
+  const [deleteComment, setDeleteComment] = useState("");
 
   // Fetch initial filter data
   useEffect(() => {
@@ -159,26 +214,10 @@ const ExamsManagementPage = () => {
     setShowViewModal(true);
   };
 
-  const handleArchiveExam = async (exam: Exam) => {
-    try {
-      const response = await fetch(`/api/exams/${exam.id}/archive`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'archive' }),
-      });
-
-      if (response.ok) {
-        toast.success('Exam archived successfully!');
-        fetchExams();
-      } else {
-        toast.error('Failed to archive exam');
-      }
-    } catch (error) {
-      console.error('Error archiving exam:', error);
-      toast.error('Failed to archive exam');
-    }
+  const handleArchiveExam = (exam: Exam) => {
+    setSelectedExam(exam);
+    setArchiveComment("");
+    setShowArchiveModal(true);
   };
 
   const handleRestoreExam = async (exam: Exam) => {
@@ -203,21 +242,84 @@ const ExamsManagementPage = () => {
     }
   };
 
-  const handleDeleteExam = async (exam: Exam) => {
-    if (!confirm('Are you sure you want to delete this exam? This action cannot be undone.')) {
+  const handleDeleteExam = (exam: Exam) => {
+    setSelectedExam(exam);
+    setDeleteComment("");
+    setShowDeleteModal(true);
+  };
+
+  const confirmArchive = async () => {
+    if (!selectedExam || !archiveComment.trim()) {
+      toast.error('Please provide a comment for archiving');
+      return;
+    }
+
+    if (archiveComment.length < 10) {
+      toast.error('Comment must be at least 10 characters long');
       return;
     }
 
     try {
-      const response = await fetch(`/api/exams/${exam.id}`, {
+      const response = await fetch(`/api/exams/${selectedExam.id}/archive`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          action: 'archive',
+          comment: archiveComment,
+          createdBy: 'admin' // You might want to get this from auth context
+        }),
+      });
+
+      if (response.ok) {
+        toast.success('Exam archived successfully!');
+        fetchExams();
+        setShowArchiveModal(false);
+        setArchiveComment("");
+        setSelectedExam(null);
+      } else {
+        const error = await response.json();
+        toast.error(error.message || 'Failed to archive exam');
+      }
+    } catch (error) {
+      console.error('Error archiving exam:', error);
+      toast.error('Failed to archive exam');
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedExam || !deleteComment.trim()) {
+      toast.error('Please provide a comment for deletion');
+      return;
+    }
+
+    if (deleteComment.length < 10) {
+      toast.error('Comment must be at least 10 characters long');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/exams/${selectedExam.id}`, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          comment: deleteComment,
+          createdBy: 'admin' // You might want to get this from auth context
+        }),
       });
 
       if (response.ok) {
         toast.success('Exam deleted successfully!');
         fetchExams();
+        setShowDeleteModal(false);
+        setDeleteComment("");
+        setSelectedExam(null);
       } else {
-        toast.error('Failed to delete exam');
+        const error = await response.json();
+        toast.error(error.message || 'Failed to delete exam');
       }
     } catch (error) {
       console.error('Error deleting exam:', error);
@@ -263,10 +365,9 @@ const ExamsManagementPage = () => {
         <div className="flex items-center gap-2">
           <button 
             onClick={handleCreateExam}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow hover:bg-yellow-500 transition-colors"
           >
             <Image src="/create.png" alt="add" width={16} height={16} />
-            Create Exam
           </button>
         </div>
       </div>
@@ -369,10 +470,7 @@ const ExamsManagementPage = () => {
               {exams.map((exam) => (
                 <div key={exam.id} className="border border-gray-200 rounded-lg overflow-hidden">
                   <div 
-                    className="bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition-colors"
-                    onClick={() => setExpandedExam(
-                      expandedExam === exam.id ? null : exam.id
-                    )}
+                    className="bg-gray-50 p-4"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -382,7 +480,7 @@ const ExamsManagementPage = () => {
                             {exam.subject?.name || 'No Subject'} • {exam.teacher ? `${exam.teacher.firstName} ${exam.teacher.lastName}` : 'No Teacher'}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {formatDate(exam.date)} • {exam.startTime} - {exam.endTime} • {exam.roomNumber}
+                            {formatDate(exam.date)} • {formatTime(exam.startTime)} - {formatTime(exam.endTime)} • {exam.roomNumber}
                           </p>
                         </div>
                       </div>
@@ -465,15 +563,6 @@ const ExamsManagementPage = () => {
                           </button>
                         </div>
 
-                        <Image 
-                          src="/right-arrow.png" 
-                          alt="expand" 
-                          width={16} 
-                          height={16}
-                          className={`transition-transform ${
-                            expandedExam === exam.id ? 'rotate-90' : ''
-                          }`}
-                        />
                       </div>
                     </div>
                   </div>
@@ -591,7 +680,7 @@ const ExamsManagementPage = () => {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700">Time:</label>
-                      <p className="text-sm text-gray-900">{viewingExam.startTime} - {viewingExam.endTime}</p>
+                      <p className="text-sm text-gray-900">{formatTime(viewingExam.startTime)} - {formatTime(viewingExam.endTime)}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-700">Room:</label>
@@ -653,22 +742,79 @@ const ExamsManagementPage = () => {
                 {/* Results Summary */}
                 <div>
                   <h3 className="text-lg font-medium mb-4">Results Summary</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-700">Total Students:</span>
-                      <span className="text-sm font-medium">{viewingExam.examResults.length}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Basic Statistics */}
+                    <div className="space-y-3">
+                      <h4 className="text-md font-medium text-gray-800">Basic Statistics</h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Total Students:</span>
+                          <span className="text-sm font-medium">{viewingExam.examResults.length}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Passed:</span>
+                          <span className="text-sm text-green-600 font-medium">
+                            {viewingExam.examResults.filter(r => r.status === "PASS").length}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Failed:</span>
+                          <span className="text-sm text-red-600 font-medium">
+                            {viewingExam.examResults.filter(r => r.status === "FAIL").length}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Not Graded:</span>
+                          <span className="text-sm text-gray-600 font-medium">
+                            {viewingExam.examResults.filter(r => r.marksObtained === 0 || r.marksObtained === null).length}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Pass Rate:</span>
+                          <span className="text-sm font-medium">
+                            {viewingExam.examResults.length > 0 
+                              ? Math.round((viewingExam.examResults.filter(r => r.status === "PASS").length / viewingExam.examResults.length) * 100)
+                              : 0}%
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-700">Passed:</span>
-                      <span className="text-sm text-green-600 font-medium">
-                        {viewingExam.examResults.filter(r => r.status === "PASS").length}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium text-gray-700">Failed:</span>
-                      <span className="text-sm text-red-600 font-medium">
-                        {viewingExam.examResults.filter(r => r.status === "FAIL").length}
-                      </span>
+
+                    {/* Performance Statistics */}
+                    <div className="space-y-3">
+                      <h4 className="text-md font-medium text-gray-800">Performance Statistics</h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Average Score:</span>
+                          <span className="text-sm font-medium">
+                            {viewingExam.examResults.length > 0 
+                              ? Math.round((viewingExam.examResults.reduce((sum, r) => sum + r.marksObtained, 0) / viewingExam.examResults.length) * 100) / 100
+                              : 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Highest Score:</span>
+                          <span className="text-sm text-green-600 font-medium">
+                            {viewingExam.examResults.length > 0 
+                              ? Math.max(...viewingExam.examResults.map(r => r.marksObtained))
+                              : 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Lowest Score:</span>
+                          <span className="text-sm text-red-600 font-medium">
+                            {viewingExam.examResults.length > 0 
+                              ? Math.min(...viewingExam.examResults.map(r => r.marksObtained))
+                              : 0}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm font-medium text-gray-700">Submissions:</span>
+                          <span className="text-sm font-medium">
+                            {viewingExam.examResults.filter(r => r.marksObtained > 0).length} / {viewingExam.examResults.length}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -689,6 +835,119 @@ const ExamsManagementPage = () => {
                   className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
                 >
                   Edit Exam
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ARCHIVE CONFIRMATION MODAL */}
+      {showArchiveModal && selectedExam && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Archive Exam</h2>
+                <button 
+                  onClick={() => setShowArchiveModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <Image src="/close.png" alt="close" width={16} height={16} />
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-gray-600 mb-2">
+                  Are you sure you want to archive the exam "{selectedExam.name}"?
+                </p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for archiving <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={archiveComment}
+                  onChange={(e) => setArchiveComment(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-md resize-none"
+                  rows={4}
+                  placeholder="Please provide a reason for archiving this exam (minimum 10 characters)..."
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {archiveComment.length}/10 characters minimum
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowArchiveModal(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmArchive}
+                  disabled={archiveComment.length < 10}
+                  className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Archive Exam
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteModal && selectedExam && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-red-600">Delete Exam</h2>
+                <button 
+                  onClick={() => setShowDeleteModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <Image src="/close.png" alt="close" width={16} height={16} />
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-gray-600 mb-2">
+                  Are you sure you want to permanently delete the exam "{selectedExam.name}"?
+                </p>
+                <p className="text-red-600 text-sm mb-4 font-medium">
+                  This action cannot be undone!
+                </p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for deletion <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={deleteComment}
+                  onChange={(e) => setDeleteComment(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-md resize-none"
+                  rows={4}
+                  placeholder="Please provide a reason for deleting this exam (minimum 10 characters)..."
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {deleteComment.length}/10 characters minimum
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  disabled={deleteComment.length < 10}
+                  className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Delete Exam
                 </button>
               </div>
             </div>

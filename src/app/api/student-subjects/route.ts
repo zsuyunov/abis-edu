@@ -44,20 +44,36 @@ export async function GET(request: NextRequest) {
         }
       },
       include: {
-        subject: true,
+        class: true,
       },
       distinct: ['subjectId'],
     });
 
-    const subjects = timetables
-      .filter(timetable => timetable.subject !== null)
-      .map(timetable => ({
-        id: timetable.subject!.id.toString(),
-        name: timetable.subject!.name,
-      }));
+    // Extract unique subject IDs from timetables
+    const allSubjectIds = timetables
+      .map(timetable => timetable.subjectId)
+      .filter(id => id !== null && id !== undefined)
+      .map(id => typeof id === 'number' ? id : parseInt(String(id)))
+      .filter(id => !isNaN(id));
+    
+    const subjectIds = Array.from(new Set(allSubjectIds));
+
+    // Fetch subjects by IDs
+    const subjects = await prisma.subject.findMany({
+      where: {
+        id: { in: subjectIds }
+      },
+      select: {
+        id: true,
+        name: true,
+      }
+    });
 
     return NextResponse.json({
-      subjects,
+      subjects: subjects.map(subject => ({
+        id: subject.id.toString(),
+        name: subject.name,
+      })),
     });
 
   } catch (error) {

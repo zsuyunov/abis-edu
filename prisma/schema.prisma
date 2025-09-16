@@ -41,7 +41,6 @@ model Student {
   class               Class?                     @relation(fields: [classId], references: [id])
   attachments         StudentAttachment[]
   studentParents      StudentParent[]
-  electiveSelections  StudentElectiveSelection[]
 
   @@index([branchId, status])
   @@index([classId, status])
@@ -78,7 +77,6 @@ model Teacher {
   attachments         TeacherAttachment[]
   education           TeacherEducation?
   passport            TeacherPassport?
-  electiveSelections  StudentElectiveSelection[]
   TimetableTemplate   TimetableTemplate[]
   timetableTopics     TimetableTopic[]
 
@@ -135,8 +133,8 @@ model Class {
   archivedAt        DateTime?
   branchId          Int
   createdAt         DateTime            @default(now())
-  educationType     ClassEducationType
-  language          ClassLanguage
+  educationType     ClassEducationType?
+  language          ClassLanguage?
   restoredAt        DateTime?
   status            ClassStatus         @default(ACTIVE)
   updatedAt         DateTime            @updatedAt
@@ -176,10 +174,9 @@ model Subject {
   grades             Grade[]
   homework           Homework[]
   TeacherAssignment  TeacherAssignment[]
-  timetables         Timetable[]
-  electiveSelections StudentElectiveSelection[]
   TimetableTemplate  TimetableTemplate[]
   timetableTopics    TimetableTopic[]
+  timetables         Timetable[]
 }
 
 model Timetable {
@@ -189,12 +186,11 @@ model Timetable {
   academicYearId            Int
   dayOfWeek                 String?
   subjectId                 Int?
-  teacherIds                Json                       @default("[]")
+  teacherIds                String[]                   @default([])
   startTime                 DateTime @db.Time
   endTime                   DateTime @db.Time
   roomNumber                String?
   buildingName              String?
-  isElective                Boolean                    @default(false)
   isActive                  Boolean                    @default(true)
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
@@ -202,7 +198,6 @@ model Timetable {
   branch                    Branch                     @relation(fields: [branchId], references: [id])
   class                     Class                      @relation(fields: [classId], references: [id])
   subject                   Subject?                   @relation(fields: [subjectId], references: [id])
-  studentElectiveSelections StudentElectiveSelection[]
   Exam                      Exam[]
   Attendance                Attendance[]
   Grade                     Grade[]
@@ -215,7 +210,6 @@ model Timetable {
   @@index([dayOfWeek, startTime])
   @@index([classId, dayOfWeek])
   @@index([isActive])
-  @@index([isElective])
 }
 
 model BellTime {
@@ -232,23 +226,6 @@ model BellTime {
   @@index([startTime, endTime])
 }
 
-model StudentElectiveSelection {
-  id          Int       @id @default(autoincrement())
-  studentId   String
-  timetableId Int
-  subjectId   Int
-  teacherId   String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  timetable   Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
-  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacher     Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, timetableId])
-  @@index([studentId])
-  @@index([timetableId])
-}
 
 model Exam {
   id              Int              @id @default(autoincrement())

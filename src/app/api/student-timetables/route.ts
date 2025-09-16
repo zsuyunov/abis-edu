@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
     const timetables = await prisma.timetable.findMany({
       where: whereClause,
       include: {
-        subject: true,
+        class: true,
       },
       orderBy: {
         startTime: "asc",
@@ -93,10 +93,11 @@ export async function GET(request: NextRequest) {
     // Get subjects for filter
     const subjects = await prisma.subject.findMany({
       where: {
-        timetables: {
+        TeacherAssignment: {
           some: {
             classId: student.classId,
-            academicYearId: parseInt(targetAcademicYearId!),
+            branchId: student.branchId || 0, // Handle null branchId
+            status: "ACTIVE",
           },
         },
       },

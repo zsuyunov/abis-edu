@@ -1,6 +1,6 @@
 
 /* eslint-disable no-console */
-import { PrismaClient, UserGender, UserPosition, UserStatus, ParentStatus, StudentStatus, TeacherStatus } from '@prisma/client';
+import { PrismaClient, UserGender, UserPosition, UserStatus, ParentStatus, StudentStatus } from '@prisma/client';
 import { AuthService } from '../src/lib/auth';
 
 const prisma = new PrismaClient();
@@ -61,26 +61,6 @@ async function upsertUser(position: UserPosition, phone: string, password: strin
   });
 }
 
-async function upsertTeacher(phone: string, password: string, branchId: number) {
-  const hashed = await AuthService.hashPassword(password);
-  await prisma.teacher.upsert({
-    where: { phone },
-    update: { password: hashed },
-    create: {
-      id: 'teacher-1',
-      firstName: 'Teacher',
-      lastName: 'One',
-      gender: 'MALE',
-      dateOfBirth: new Date('1990-01-01'),
-      phone,
-      teacherId: 'T-001',
-      password: hashed,
-      email: 'teacher@example.com',
-      address: 'Address',
-      status: TeacherStatus.ACTIVE,
-    },
-  });
-}
 
 async function upsertParent(phone: string, password: string, branchId: number) {
   const hashed = await AuthService.hashPassword(password);
@@ -135,12 +115,6 @@ async function upsertStudent(phone: string, password: string, branchId: number) 
 
   let klass = await prisma.class.findFirst();
   if (!klass) {
-    // Need a teacher to create a class
-    let t = await prisma.teacher.findFirst();
-    if (!t) {
-      await upsertTeacher('+998900000001', '123456', branchId);
-      t = await prisma.teacher.findFirst();
-    }
     klass = await prisma.class.create({
       data: {
         name: '1-A',
@@ -207,8 +181,7 @@ async function main() {
   await upsertUser(UserPosition.MAIN_ADMISSION, '+998901234505', '123456', branch.id);
   await upsertUser(UserPosition.SUPPORT_ADMISSION, '+998901234506', '123456', branch.id);
 
-  // Teacher / Parent / Student sample
-  await upsertTeacher('+998901234507', '123456', branch.id);
+  // Parent / Student sample
   await upsertParent('+998901234508', '123456', branch.id);
   await upsertStudent('+998901234509', '123456', branch.id);
 

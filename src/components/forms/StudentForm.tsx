@@ -78,6 +78,7 @@ const StudentForm = ({
     {
       success: false,
       error: false,
+      message: "",
     }
   );
 
@@ -137,16 +138,7 @@ const StudentForm = ({
     return () => clearTimeout(timeoutId);
   }, [watch("studentId"), type, data?.studentId]);
 
-  const onSubmit = handleSubmit((data) => {
-    const formData = {
-      ...data,
-      attachments,
-      // For updates, only include password if provided, otherwise exclude it
-      ...(type === "update" ? (data.password ? { password: data.password } : {}) : {}),
-    };
-    console.log("Student form data:", formData);
-    formAction(formData as any);
-  });
+  // Remove onSubmit since we're using useFormState with action prop
 
   const router = useRouter();
 
@@ -163,7 +155,7 @@ const StudentForm = ({
 
   return (
     <FormProvider {...methods}>
-      <form className="flex flex-col gap-4 sm:gap-6" onSubmit={onSubmit}>
+      <form className="flex flex-col gap-4 sm:gap-6" action={formAction}>
         <h1 className="text-base sm:text-lg font-semibold">
           {type === "create" ? "Create a new student" : "Update the student"}
         </h1>
@@ -173,42 +165,69 @@ const StudentForm = ({
           Basic Information
         </span>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          <InputField
-            label="First Name"
-            name="firstName"
-            defaultValue={data?.firstName}
-            register={register}
-            error={errors.firstName}
-            required
-          />
-          <InputField
-            label="Last Name"
-            name="lastName"
-            defaultValue={data?.lastName}
-            register={register}
-            error={errors.lastName}
-            required
-          />
-          <InputField
-            label="Date of Birth (optional)"
-            name="dateOfBirth"
-            type="date"
-            defaultValue={data?.dateOfBirth ? new Date(data.dateOfBirth).toISOString().split("T")[0] : ""}
-            register={register}
-            error={errors.dateOfBirth}
-            required={false}
-          />
-          <InputField
-            label="Phone Number"
-            name="phone"
-            type="tel"
-            defaultValue={data?.phone}
-            register={register}
-            error={errors.phone}
-            inputProps={{ placeholder: "+998901234567" }}
-            required
-          />
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-full">
+            <label className="text-xs text-gray-500">
+              First Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              {...register("firstName")}
+              defaultValue={data?.firstName}
+              className="border border-gray-300 ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
+              placeholder="Enter first name"
+            />
+            {errors.firstName?.message && (
+              <p className="text-xs text-red-400">{errors.firstName.message.toString()}</p>
+            )}
+          </div>
+          
+          <div className="flex flex-col gap-2 w-full">
+            <label className="text-xs text-gray-500">
+              Last Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              {...register("lastName")}
+              defaultValue={data?.lastName}
+              className="border border-gray-300 ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
+              placeholder="Enter last name"
+            />
+            {errors.lastName?.message && (
+              <p className="text-xs text-red-400">{errors.lastName.message.toString()}</p>
+            )}
+          </div>
+          
+          <div className="flex flex-col gap-2 w-full">
+            <label className="text-xs text-gray-500">
+              Date of Birth (optional)
+            </label>
+            <input
+              type="date"
+              {...register("dateOfBirth")}
+              defaultValue={data?.dateOfBirth ? new Date(data.dateOfBirth).toISOString().split("T")[0] : ""}
+              className="border border-gray-300 ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
+            />
+            {errors.dateOfBirth?.message && (
+              <p className="text-xs text-red-400">{errors.dateOfBirth.message.toString()}</p>
+            )}
+          </div>
+          
+          <div className="flex flex-col gap-2 w-full">
+            <label className="text-xs text-gray-500">
+              Phone Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="tel"
+              {...register("phone")}
+              defaultValue={data?.phone}
+              className="border border-gray-300 ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
+              placeholder="+998901234567"
+            />
+            {errors.phone?.message && (
+              <p className="text-xs text-red-400">{errors.phone.message.toString()}</p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2 w-full">
             <label className="text-xs text-gray-500">
               Student ID <span className="text-red-500">*</span>
             </label>
@@ -236,7 +255,7 @@ const StudentForm = ({
               Format: S##### (e.g., S12345)
             </p>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-full">
             <label className="text-xs text-gray-500">
               Password {type === "create" && <span className="text-red-500">*</span>}
             </label>
@@ -248,7 +267,7 @@ const StudentForm = ({
               required={type === "create"}
             />
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-full">
             <label className="text-xs text-gray-500">
               Gender <span className="text-red-500">*</span>
             </label>
@@ -267,7 +286,7 @@ const StudentForm = ({
               </p>
             )}
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-full">
             <label className="text-xs text-gray-500">
               Status <span className="text-red-500">*</span>
             </label>
@@ -364,13 +383,29 @@ const StudentForm = ({
           </div>
         </div>
 
-        {/* Hidden ID field for updates */}
+        {/* Hidden fields for form data */}
         {data && (
           <input type="hidden" {...register("id")} value={data.id} />
         )}
+        
+        {/* Hidden fields for attachments */}
+        {attachments.document1 && (
+          <input type="hidden" name="document1" value={JSON.stringify(attachments.document1)} />
+        )}
+        {attachments.document2 && (
+          <input type="hidden" name="document2" value={JSON.stringify(attachments.document2)} />
+        )}
+        {attachments.image1 && (
+          <input type="hidden" name="image1" value={JSON.stringify(attachments.image1)} />
+        )}
+        {attachments.image2 && (
+          <input type="hidden" name="image2" value={JSON.stringify(attachments.image2)} />
+        )}
 
         {state.error && (
-          <span className="text-red-500">Something went wrong!</span>
+          <span className="text-red-500">
+            {state.message || "Something went wrong!"}
+          </span>
         )}
         
         <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">

@@ -35,6 +35,7 @@ const TeacherListPage = async ({
             query.OR = [
               { firstName: { contains: value, mode: "insensitive" } },
               { lastName: { contains: value, mode: "insensitive" } },
+              { teacherId: { contains: value, mode: "insensitive" } },
               { email: { contains: value, mode: "insensitive" } },
               { phone: { contains: value, mode: "insensitive" } },
               { address: { contains: value, mode: "insensitive" } },

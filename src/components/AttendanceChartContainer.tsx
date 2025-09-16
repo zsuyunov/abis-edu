@@ -60,7 +60,7 @@ const AttendanceChartContainer = () => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border p-6 h-[450px]">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-[450px]">
         <div className="animate-pulse">
           <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
           <div className="h-80 bg-gray-200 rounded"></div>
@@ -70,7 +70,7 @@ const AttendanceChartContainer = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border p-6 h-[450px]">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-[450px]">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -78,7 +78,7 @@ const AttendanceChartContainer = () => {
             <Users className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Attendance Overview</h3>
+            <h3 className="text-lg font-semibold text-gray-800">Attendance Overview</h3>
             <p className="text-sm text-gray-600">Daily attendance tracking</p>
           </div>
         </div>
@@ -104,42 +104,42 @@ const AttendanceChartContainer = () => {
       {/* Stats Cards */}
       {attendanceData ? (
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-blue-50 rounded-lg p-3">
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">Present</span>
+              <span className="text-sm font-medium text-blue-800">Present</span>
             </div>
-            <div className="text-xl font-bold text-blue-900 mt-1">
+            <div className="text-xl font-bold text-blue-800 mt-1">
               {attendanceData.presentRate.toFixed(1)}%
             </div>
           </div>
 
-          <div className="bg-red-50 rounded-lg p-3">
+          <div className="bg-red-50 rounded-lg p-3 border border-red-100">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-red-600" />
-              <span className="text-sm font-medium text-red-900">Absent</span>
+              <span className="text-sm font-medium text-red-800">Absent</span>
             </div>
-            <div className="text-xl font-bold text-red-900 mt-1">
+            <div className="text-xl font-bold text-red-800 mt-1">
               {attendanceData.absentRate.toFixed(1)}%
             </div>
           </div>
 
-          <div className="bg-yellow-50 rounded-lg p-3">
+          <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-yellow-600" />
-              <span className="text-sm font-medium text-yellow-900">Late</span>
+              <span className="text-sm font-medium text-yellow-800">Late</span>
             </div>
-            <div className="text-xl font-bold text-yellow-900 mt-1">
+            <div className="text-xl font-bold text-yellow-800 mt-1">
               {attendanceData.lateRate.toFixed(1)}%
             </div>
           </div>
 
-          <div className="bg-green-50 rounded-lg p-3">
+          <div className="bg-green-50 rounded-lg p-3 border border-green-100">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-medium text-green-900">Excused</span>
+              <span className="text-sm font-medium text-green-800">Excused</span>
             </div>
-            <div className="text-xl font-bold text-green-900 mt-1">
+            <div className="text-xl font-bold text-green-800 mt-1">
               {attendanceData.excusedRate.toFixed(1)}%
             </div>
           </div>

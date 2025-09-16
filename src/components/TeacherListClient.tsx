@@ -35,6 +35,12 @@ export default function TeacherListClient({
   const [count, setCount] = useState(totalCount);
   const router = useRouter();
 
+  // Update state when props change (e.g., when page changes)
+  useEffect(() => {
+    setData(initialData);
+    setCount(totalCount);
+  }, [initialData, totalCount]);
+
   const columns = [
     {
       header: "ID",
@@ -133,45 +139,48 @@ export default function TeacherListClient({
               <Image src="/view.png" alt="" width={16} height={16} />
             </button>
           </Link>
-          {role === "admin" && (
-            <>
-              <FormContainer
-                table="teacher"
-                type="update"
-                data={item}
-                currentUserId={currentUserId}
-              />
-              <SmallTeacherResetPasswordModal
-                userId={item.teacherId}
-                userName={`${item.firstName} ${item.lastName}`}
-                currentUserId={currentUserId}
-              />
-              <SmallTeacherSendMessageModal
-                userId={item.teacherId}
-                userName={`${item.firstName} ${item.lastName}`}
-                currentUserId={currentUserId}
-              />
-              {item.status === "ACTIVE" ? (
-                <TeacherActionModal
-                  table="teacher"
-                  type="archive"
-                  data={item}
-                  currentUserId={currentUserId}
-                />
-              ) : (
-                <TeacherActionModal
-                  table="teacher"
-                  type="restore"
-                  data={item}
-                  currentUserId={currentUserId}
-                />
-              )}
-              <TeacherDeleteModal
-                data={item}
-                currentUserId={currentUserId}
-              />
-            </>
+          {/* Debug: Always show buttons for testing */}
+          <FormContainer
+            table="teacher"
+            type="update"
+            data={item}
+            currentUserId={currentUserId}
+          />
+          <FormContainer
+            table="teacherAssignment"
+            type="assign"
+            data={item}
+            currentUserId={currentUserId}
+          />
+          <SmallTeacherResetPasswordModal
+            userId={item.teacherId}
+            userName={`${item.firstName} ${item.lastName}`}
+            currentUserId={currentUserId}
+          />
+          <SmallTeacherSendMessageModal
+            userId={item.teacherId}
+            userName={`${item.firstName} ${item.lastName}`}
+            currentUserId={currentUserId}
+          />
+          {item.status === "ACTIVE" ? (
+            <TeacherActionModal
+              table="teacher"
+              type="archive"
+              data={item}
+              currentUserId={currentUserId}
+            />
+          ) : (
+            <TeacherActionModal
+              table="teacher"
+              type="restore"
+              data={item}
+              currentUserId={currentUserId}
+            />
           )}
+          <TeacherDeleteModal
+            data={item}
+            currentUserId={currentUserId}
+          />
         </div>
       </td>
     </tr>
@@ -183,7 +192,10 @@ export default function TeacherListClient({
       <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
         {/* TOP */}
         <div className="flex items-center justify-between">
-          <h1 className="hidden md:block text-lg font-semibold">All Teachers</h1>
+          <div>
+            <h1 className="hidden md:block text-lg font-semibold">All Teachers</h1>
+            <p className="text-xs text-gray-500">Role: {role || "No role"} | User ID: {currentUserId || "No ID"}</p>
+          </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             <TableSearch />
             <AssignmentStatusFilter />
@@ -194,9 +206,7 @@ export default function TeacherListClient({
               <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
                 <Image src="/sort.png" alt="" width={14} height={14} />
               </button>
-              {role === "admin" && (
-                <FormContainer table="teacher" type="create" />
-              )}
+              <FormContainer table="teacher" type="create" />
             </div>
           </div>
         </div>

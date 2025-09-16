@@ -26,7 +26,6 @@ interface Timetable {
   endTime: string;
   roomNumber: string | null;
   buildingName: string | null;
-  isElective: boolean;
   isActive: boolean;
   class: {
     id: number;
@@ -263,11 +262,7 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
                               key={timetable.id}
                               initial={{ opacity: 0, scale: 0.95 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              className={`p-3 rounded-lg mb-2 ${
-                                timetable.isElective 
-                                  ? 'bg-purple-50 border border-purple-200' 
-                                  : 'bg-blue-50 border border-blue-200'
-                              }`}
+                              className="p-3 rounded-lg mb-2 bg-blue-50 border border-blue-200"
                             >
                               <div className="font-medium text-gray-900 text-sm mb-1">
                                 {timetable.subject?.name || 'No Subject'}
@@ -280,11 +275,6 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
                                   <MapPin className="w-3 h-3" />
                                   {timetable.roomNumber}
                                   {timetable.buildingName && ` (${timetable.buildingName})`}
-                                </div>
-                              )}
-                              {timetable.isElective && (
-                                <div className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                                  Elective
                                 </div>
                               )}
                             </motion.div>
@@ -334,11 +324,7 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className={`p-6 rounded-lg border ${
-                    timetable.isElective 
-                      ? 'bg-purple-50 border-purple-200' 
-                      : 'bg-blue-50 border-blue-200'
-                  }`}
+                  className="p-6 rounded-lg border bg-blue-50 border-blue-200"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -347,11 +333,6 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
                           <Clock className="w-4 h-4" />
                           {formatTime(timetable.startTime)} - {formatTime(timetable.endTime)}
                         </div>
-                        {timetable.isElective && (
-                          <span className="bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded">
-                            Elective
-                          </span>
-                        )}
                       </div>
                       
                       <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -446,9 +427,9 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900">
-                {timetables.filter(t => t.isActive && t.isElective).length}
+                {timetables.filter(t => t.isActive).length}
               </div>
-              <div className="text-sm text-gray-600">Electives</div>
+              <div className="text-sm text-gray-600">Total Classes</div>
             </div>
           </div>
         </div>

@@ -27,6 +27,7 @@ interface TeacherAssignment {
     id: number;
     name: string;
     branch: {
+      id: number;
       shortName: string;
     };
   };
@@ -48,6 +49,7 @@ interface UnassignedTeacher {
   lastName: string;
   teacherId: string;
   branch: {
+    id: number;
     shortName: string;
   };
   supervisedClass?: {
@@ -66,6 +68,17 @@ const TeacherAssignmentsPage = () => {
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [viewMode, setViewMode] = useState<"assignments" | "unassigned">("assignments");
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    totalCount: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
 
   // Filter data
   const [branches, setBranches] = useState<any[]>([]);
@@ -100,6 +113,18 @@ const TeacherAssignmentsPage = () => {
     };
   }, [selectedBranch, selectedAcademicYear, selectedSubject, selectedRole]);
 
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedBranch, selectedAcademicYear, selectedSubject, selectedRole]);
+
+  // Fetch assignments when page changes
+  useEffect(() => {
+    if (viewMode === "assignments") {
+      fetchAssignments();
+    }
+  }, [currentPage]);
+
   const fetchFilterData = async () => {
     try {
       const [branchesRes, academicYearsRes, subjectsRes] = await Promise.all([
@@ -128,11 +153,20 @@ const TeacherAssignmentsPage = () => {
       if (selectedAcademicYear) params.append("academicYearId", selectedAcademicYear);
       if (selectedSubject) params.append("subjectId", selectedSubject);
       if (selectedRole) params.append("role", selectedRole);
+      
+      // Add pagination parameters
+      params.append("page", currentPage.toString());
+      params.append("limit", "50");
 
       const response = await fetch(`/api/teacher-assignments?${params}`);
       const data = await response.json();
       
       setAssignments(extractArray(data, ["assignments", "data"]));
+      
+      // Update pagination state
+      if (data.pagination) {
+        setPagination(data.pagination);
+      }
       
       // Calculate statistics
       const arrayData = extractArray(data, ["assignments", "data"]);
@@ -142,7 +176,7 @@ const TeacherAssignmentsPage = () => {
       
       setStats(prev => ({
         ...prev,
-        totalAssignments: arrayData.length || 0,
+        totalAssignments: data.pagination?.totalCount || arrayData.length || 0,
         totalTeachers: uniqueTeachers.size,
         totalClasses: uniqueClasses.size,
         totalSubjects: uniqueSubjects.size
@@ -334,9 +368,9 @@ const TeacherAssignmentsPage = () => {
       {!loading && viewMode === "assignments" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Active Assignments ({assignments.length})</h3>
+            <h3 className="text-lg font-semibold">Active Assignments ({pagination.totalCount})</h3>
             <div className="text-sm text-gray-500">
-              Showing {assignments.length} of {stats.totalAssignments} assignments
+              Showing {assignments.length} of {pagination.totalCount} assignments
             </div>
           </div>
           
@@ -415,6 +449,77 @@ const TeacherAssignmentsPage = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          
+          {/* Pagination Controls */}
+          {assignments.length > 0 && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <div className="text-sm text-gray-700">
+                Page {pagination.page} of {pagination.totalPages} 
+                ({pagination.totalCount} total assignments)
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={!pagination.hasPrevPage}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={!pagination.hasPrevPage}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`px-3 py-1 text-sm border rounded-md ${
+                          currentPage === pageNum
+                            ? 'bg-blue-500 text-white border-blue-500'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <button
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={!pagination.hasNextPage}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setCurrentPage(pagination.totalPages)}
+                  disabled={!pagination.hasNextPage}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Last
+                </button>
+              </div>
             </div>
           )}
         </div>

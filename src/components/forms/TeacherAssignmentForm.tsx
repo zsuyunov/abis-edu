@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Dispatch, SetStateAction, useEffect, useState, useTransition } from "react";
+// useFormState removed - using direct API calls for delete functionality
 import {
   teacherAssignmentSchema,
   TeacherAssignmentSchema,
@@ -22,6 +23,8 @@ const TeacherAssignmentForm = ({
   setOpen: Dispatch<SetStateAction<boolean>>;
   relatedData?: any;
 }) => {
+  console.log("🎯 TeacherAssignmentForm initialized with type:", type);
+  console.log("🎯 Data:", data);
   const {
     register,
     handleSubmit,
@@ -35,33 +38,45 @@ const TeacherAssignmentForm = ({
 
   const [state, setState] = useState<{ success: boolean; error: boolean; message?: string }>({ success: false, error: false });
   const [isSubmitting, startTransition] = useTransition();
+  
+  // For delete, use API route instead of server action
+  const handleDeleteSubmit = async (formData: FormData) => {
+    console.log("🗑️ handleDeleteSubmit called with formData:", formData);
+    console.log("🗑️ FormData entries:", Array.from(formData.entries()));
+
+    try {
+      console.log("🗑️ About to submit to API route");
+      const response = await fetch('/api/teacher-assignments', {
+        method: 'DELETE',
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log("🗑️ Delete result:", result);
+
+      if (result.success) {
+        toast.success(result.message || "Teacher assignment removed successfully!");
+        setOpen(false);
+      } else {
+        toast.error(result.message || "Failed to remove assignment");
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error("Failed to remove assignment");
+    }
+  };
 
   const onSubmit = handleSubmit((formData) => {
     console.log("🚀 Form submission:", { formData, assignments, selectedAcademicYearId });
     console.log("🔍 Form validation errors:", errors);
+    console.log("🔍 Current type:", type);
 
     if (type === "delete") {
-      // For delete, create FormData with required fields
-      const deleteFormData = new FormData();
-      deleteFormData.append("teacherId", data.teacher.id);
-      deleteFormData.append("classId", data.class.id.toString());
-      deleteFormData.append("subjectId", data.subject.id.toString());
-      deleteFormData.append("branchId", data.branch?.id?.toString() || "");
-      deleteFormData.append("comment", formData.comment || "");
-      deleteFormData.append("currentUserId", "admin"); // TODO: Get actual current user ID
-      startTransition(async () => {
-        const res = await deleteTeacherAssignment(state, deleteFormData as any);
-        setState(res);
-        
-        if (res.success) {
-          toast.success(res.message || "Teacher assignment removed successfully!");
-          setOpen(false);
-          router.refresh();
-        } else {
-          toast.error(res.message || "Failed to remove teacher assignment");
-        }
-      });
+      console.log("🚫 Delete type detected, returning early");
+      // For delete, we'll handle it in the form submission
+      return; // Let the form handle the submission
     } else {
+      console.log("✅ Create/Update type detected, proceeding with assignment logic");
       // For create/update, validate assignments based on role
       const isSupervisor = formData.assignSupervisor;
       const isTeacher = formData.assignAsTeacher;
@@ -89,36 +104,99 @@ const TeacherAssignmentForm = ({
         return;
       }
 
-      // For now, handle single assignment (first valid one)
-      // This can be extended to handle multiple assignments in the future
-      const assignment = validAssignments[0];
-      const assignmentData = {
-        ...formData,
-        branchId: assignment.branchId,
-        classId: assignment.classId,
-        subjectId: assignment.subjectId || null, // Allow null for supervisors
-        role: isSupervisor ? "SUPERVISOR" : "TEACHER",
-      };
-
-      console.log("📤 Submitting to action:", assignmentData);
+      // Handle multiple assignments
+      console.log("📤 Submitting multiple assignments:", validAssignments);
       
       startTransition(async () => {
         try {
           console.log("🚀 Starting transition with type:", type);
           
-          const res = await (type === "create"
-            ? createTeacherAssignment(state, assignmentData as any)
-            : updateTeacherAssignment(state, assignmentData as any));
+          if (type === "create") {
+            // Process all valid assignments
+            const results = [];
+            let successCount = 0;
+            let errorCount = 0;
             
-          console.log("✅ Action completed with result:", res);
-          setState(res);
-          
-          if (res.success) {
-            toast.success(res.message || (type === "create" ? "Assignment created successfully!" : "Assignment updated successfully!"));
-            setOpen(false);
-            router.refresh();
+            for (const assignment of validAssignments) {
+              const assignmentData = {
+                ...formData,
+                branchId: assignment.branchId,
+                classId: assignment.classId,
+                subjectId: assignment.subjectId || null, // Allow null for supervisors
+                role: isSupervisor ? "SUPERVISOR" : "TEACHER",
+              };
+              
+              console.log("📤 Creating assignment:", assignmentData);
+              
+              const res = await createTeacherAssignment(state, assignmentData as any);
+              results.push(res);
+              
+              if (res.success) {
+                successCount++;
+              } else {
+                errorCount++;
+                console.error("❌ Assignment failed:", res.message);
+              }
+            }
+            
+            // Set state based on results
+            if (successCount > 0 && errorCount === 0) {
+              setState({ success: true, error: false, message: `${successCount} assignment(s) created successfully!` });
+              toast.success(`${successCount} assignment(s) created successfully!`);
+              setOpen(false);
+              router.refresh();
+            } else if (successCount > 0 && errorCount > 0) {
+              setState({ success: true, error: false, message: `${successCount} assignment(s) created, ${errorCount} failed` });
+              toast.warning(`${successCount} assignment(s) created, ${errorCount} failed. Check console for details.`);
+              setOpen(false);
+              router.refresh();
+            } else {
+              setState({ success: false, error: true, message: "All assignments failed to create" });
+              toast.error("All assignments failed to create. Check console for details.");
+            }
           } else {
-            toast.error(res.message || `Failed to ${type} assignment`);
+            // For updates, handle multiple assignments
+            const results = [];
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (const assignment of validAssignments) {
+              const assignmentData = {
+                ...formData,
+                branchId: assignment.branchId,
+                classId: assignment.classId,
+                subjectId: assignment.subjectId || null,
+                role: isSupervisor ? "SUPERVISOR" : "TEACHER",
+              };
+              
+              console.log("📤 Updating assignment:", assignmentData);
+              
+              const res = await updateTeacherAssignment(state, assignmentData as any);
+              results.push(res);
+              
+              if (res.success) {
+                successCount++;
+              } else {
+                errorCount++;
+                console.error("❌ Assignment update failed:", res.message);
+              }
+            }
+            
+            // Set state based on results
+            if (successCount > 0 && errorCount === 0) {
+              setState({ success: true, error: false, message: `${successCount} assignment(s) updated successfully!` });
+              toast.success(`${successCount} assignment(s) updated successfully!`);
+              setOpen(false);
+              router.refresh();
+            } else if (successCount > 0 && errorCount > 0) {
+              setState({ success: true, error: false, message: `${successCount} assignment(s) updated, ${errorCount} failed` });
+              toast.warning(`${successCount} assignment(s) updated, ${errorCount} failed. Check console for details.`);
+              setOpen(false);
+              router.refresh();
+            } else {
+              setState({ success: false, error: true, message: "All assignment updates failed" });
+              toast.error("All assignment updates failed. Check console for details.");
+            }
           }
         } catch (error) {
           console.error("❌ Error in transition:", error);
@@ -130,6 +208,8 @@ const TeacherAssignmentForm = ({
   });
 
   const router = useRouter();
+
+  // Remove old delete state handling since we handle it in the form submission now
 
   // Prefill form for update
   useEffect(() => {
@@ -173,6 +253,19 @@ const TeacherAssignmentForm = ({
   }]);
 
   const selectedAcademicYearId = watch("academicYearId");
+  const isSupervisor = watch("assignSupervisor");
+
+  // Clear subjectId from all assignments when supervisor is enabled
+  useEffect(() => {
+    if (isSupervisor) {
+      setAssignments(prev => 
+        prev.map(assignment => ({
+          ...assignment,
+          subjectId: ''
+        }))
+      );
+    }
+  }, [isSupervisor]);
 
   useEffect(() => {
     const fetchInitial = async () => {
@@ -187,7 +280,7 @@ const TeacherAssignmentForm = ({
 
         if (branchesRes.ok) {
           const branchData = await branchesRes.json();
-          setBranches(branchData.branches || []);
+          setBranches(Array.isArray(branchData) ? branchData : (branchData.branches || []));
         }
 
         if (yearsRes.ok) {
@@ -198,7 +291,7 @@ const TeacherAssignmentForm = ({
 
         if (subjectsRes.ok) {
           const subs = await subjectsRes.json();
-          setSubjects(subs.subjects || []);
+          setSubjects(Array.isArray(subs) ? subs : (subs.subjects || []));
         }
 
         // Pre-populate for update mode
@@ -258,7 +351,7 @@ const TeacherAssignmentForm = ({
       const classesRes = await fetch(`/api/classes?academicYearId=${selectedAcademicYearId}&branchId=${branchId}`);
       if (classesRes.ok) {
         const c = await classesRes.json();
-        setClasses(prev => ({ ...prev, [assignmentId]: c.classes || [] }));
+        setClasses(prev => ({ ...prev, [assignmentId]: Array.isArray(c) ? c : (c.classes || []) }));
       }
     } catch (e) {
       console.error('Failed to load classes for assignment', e);
@@ -314,6 +407,109 @@ const TeacherAssignmentForm = ({
     subjectName: data.subject?.name || 'Unknown Subject',
     academicYearName: data.academicYear?.name || 'Unknown Year'
   } : null;
+
+  // Delete functionality is now handled directly in handleDeleteSubmit
+  // No need for useEffect since we handle success/error in the function itself
+
+  // For delete, create a separate form that submits directly to the server action
+  if (type === "delete") {
+    // Debug: Log the data structure
+    console.log("🗑️ Delete form data structure:", {
+      data,
+      teacher: data?.teacher,
+      class: data?.class,
+      subject: data?.subject,
+      academicYear: data?.academicYear
+    });
+
+    return (
+      <form
+        className="flex flex-col gap-6 max-h-[80vh] overflow-y-auto"
+        onSubmit={(e) => {
+          console.log("🗑️ Form onSubmit triggered");
+          e.preventDefault();
+          console.log("🗑️ Creating FormData from form element");
+          const formData = new FormData(e.currentTarget);
+          console.log("🗑️ FormData created:", formData);
+          console.log("🗑️ Calling handleDeleteSubmit");
+          handleDeleteSubmit(formData);
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Delete Teacher Assignment</h1>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Are you sure you want to unassign this teacher?
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p><strong>Teacher:</strong> {data?.teacher?.firstName} {data?.teacher?.lastName} ({data?.teacher?.teacherId})</p>
+                <p><strong>Class:</strong> {data?.class?.name}</p>
+                <p><strong>Subject:</strong> {data?.subject?.name}</p>
+                <p><strong>Academic Year:</strong> {data?.academicYear?.name}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-2">
+            Comment *
+          </label>
+          <textarea
+            id="comment"
+            name="comment"
+            rows={4}
+            required
+            minLength={10}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            placeholder="Please provide a reason for unassigning this teacher (minimum 10 characters)"
+          />
+        </div>
+
+        {/* Hidden fields for the server action */}
+        <input type="hidden" name="teacherId" value={data?.teacher?.id || ""} />
+        <input type="hidden" name="classId" value={data?.class?.id || ""} />
+        <input type="hidden" name="subjectId" value={data?.subject?.id || ""} />
+        <input type="hidden" name="branchId" value={data?.class?.branch?.id || ""} />
+        <input type="hidden" name="currentUserId" value="admin" />
+        <input type="hidden" name="academicYearId" value={data?.academicYear?.id || ""} />
+
+        <div className="flex justify-end gap-4">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="bg-gray-400 text-white p-2 rounded-md hover:bg-gray-500 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="bg-red-600 text-white p-2 rounded-md hover:bg-red-700 transition-colors"
+          >
+            Confirm Unassignment
+          </button>
+        </div>
+      </form>
+    );
+  }
 
   return (
     <form className="flex flex-col gap-6 max-h-[80vh] overflow-y-auto" onSubmit={onSubmit}>
@@ -451,7 +647,7 @@ const TeacherAssignmentForm = ({
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${watch('assignSupervisor') ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
             <div className="flex flex-col gap-2">
               <label className="text-xs text-gray-500">
                 Branch <span className="text-red-500">*</span>
@@ -494,26 +690,26 @@ const TeacherAssignmentForm = ({
               </select>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-xs text-gray-500">
-                Subject <span className={watch('assignSupervisor') ? "text-gray-400" : "text-red-500"}>
-                  {watch('assignSupervisor') ? "(optional)" : "*"}
-                </span>
-              </label>
-              <select
-                className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900"
-                value={assignment.subjectId}
-                onChange={(e) => updateAssignment(assignment.id, 'subjectId', e.target.value)}
-                disabled={loading || isSubmitting}
-              >
-                <option value="">Select Subject</option>
-                {subjects.map((subject: any) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!watch('assignSupervisor') && (
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-gray-500">
+                  Subject <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900"
+                  value={assignment.subjectId}
+                  onChange={(e) => updateAssignment(assignment.id, 'subjectId', e.target.value)}
+                  disabled={loading || isSubmitting}
+                >
+                  <option value="">Select Subject</option>
+                  {subjects.map((subject: any) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -548,46 +744,7 @@ const TeacherAssignmentForm = ({
         <input type="hidden" {...register("id")} value={data?.id} />
       )}
 
-      {/* Delete confirmation for delete type */}
-      {type === "delete" && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Delete Teacher Assignment</h3>
-              <div className="mt-2 text-sm text-red-700">
-                <p>This will remove the assignment of <strong>{data?.teacher?.firstName || data?.teacher?.name?.split(' ')[0]} {data?.teacher?.lastName || data?.teacher?.name?.split(' ')[1]}</strong> to teach <strong>{data?.subject?.name}</strong> in <strong>{data?.class?.name}</strong>.</p>
-                <p className="mt-1">This action cannot be undone.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Comment field for delete type */}
-      {type === "delete" && (
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-gray-700">
-            Comment <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            {...register("comment")}
-            rows={4}
-            className="ring-[1.5px] ring-gray-300 p-3 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400 resize-none"
-            placeholder="Please provide a reason for deleting this assignment (minimum 10 characters)..."
-          />
-          {errors?.comment?.message && (
-            <p className="text-xs text-red-400">{errors.comment.message.toString()}</p>
-          )}
-          <p className="text-xs text-gray-500">
-            Minimum 10 characters required. This comment will be recorded for audit purposes.
-          </p>
-        </div>
-      )}
+      {/* Delete case is handled above with early return */}
 
       {state.error && state.message && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -606,23 +763,17 @@ const TeacherAssignmentForm = ({
         <button
           type="submit"
           disabled={loading || isSubmitting}
-          className={`p-2 rounded-md text-white transition-colors ${
-            type === "delete" 
-              ? "bg-red-600 hover:bg-red-700 disabled:bg-red-400" 
-              : "bg-blue-400 hover:bg-blue-500 disabled:bg-blue-300"
-          }`}
+          className="bg-blue-400 hover:bg-blue-500 disabled:bg-blue-300 p-2 rounded-md text-white transition-colors"
         >
           {loading || isSubmitting ? (
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               {type === "create" ? "Creating..." : 
-               type === "update" ? "Updating..." : 
-               "Deleting..."}
+               "Updating..."}
             </div>
           ) : (
             type === "create" ? "Create Assignment" : 
-            type === "update" ? "Update Assignment" : 
-            "Delete Assignment"
+            "Update Assignment"
           )}
         </button>
       </div>

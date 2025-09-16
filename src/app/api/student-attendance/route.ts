@@ -70,7 +70,9 @@ export async function GET(request: NextRequest) {
 
     if (subjectId) {
       attendanceWhere.timetable = {
-        subjectId: parseInt(subjectId),
+        subjectIds: {
+          has: parseInt(subjectId)
+        }
       };
     }
 
@@ -87,7 +89,6 @@ export async function GET(request: NextRequest) {
       include: {
         timetable: {
           include: {
-            subject: true,
             class: true,
           },
         },
@@ -203,23 +204,23 @@ function calculateAttendanceStats(records: any[], period: string) {
     a.date.localeCompare(b.date)
   );
 
-  // Subject-wise breakdown
-  const subjectStats: Record<string, any> = {};
-  records.forEach(record => {
-    const subjectName = record.timetable.subject.name;
-    if (!subjectStats[subjectName]) {
-      subjectStats[subjectName] = {
-        subject: subjectName,
-        present: 0,
-        absent: 0,
-        late: 0,
-        excused: 0,
-        total: 0,
-      };
-    }
-    subjectStats[subjectName][record.status.toLowerCase()]++;
-    subjectStats[subjectName].total++;
-  });
+  // Subject-wise breakdown - temporarily disabled due to schema changes
+  // const subjectStats: Record<string, any> = {};
+  // records.forEach(record => {
+  //   const subjectName = record.timetable.subject.name;
+  //   if (!subjectStats[subjectName]) {
+  //     subjectStats[subjectName] = {
+  //       subject: subjectName,
+  //       present: 0,
+  //       absent: 0,
+  //       late: 0,
+  //       excused: 0,
+  //       total: 0,
+  //     };
+  //   }
+  //   subjectStats[subjectName][record.status.toLowerCase()]++;
+  //   subjectStats[subjectName].total++;
+  // });
 
   return {
     totalRecords,
@@ -230,7 +231,7 @@ function calculateAttendanceStats(records: any[], period: string) {
     attendanceRate,
     punctualityRate,
     chartData,
-    subjectStats: Object.values(subjectStats),
+    subjectStats: [], // temporarily empty due to schema changes
     period,
   };
 }
@@ -246,7 +247,9 @@ async function getAttendanceCalendar(studentId: string, dateRange: any, subjectI
 
   if (subjectId) {
     attendanceWhere.timetable = {
-      subjectId: parseInt(subjectId),
+      subjectIds: {
+        has: parseInt(subjectId)
+      }
     };
   }
 
@@ -260,11 +263,7 @@ async function getAttendanceCalendar(studentId: string, dateRange: any, subjectI
   const attendanceRecords = await prisma.attendance.findMany({
     where: attendanceWhere,
     include: {
-      timetable: {
-        include: {
-          subject: true,
-        },
-      },
+      timetable: true,
     },
     orderBy: {
       date: 'desc',

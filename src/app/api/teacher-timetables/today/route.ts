@@ -33,20 +33,53 @@ export async function GET(request: NextRequest) {
     const endOfToday = new Date(today);
     endOfToday.setHours(23, 59, 59, 999);
 
-    // Get today's timetables
-    const todaysTimetables = await prisma.timetable.findMany({
-      where: {
-        classId: { in: teacherAssignments.map(ta => ta.classId) },
-        isActive: true,
-        startTime: {
-          gte: today,
-          lte: endOfToday,
-        },
+    // Get teacher's assigned class and subject IDs
+    const assignedClassIds = teacherAssignments.map(ta => ta.classId);
+    const assignedSubjectIds = teacherAssignments
+      .filter(ta => ta.subjectId !== null)
+      .map(ta => ta.subjectId as number); // Cast to number since we filtered out nulls
+
+    // Build the where clause for the timetable query
+    const whereClause: any = {
+      isActive: true,
+      startTime: {
+        gte: today,
+        lte: endOfToday,
       },
+      OR: [
+        // Match by class and subject if subjects are assigned
+        ...(assignedSubjectIds.length > 0 ? [{
+          classId: { in: assignedClassIds },
+          subjectId: { in: assignedSubjectIds },
+        }] : []),
+        // Always include classes where no specific subject is assigned
+        {
+          classId: { in: assignedClassIds },
+          subjectId: null,
+        },
+      ],
+    };
+
+    // Get today's timetables for the teacher's assigned classes and subjects
+    const todaysTimetables = await prisma.timetable.findMany({
+      where: whereClause,
       include: {
         subject: true,
-        class: true,
-        branch: true,
+        class: {
+          include: {
+            branch: true,
+            academicYear: true,
+          },
+        },
+        topics: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+          },
+        },
+        // Note: 'homework' relation is not directly available in the Timetable model
+        // We'll handle homework separately if needed
       },
       orderBy: {
         startTime: "asc",
@@ -58,20 +91,42 @@ export async function GET(request: NextRequest) {
       timetable.startTime >= now
     );
 
-    // Transform timetables to include fullDate field
-    const transformedTodaysTimetables = todaysTimetables.map(timetable => ({
-      ...timetable,
-      fullDate: new Date().toISOString().split('T')[0],
-      startTime: timetable.startTime?.toISOString() || timetable.startTime,
-      endTime: timetable.endTime?.toISOString() || timetable.endTime,
-    }));
+    // Define interface for the transformed timetable
+    interface TransformedTimetable {
+      id: string;
+      fullDate: string;
+      startTime: string;
+      endTime: string;
+      class: {
+        id: string;
+        name: string;
+        branch: { id: string; shortName: string; };
+        academicYear: { id: number; name: string; };
+      };
+      subject: { id: string; name: string; };
+      branch: { id: string; shortName: string; };
+      topics: Array<{ id: string; title: string; description: string }>;
+    }
 
-    const transformedUpcomingToday = upcomingToday.map(timetable => ({
+    // Transform timetables to include fullDate field and ensure consistent data structure
+    const transformTimetable = (timetable: any): TransformedTimetable => ({
       ...timetable,
       fullDate: new Date().toISOString().split('T')[0],
       startTime: timetable.startTime?.toISOString() || timetable.startTime,
       endTime: timetable.endTime?.toISOString() || timetable.endTime,
-    }));
+      class: {
+        ...timetable.class,
+        name: timetable.class?.name || `Class ${timetable.classId}`,
+        academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
+        branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' }
+      },
+      subject: timetable.subject || { id: 'none', name: 'General' },
+      branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
+      topics: timetable.topics || []
+    });
+
+    const transformedTodaysTimetables = todaysTimetables.map(transformTimetable);
+    const transformedUpcomingToday = upcomingToday.map(transformTimetable);
 
     return NextResponse.json({
       todaysTimetables: transformedTodaysTimetables,

@@ -1,6 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+
+// Helper function to safely extract form data
+const safeGetFormData = (data: FormData | null | undefined, key: string): string => {
+  if (!data) {
+    console.error("Form data is missing in safeGetFormData");
+    return "";
+  }
+  return (data.get(key) as string) || "";
+};
 import {
   AcademicYearSchema,
   ArchiveCommentSchema,
@@ -47,11 +56,48 @@ import { AuthService } from "@/lib/auth";
 
 type CurrentState = { success: boolean; error: boolean; message?: string };
 
+// Helper function to generate a unique teacher ID in format T + 5 digits
+async function generateUniqueTeacherId(): Promise<string> {
+  let teacherId: string;
+  let counter = 1;
+  
+  while (true) {
+    const randomDigits = Math.floor(Math.random() * 90000) + 10000; // 5 digits
+    teacherId = `T${randomDigits}`;
+    
+    const existingTeacher = await prisma.teacher.findFirst({
+      where: { teacherId: teacherId }
+    });
+    
+    if (!existingTeacher) {
+      return teacherId;
+    }
+    
+    counter++;
+    if (counter > 999) {
+      throw new Error('Could not generate unique teacher ID after 999 attempts');
+    }
+  }
+}
+
 export const createSubject = async (
   currentState: CurrentState,
   data: SubjectSchema
 ) => {
   try {
+    // Check if a subject with this name already exists
+    const existingSubject = await prisma.subject.findFirst({
+      where: { name: data.name }
+    });
+
+    if (existingSubject) {
+      return { 
+        success: false, 
+        error: true, 
+        message: `A subject with the name "${data.name}" already exists` 
+      };
+    }
+
     await prisma.subject.create({
       data: {
         name: data.name,
@@ -60,10 +106,17 @@ export const createSubject = async (
     });
 
     // revalidatePath("/list/subjects");
-    return { success: true, error: false };
+    return { success: true, error: false, message: "Subject created successfully" };
   } catch (err) {
     console.log(err);
-    return { success: false, error: true };
+    if (err instanceof Error && err.message.includes('Unique constraint')) {
+      return { 
+        success: false, 
+        error: true, 
+        message: `A subject with the name "${data.name}" already exists` 
+      };
+    }
+    return { success: false, error: true, message: "Failed to create subject" };
   }
 };
 
@@ -72,6 +125,34 @@ export const updateSubject = async (
   data: SubjectSchema
 ) => {
   try {
+    // First, get the current subject to check if name is actually changing
+    const currentSubject = await prisma.subject.findUnique({
+      where: { id: data.id },
+      select: { name: true }
+    });
+
+    if (!currentSubject) {
+      return { success: false, error: true, message: "Subject not found" };
+    }
+
+    // If the name is changing, check if the new name already exists
+    if (currentSubject.name !== data.name) {
+      const existingSubject = await prisma.subject.findFirst({
+        where: {
+          name: data.name,
+          id: { not: data.id } // Exclude the current subject
+        }
+      });
+
+      if (existingSubject) {
+        return { 
+          success: false, 
+          error: true, 
+          message: `A subject with the name "${data.name}" already exists` 
+        };
+      }
+    }
+
     await prisma.subject.update({
       where: {
         id: data.id,
@@ -83,10 +164,17 @@ export const updateSubject = async (
     });
 
     // revalidatePath("/list/subjects");
-    return { success: true, error: false };
+    return { success: true, error: false, message: "Subject updated successfully" };
   } catch (err) {
     console.log(err);
-    return { success: false, error: true };
+    if (err instanceof Error && err.message.includes('Unique constraint')) {
+      return { 
+        success: false, 
+        error: true, 
+        message: `A subject with the name "${data.name}" already exists` 
+      };
+    }
+    return { success: false, error: true, message: "Failed to update subject" };
   }
 };
 
@@ -203,14 +291,43 @@ export const deleteSubject = async (
 
 export const createClass = async (
   currentState: CurrentState,
-  data: ClassSchema
-) => {
+  formData: FormData
+): Promise<CurrentState> => {
+  // Extract data from FormData
+  const data = {
+    name: formData.get("name") as string,
+    capacity: parseInt(formData.get("capacity") as string),
+    branchId: parseInt(formData.get("branchId") as string),
+    academicYearId: parseInt(formData.get("academicYearId") as string),
+    language: formData.get("language") as string || null,
+    educationType: formData.get("educationType") as string || null,
+    status: formData.get("status") as string || "ACTIVE",
+  };
+
   try {
+    console.log("Creating class with formData:", formData);
+    console.log("FormData entries:", Array.from(formData.entries()));
+    
+    console.log("Parsed data:", data);
+    
+    // Check if a class with this name already exists
+    const existingClass = await prisma.class.findFirst({
+      where: { name: data.name }
+    });
+
+    if (existingClass) {
+      return { 
+        success: false, 
+        error: true, 
+        message: `A class with the name "${data.name}" already exists` 
+      };
+    }
+
     const classData: any = {
       name: data.name,
       capacity: data.capacity,
-      language: data.language as any,
-      educationType: data.educationType as any,
+      language: data.language || null,
+      educationType: data.educationType || null,
       status: (data.status || "ACTIVE") as any,
       branch: { connect: { id: data.branchId } },
       academicYear: { connect: { id: data.academicYearId } },
@@ -219,27 +336,78 @@ export const createClass = async (
     await prisma.class.create({ data: classData as any });
 
     // revalidatePath("/list/classes");
-    return { success: true, error: false };
+    return { success: true, error: false, message: "Class created successfully" };
   } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
+    console.error("Class creation error:", err);
+    if (err instanceof Error && err.message.includes('Unique constraint')) {
+      return { 
+        success: false, 
+        error: true, 
+        message: `A class with the name "${data.name || 'unknown'}" already exists` 
+      };
+    }
+    return { 
+      success: false, 
+      error: true, 
+      message: `Failed to create class: ${err instanceof Error ? err.message : 'Unknown error'}` 
+    };
   }
 };
 
 export const updateClass = async (
   currentState: CurrentState,
-  data: ClassSchema
-) => {
+  formData: FormData
+): Promise<CurrentState> => {
+  // Extract data from FormData
+  const data = {
+    id: parseInt(formData.get("id") as string),
+    name: formData.get("name") as string,
+    capacity: parseInt(formData.get("capacity") as string),
+    branchId: parseInt(formData.get("branchId") as string),
+    academicYearId: parseInt(formData.get("academicYearId") as string),
+    language: formData.get("language") as string || null,
+    educationType: formData.get("educationType") as string || null,
+    status: formData.get("status") as string || "ACTIVE",
+  };
+  
   if (!data.id) {
-    return { success: false, error: true };
+    return { success: false, error: true, message: "Class ID is required" };
   }
 
   try {
+    // First, get the current class to check if name is actually changing
+    const currentClass = await prisma.class.findUnique({
+      where: { id: data.id },
+      select: { name: true }
+    });
+
+    if (!currentClass) {
+      return { success: false, error: true, message: "Class not found" };
+    }
+
+    // If the name is changing, check if the new name already exists
+    if (currentClass.name !== data.name) {
+      const existingClass = await prisma.class.findFirst({
+        where: {
+          name: data.name,
+          id: { not: data.id } // Exclude the current class
+        }
+      });
+
+      if (existingClass) {
+        return { 
+          success: false, 
+          error: true, 
+          message: `A class with the name "${data.name}" already exists` 
+        };
+      }
+    }
+
     const updateData: any = {
       name: data.name,
       capacity: data.capacity,
-      language: data.language as any,
-      educationType: data.educationType as any,
+      language: data.language || null,
+      educationType: data.educationType || null,
       status: data.status as any,
       branch: { connect: { id: data.branchId } },
       academicYear: { connect: { id: data.academicYearId } },
@@ -251,10 +419,17 @@ export const updateClass = async (
     });
 
     // revalidatePath("/list/classes");
-    return { success: true, error: false };
+    return { success: true, error: false, message: "Class updated successfully" };
   } catch (err) {
     console.log(err);
-    return { success: false, error: true };
+    if (err instanceof Error && err.message.includes('Unique constraint')) {
+      return { 
+        success: false, 
+        error: true, 
+        message: `A class with the name "${data.name}" already exists` 
+      };
+    }
+    return { success: false, error: true, message: "Failed to update class" };
   }
 };
 
@@ -664,7 +839,7 @@ export const createAttendance = async (
         branchId: timetable.branchId,
         classId: timetable.classId,
         subjectId: timetable.subjectId!,
-        teacherId: Array.isArray(timetable.teacherIds) ? (timetable.teacherIds as string[])[0] || "" : "",
+        teacherId: timetable.teacherIds && timetable.teacherIds.length > 0 ? timetable.teacherIds[0] : "",
       },
     });
 
@@ -2376,6 +2551,18 @@ export const getHomeworkAnalytics = async (
 // Exam Actions
 export const checkExamConflicts = async (data: ExamConflictSchema) => {
   try {
+    // Convert time strings to DateTime objects for Prisma comparison
+    // data.startTime and data.endTime are in HH:MM:SS format
+    const convertTimeStringToDateTime = (timeString: string) => {
+      // For Prisma @db.Time fields, we need to create a DateTime object
+      // that represents just the time. Using local time to avoid timezone conversion issues.
+      const date = new Date(`1970-01-01T${timeString}`);
+      return date;
+    };
+    
+    const startTime = convertTimeStringToDateTime(data.startTime);
+    const endTime = convertTimeStringToDateTime(data.endTime);
+    
     const conflicts = await prisma.exam.findMany({
       where: {
         date: data.date,
@@ -2387,20 +2574,20 @@ export const checkExamConflicts = async (data: ExamConflictSchema) => {
             OR: [
               {
                 AND: [
-                  { startTime: { lte: data.startTime } },
-                  { endTime: { gt: data.startTime } }
+                  { startTime: { lte: startTime } },
+                  { endTime: { gt: startTime } }
                 ]
               },
               {
                 AND: [
-                  { startTime: { lt: data.endTime } },
-                  { endTime: { gte: data.endTime } }
+                  { startTime: { lt: endTime } },
+                  { endTime: { gte: endTime } }
                 ]
               },
               {
                 AND: [
-                  { startTime: { gte: data.startTime } },
-                  { endTime: { lte: data.endTime } }
+                  { startTime: { gte: startTime } },
+                  { endTime: { lte: endTime } }
                 ]
               }
             ]
@@ -2411,20 +2598,20 @@ export const checkExamConflicts = async (data: ExamConflictSchema) => {
             OR: [
               {
                 AND: [
-                  { startTime: { lte: data.startTime } },
-                  { endTime: { gt: data.startTime } }
+                  { startTime: { lte: startTime } },
+                  { endTime: { gt: startTime } }
                 ]
               },
               {
                 AND: [
-                  { startTime: { lt: data.endTime } },
-                  { endTime: { gte: data.endTime } }
+                  { startTime: { lt: endTime } },
+                  { endTime: { gte: endTime } }
                 ]
               },
               {
                 AND: [
-                  { startTime: { gte: data.startTime } },
-                  { endTime: { lte: data.endTime } }
+                  { startTime: { gte: startTime } },
+                  { endTime: { lte: endTime } }
                 ]
               }
             ]
@@ -2464,13 +2651,21 @@ export const createExam = async (
   data: ExamSchema
 ) => {
   try {
+    // Convert time strings to DateTime objects for Prisma
+    const convertTimeStringToDateTime = (timeString: string) => {
+      // For Prisma @db.Time fields, we need to create a DateTime object
+      // that represents just the time. Using local time to avoid timezone conversion issues.
+      const date = new Date(`1970-01-01T${timeString}`);
+      return date;
+    };
+
     // Check for conflicts before creating
     const conflictCheck = await checkExamConflicts({
       date: data.date,
       startTime: data.startTime,
       endTime: data.endTime,
       classId: data.classId,
-      roomNumber: data.roomNumber,
+      roomNumber: data.roomNumber || '',
     });
 
     if (conflictCheck.hasConflicts) {
@@ -2481,16 +2676,15 @@ export const createExam = async (
       };
     }
 
-    await prisma.$transaction(async (tx) => {
-      // Create the exam
-      const exam = await tx.exam.create({
+    // Create the exam first (outside transaction to avoid timeout)
+    const exam = await prisma.exam.create({
         data: {
           name: data.name,
           date: data.date,
           examDay: data.examDay,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          roomNumber: data.roomNumber,
+          startTime: convertTimeStringToDateTime(data.startTime),
+          endTime: convertTimeStringToDateTime(data.endTime),
+        roomNumber: data.roomNumber || '',
           fullMarks: data.fullMarks,
           passingMarks: data.passingMarks,
           status: data.status as any,
@@ -2502,8 +2696,11 @@ export const createExam = async (
         },
       });
 
-      // Get all students in the class and create exam results
-      const students = await tx.student.findMany({
+    // Create exam results asynchronously to avoid blocking the main operation
+    // This runs in the background and won't block the exam creation
+    setImmediate(async () => {
+      try {
+        const students = await prisma.student.findMany({
         where: { 
           classId: data.classId,
           status: "ACTIVE"
@@ -2511,20 +2708,31 @@ export const createExam = async (
         select: { id: true },
       });
 
-      // Create exam result placeholders for all students
-      await Promise.all(
-        students.map(student =>
-          tx.examResult.create({
-            data: {
+        console.log(`Creating exam results for ${students.length} students...`);
+
+        // Create exam results in batches of 100 to avoid timeout
+        const batchSize = 100;
+        for (let i = 0; i < students.length; i += batchSize) {
+          const batch = students.slice(i, i + batchSize);
+          
+          await prisma.examResult.createMany({
+            data: batch.map(student => ({
               examId: exam.id,
               studentId: student.id,
               marksObtained: 0,
               status: "FAIL", // Default until marks are entered
               branchId: data.branchId,
-            },
-          })
-        )
-      );
+            })),
+          });
+          
+          console.log(`Created exam results for batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(students.length / batchSize)}`);
+        }
+        
+        console.log(`Successfully created exam results for all ${students.length} students`);
+      } catch (error) {
+        console.error("Error creating exam results:", error);
+        // Exam results can be created later manually if needed
+      }
     });
 
     return { success: true, error: false };
@@ -2543,13 +2751,21 @@ export const updateExam = async (
   }
 
   try {
+    // Convert time strings to DateTime objects for Prisma
+    const convertTimeStringToDateTime = (timeString: string) => {
+      // For Prisma @db.Time fields, we need to create a DateTime object
+      // that represents just the time. Using local time to avoid timezone conversion issues.
+      const date = new Date(`1970-01-01T${timeString}`);
+      return date;
+    };
+
     // Check for conflicts before updating
     const conflictCheck = await checkExamConflicts({
       date: data.date,
       startTime: data.startTime,
       endTime: data.endTime,
       classId: data.classId,
-      roomNumber: data.roomNumber,
+      roomNumber: data.roomNumber || '',
       excludeExamId: data.id,
     });
 
@@ -2567,8 +2783,8 @@ export const updateExam = async (
         name: data.name,
         date: data.date,
         examDay: data.examDay,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        startTime: convertTimeStringToDateTime(data.startTime),
+        endTime: convertTimeStringToDateTime(data.endTime),
         roomNumber: data.roomNumber,
         fullMarks: data.fullMarks,
         passingMarks: data.passingMarks,
@@ -2862,15 +3078,28 @@ export const createBranch = async (
 ) => {
   try {
     // Check if STIR number already exists
-    const existingBranch = await prisma.branch.findFirst({
+    const existingBranchByStir = await prisma.branch.findFirst({
       where: { stir: data.stir }
     });
 
-    if (existingBranch) {
+    if (existingBranchByStir) {
       return { 
         success: false, 
         error: true, 
         message: "This STIR number is already registered. Please use a different STIR number." 
+      };
+    }
+
+    // Check if shortName already exists
+    const existingBranchByShortName = await prisma.branch.findFirst({
+      where: { shortName: data.shortName }
+    });
+
+    if (existingBranchByShortName) {
+      return { 
+        success: false, 
+        error: true, 
+        message: `A branch with the short name "${data.shortName}" already exists` 
       };
     }
 
@@ -2893,10 +3122,17 @@ export const createBranch = async (
       data: branchData,
     });
 
-    return { success: true, error: false };
+    return { success: true, error: false, message: "Branch created successfully" };
   } catch (err) {
     console.log(err);
-    return { success: false, error: true };
+    if (err instanceof Error && err.message.includes('Unique constraint')) {
+      return { 
+        success: false, 
+        error: true, 
+        message: "A branch with this name or STIR number already exists" 
+      };
+    }
+    return { success: false, error: true, message: "Failed to create branch" };
   }
 };
 
@@ -3356,27 +3592,24 @@ export const createTeacher = async (
   data: TeacherSchema
 ) => {
   try {
-    // Check if teacherId is already taken by any user type
-    const [existingTeacher, existingUser, existingParent, existingStudent] = await Promise.all([
-      prisma.teacher.findFirst({ where: { teacherId: data.teacherId } as any }),
-      prisma.user.findFirst({ where: { userId: data.teacherId } as any }),
-      prisma.parent.findFirst({ where: { parentId: data.teacherId } as any }),
-      prisma.student.findFirst({ where: { studentId: data.teacherId } as any }),
-    ]);
+    // Check if phone number is already taken by any teacher
+    const existingTeacherByPhone = await prisma.teacher.findFirst({ 
+      where: { phone: data.phone } 
+    });
 
-    if (existingTeacher || existingUser || existingParent || existingStudent) {
+    if (existingTeacherByPhone) {
       return { 
         success: false, 
         error: true, 
-        message: "This ID is already taken. Please use a different ID." 
+        message: "A teacher with this phone number already exists. Please use a different phone number." 
       };
     }
 
     // Hash the password
     const hashedPassword = await AuthService.hashPassword(data.password);
 
-    // Generate a unique ID for the teacher
-    const teacherId = `teacher_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate a unique teacher ID in format T + 5 digits
+    const teacherId = await generateUniqueTeacherId();
 
     // Prepare teacher data
     const teacherData = {
@@ -3386,7 +3619,7 @@ export const createTeacher = async (
       gender: data.gender,
       dateOfBirth: data.dateOfBirth || new Date('1990-01-01'), // Provide default date if none provided
       phone: data.phone,
-      teacherId: data.teacherId,
+      teacherId: teacherId, // Use the generated teacherId
       password: hashedPassword,
       email: data.email || null,
       address: data.address || "",
@@ -3754,17 +3987,60 @@ export const deleteTeacherAssignment = async (
   currentState: CurrentState,
   data: FormData
 ) => {
-  const teacherId = data.get("teacherId") as string;
-  const classId = data.get("classId") as string;
-  const subjectId = data.get("subjectId") as string;
-  const comment = data.get("comment") as string;
-  const currentUserId = data.get("currentUserId") as string;
-
-  if (!comment || comment.length < 10) {
-    return { success: false, error: true, message: "Comment is required (minimum 10 characters)" };
-  }
-
   try {
+    console.log("=== deleteTeacherAssignment called ===");
+    console.log("Current state:", currentState);
+    console.log("Data type:", typeof data);
+    console.log("Is FormData:", data instanceof FormData);
+
+    // Check if data is undefined or null
+    if (!data) {
+      console.error("deleteTeacherAssignment: Form data is missing");
+      return { success: false, error: true, message: "Form data is missing" };
+    }
+
+    console.log("deleteTeacherAssignment: Form data received:", {
+      hasData: !!data,
+      dataType: typeof data,
+      isFormData: data instanceof FormData,
+      entries: data ? Array.from(data.entries()) : "no data"
+    });
+
+    // Debug: Check if FormData is empty
+    if (data instanceof FormData) {
+      const entries = Array.from(data.entries());
+      console.log("FormData entries:", entries);
+      if (entries.length === 0) {
+        console.error("FormData is empty - no entries found");
+        return { success: false, error: true, message: "Form data is empty" };
+      }
+    } else {
+      console.error("Data is not FormData instance:", typeof data, data);
+      return { success: false, error: true, message: "Invalid form data type" };
+    }
+
+    const teacherId = safeGetFormData(data, "teacherId");
+    const classId = safeGetFormData(data, "classId");
+    const subjectId = safeGetFormData(data, "subjectId");
+    const comment = safeGetFormData(data, "comment");
+    const currentUserId = safeGetFormData(data, "currentUserId");
+
+    console.log("deleteTeacherAssignment: Extracted values:", {
+      teacherId,
+      classId,
+      subjectId,
+      comment: comment ? `${comment.substring(0, 20)}...` : "empty",
+      currentUserId
+    });
+
+    // Validate required fields
+    if (!teacherId || !classId) {
+      return { success: false, error: true, message: "Missing required fields: teacherId or classId" };
+    }
+
+    if (!comment || comment.length < 10) {
+      return { success: false, error: true, message: "Comment is required (minimum 10 characters)" };
+    }
     // Find the teacher assignment to delete
     const assignment = await prisma.teacherAssignment.findFirst({
       where: {
@@ -3811,7 +4087,7 @@ export const deleteTeacherAssignment = async (
     return {
       success: false,
       error: true,
-      message: "Failed to delete teacher assignment",
+      message: error instanceof Error ? error.message : "Failed to delete teacher assignment",
     };
   }
 };
@@ -4800,9 +5076,35 @@ export const resetParentPassword = async (
 // Student Actions
 export const createStudent = async (
   currentState: CurrentState,
-  data: StudentSchema
-) => {
+  formData: FormData
+): Promise<CurrentState> => {
   try {
+    console.log("Creating student with formData:", formData);
+    console.log("FormData entries:", Array.from(formData.entries()));
+    
+    // Extract data from FormData
+    const data = {
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
+      dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : undefined,
+      phone: formData.get("phone") as string,
+      studentId: formData.get("studentId") as string,
+      password: formData.get("password") as string,
+      gender: formData.get("gender") as string,
+      status: formData.get("status") as string || "ACTIVE",
+      branchId: formData.get("branchId") ? parseInt(formData.get("branchId") as string) : undefined,
+      classId: formData.get("classId") ? parseInt(formData.get("classId") as string) : undefined,
+      parentId: formData.get("parentId") as string || undefined,
+      attachments: {
+        document1: formData.get("document1") ? JSON.parse(formData.get("document1") as string) : undefined,
+        document2: formData.get("document2") ? JSON.parse(formData.get("document2") as string) : undefined,
+        image1: formData.get("image1") ? JSON.parse(formData.get("image1") as string) : undefined,
+        image2: formData.get("image2") ? JSON.parse(formData.get("image2") as string) : undefined,
+      }
+    };
+    
+    console.log("Parsed student data:", data);
+    
     // Check if studentId is already taken by any user type
     const [existingStudent, existingUser, existingTeacher, existingParent] = await Promise.all([
       prisma.student.findFirst({ where: { studentId: data.studentId } as any }),
@@ -4875,19 +5177,45 @@ export const createStudent = async (
       await prisma.studentAttachment.createMany({ data: attachmentsToCreate });
     }
 
-    return { success: true, error: false };
+    return { success: true, error: false, message: "Student created successfully" };
   } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
+    console.error("Student creation error:", err);
+    return { 
+      success: false, 
+      error: true, 
+      message: `Failed to create student: ${err instanceof Error ? err.message : 'Unknown error'}` 
+    };
   }
 };
 
 export const updateStudent = async (
   currentState: CurrentState,
-  data: StudentUpdateSchema
-) => {
+  formData: FormData
+): Promise<CurrentState> => {
+  // Extract data from FormData
+  const data = {
+    id: formData.get("id") as string,
+    firstName: formData.get("firstName") as string,
+    lastName: formData.get("lastName") as string,
+    dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : undefined,
+    phone: formData.get("phone") as string,
+    studentId: formData.get("studentId") as string,
+    password: formData.get("password") as string,
+    gender: formData.get("gender") as string,
+    status: formData.get("status") as string || "ACTIVE",
+    branchId: formData.get("branchId") ? parseInt(formData.get("branchId") as string) : undefined,
+    classId: formData.get("classId") ? parseInt(formData.get("classId") as string) : undefined,
+    parentId: formData.get("parentId") as string || undefined,
+    attachments: {
+      document1: formData.get("document1") ? JSON.parse(formData.get("document1") as string) : undefined,
+      document2: formData.get("document2") ? JSON.parse(formData.get("document2") as string) : undefined,
+      image1: formData.get("image1") ? JSON.parse(formData.get("image1") as string) : undefined,
+      image2: formData.get("image2") ? JSON.parse(formData.get("image2") as string) : undefined,
+    }
+  };
+  
   if (!data.id) {
-    return { success: false, error: true };
+    return { success: false, error: true, message: "Student ID is required" };
   }
 
   try {
@@ -4944,10 +5272,14 @@ export const updateStudent = async (
       await prisma.studentAttachment.createMany({ data: attachmentsToCreate });
     }
 
-    return { success: true, error: false };
+    return { success: true, error: false, message: "Student updated successfully" };
   } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
+    console.error("Student update error:", err);
+    return { 
+      success: false, 
+      error: true, 
+      message: `Failed to update student: ${err instanceof Error ? err.message : 'Unknown error'}` 
+    };
   }
 };
 

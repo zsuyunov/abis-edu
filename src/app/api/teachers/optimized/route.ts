@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
     const searchQuery = buildSearchQuery(search, ['firstName', 'lastName', 'teacherId']);
 
     const where: any = { status, ...searchQuery };
-    if (branchId) where.branchId = Number(branchId);
 
     const [teachers, totalCount] = await Promise.all([
       prisma.teacher.findMany({

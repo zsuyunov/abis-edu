@@ -33,9 +33,7 @@ export async function GET(request: NextRequest) {
       where.subjectId = parseInt(subjectId);
     }
     if (teacherId && teacherId !== "all") {
-      where.teacherIds = {
-        has: teacherId
-      };
+      where.teacherId = teacherId;
     }
     if (status && status !== "all") {
       where.isActive = status === "ACTIVE";
@@ -103,19 +101,50 @@ export async function GET(request: NextRequest) {
     
     const timetables = await prisma.timetable.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        branchId: true,
+        classId: true,
+        academicYearId: true,
+        dayOfWeek: true,
+        subjectId: true,
+        teacherIds: true,
+        startTime: true,
+        endTime: true,
+        roomNumber: true,
+        buildingName: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        timetableTemplateId: true,
         branch: { select: { id: true, shortName: true } },
         class: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
-        subject: { select: { id: true, name: true } },
       },
       orderBy: [
         { startTime: "asc" },
       ],
     });
+
+    // Fetch subjects for each timetable
+    const timetablesWithSubjects = await Promise.all(
+      timetables.map(async (timetable) => {
+        const subject = timetable.subjectId 
+          ? await prisma.subject.findUnique({
+              where: { id: timetable.subjectId },
+              select: { id: true, name: true }
+            })
+          : null;
+        
+        return {
+          ...timetable,
+          subject
+        };
+      })
+    );
     
     // Transform timetables to include fullDate field
-    const transformedTimetables = timetables.map(timetable => ({
+    const transformedTimetables = timetablesWithSubjects.map(timetable => ({
       ...timetable,
       fullDate: new Date().toISOString().split('T')[0], // Use current date as fallback
       startTime: timetable.startTime?.toISOString() || timetable.startTime,
@@ -142,7 +171,7 @@ export async function POST(request: NextRequest) {
         classId: body.classId,
         academicYearId: body.academicYearId,
         subjectId: body.subjectId,
-        teacherIds: body.teacherIds || [],
+        teacherIds: body.teacherId ? [body.teacherId] : [],
         dayOfWeek: body.dayOfWeek,
         startTime: new Date(body.startTime),
         endTime: new Date(body.endTime),
@@ -154,7 +183,6 @@ export async function POST(request: NextRequest) {
         branch: { select: { id: true, shortName: true } },
         class: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
-        subject: { select: { id: true, name: true } },
       },
     });
     

@@ -53,7 +53,7 @@ export async function PUT(
         classId: body.classId,
         academicYearId: body.academicYearId,
         subjectId: body.subjectId,
-        teacherIds: body.teacherIds || [],
+        teacherIds: body.teacherId ? [body.teacherId] : [],
         dayOfWeek: body.dayOfWeek,
         startTime: new Date(body.startTime),
         endTime: new Date(body.endTime),

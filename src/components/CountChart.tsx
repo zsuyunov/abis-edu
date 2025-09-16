@@ -1,5 +1,7 @@
 "use client";
 import Image from "next/image";
+import TeacherGenderIcons from "./TeacherGenderIcons";
+import StudentGenderIcons from "./StudentGenderIcons";
 import {
   RadialBarChart,
   RadialBar,
@@ -8,7 +10,7 @@ import {
 } from "recharts";
 
 
-const CountChart = ({ boys, girls }: { boys: number; girls: number }) => {
+const CountChart = ({ boys, girls, isTeacher = false }: { boys: number; girls: number; isTeacher?: boolean }) => {
   const data = [
     {
       name: "Total",
@@ -16,14 +18,14 @@ const CountChart = ({ boys, girls }: { boys: number; girls: number }) => {
       fill: "white",
     },
     {
-      name: "Girls",
+      name: isTeacher ? "Female" : "Girls",
       count: girls,
-      fill: "#FAE27C",
+      fill: isTeacher ? "#60A5FA" : "#22D3EE", // Blue-400 for teachers, cyan for students
     },
     {
-      name: "Boys",
+      name: isTeacher ? "Male" : "Boys",
       count: boys,
-      fill: "#C3EBFA",
+      fill: isTeacher ? "#7C3AED" : "#3B82F6", // Purple for teachers, blue for students
     },
   ];
   return (
@@ -40,13 +42,15 @@ const CountChart = ({ boys, girls }: { boys: number; girls: number }) => {
           <RadialBar background dataKey="count" />
         </RadialBarChart>
       </ResponsiveContainer>
-      <Image
-        src="/maleFemale.png"
-        alt=""
-        width={50}
-        height={50}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-      />
+      {isTeacher ? (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <TeacherGenderIcons />
+        </div>
+      ) : (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          <StudentGenderIcons />
+        </div>
+      )}
     </div>
   );
 };

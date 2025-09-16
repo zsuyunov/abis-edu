@@ -24,11 +24,17 @@ export async function POST(request: NextRequest) {
     // Get timetable data to populate required fields
     const timetable = await prisma.timetable.findUnique({
       where: { id: timetableId },
-      include: {
+      select: {
+        id: true,
+        teacherIds: true,
         class: true,
         subject: true,
         branch: true,
         academicYear: true,
+        subjectId: true,
+        classId: true,
+        branchId: true,
+        academicYearId: true
       },
     });
 
@@ -37,8 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if teacher is assigned to this timetable
-    const teacherIds = Array.isArray(timetable.teacherIds) ? timetable.teacherIds : [];
-    if (!teacherIds.includes(teacherId)) {
+    if (!timetable.teacherIds || !timetable.teacherIds.includes(teacherId)) {
       return NextResponse.json({ error: "Access denied to this timetable" }, { status: 403 });
     }
 
