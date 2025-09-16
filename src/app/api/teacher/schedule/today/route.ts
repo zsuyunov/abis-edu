@@ -34,7 +34,9 @@ export async function GET(request: NextRequest) {
 
     // Filter timetables where teacherId matches
     const todayTimetables = allTodayTimetables.filter(timetable => {
-      return timetable.teacherIds && timetable.teacherIds.includes(teacherId);
+      return timetable.teacherIds &&
+             Array.isArray(timetable.teacherIds) &&
+             timetable.teacherIds.includes(teacherId);
     });
 
     // Transform the data
