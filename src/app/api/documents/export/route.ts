@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
       where.OR = [
         { title: { contains: searchKeyword, mode: "insensitive" } },
         { description: { contains: searchKeyword, mode: "insensitive" } },
-        { tags: { has: searchKeyword } },
-        { keywords: { has: searchKeyword } },
+        { tags: { hasSome: [searchKeyword] } },
+        { keywords: { hasSome: [searchKeyword] } },
       ];
     }
     

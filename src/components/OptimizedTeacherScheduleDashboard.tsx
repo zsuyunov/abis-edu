@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { format, addDays, subDays, isToday, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -69,10 +69,15 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const [loadingAction, setLoadingAction] = useState<string>("");
   const [students, setStudents] = useState<any[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
-  const [attendanceData, setAttendanceData] = useState<Record<string, 'present' | 'absent' | 'late'>>({});
+  const [attendanceData, setAttendanceData] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused'>>({});
+  const [attendanceComments, setAttendanceComments] = useState<Record<string, string>>({});
   const [gradeData, setGradeData] = useState<Record<string, number>>({});
+  const [gradeComments, setGradeComments] = useState<Record<string, string>>({});
+  const [searchTerm, setSearchTerm] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const { prefetchQuery } = usePrefetch();
+  const commentsRef = useRef<Record<string, string>>({});
+
 
   // Memoized branches and roles
   const branches = useMemo(() => 
@@ -315,25 +320,36 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const getLessonNumber = useCallback((index: number) => index + 1, []);
 
   // Fetch students for a class
-  const fetchStudents = useCallback(async (classId: string) => {
+  const fetchStudents = useCallback(async (classId: number) => {
+    console.log('OptimizedTeacherScheduleDashboard - Fetching students for class:', classId);
     setLoadingStudents(true);
     try {
       const response = await fetch(`/api/students/by-class?classId=${classId}`);
       if (response.ok) {
         const studentData = await response.json();
+        console.log('OptimizedTeacherScheduleDashboard - Students fetched:', studentData);
         setStudents(studentData);
         // Initialize attendance and grade data
-        const initialAttendance: Record<string, 'present' | 'absent' | 'late'> = {};
+        const initialAttendance: Record<string, 'present' | 'absent' | 'late' | 'excused'> = {};
+        const initialComments: Record<string, string> = {};
         const initialGrades: Record<string, number> = {};
         studentData.forEach((student: any) => {
           initialAttendance[student.id] = 'present';
+          // Preserve existing comments if any
+          initialComments[student.id] = commentsRef.current[student.id] || '';
           initialGrades[student.id] = 0;
         });
         setAttendanceData(initialAttendance);
+        setAttendanceComments(initialComments);
         setGradeData(initialGrades);
+        // Update the ref with the initial comments
+        commentsRef.current = initialComments;
+        console.log('OptimizedTeacherScheduleDashboard - Attendance data initialized:', initialAttendance);
+      } else {
+        console.error('OptimizedTeacherScheduleDashboard - Failed to fetch students:', response.status);
       }
     } catch (error) {
-      console.error('Error fetching students:', error);
+      console.error('OptimizedTeacherScheduleDashboard - Error fetching students:', error);
     } finally {
       setLoadingStudents(false);
     }
@@ -343,13 +359,13 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const handleOpenAttendanceModal = useCallback((timetable: TimetableEntry) => {
     setSelectedTimetable(timetable);
     setShowAttendanceModal(true);
-    fetchStudents(timetable.class.id);
+    fetchStudents(Number(timetable.class.id));
   }, [fetchStudents]);
 
   const handleOpenGradeModal = useCallback((timetable: TimetableEntry) => {
     setSelectedTimetable(timetable);
     setShowGradeModal(true);
-    fetchStudents(timetable.class.id);
+    fetchStudents(Number(timetable.class.id));
   }, [fetchStudents]);
 
   const getLessonStatus = useCallback((timetable: TimetableEntry) => {
@@ -432,8 +448,26 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
 
   // Save attendance handler
   const handleSaveAttendance = useCallback(async () => {
-    if (!selectedTimetable || students.length === 0) return;
-    
+    console.log('OptimizedTeacherScheduleDashboard - handleSaveAttendance called');
+    console.log('OptimizedTeacherScheduleDashboard - selectedTimetable:', selectedTimetable);
+    console.log('OptimizedTeacherScheduleDashboard - students:', students);
+    console.log('OptimizedTeacherScheduleDashboard - attendanceData:', attendanceData);
+
+    if (!selectedTimetable || students.length === 0) {
+      console.log('OptimizedTeacherScheduleDashboard - Missing timetable or students');
+      return;
+    }
+
+    const attendanceArray = Object.entries(attendanceData)
+      .filter(([studentId, status]) => studentId && status)
+      .map(([studentId, status]) => ({
+        studentId: studentId, // Keep as string
+        status: status.toUpperCase(),
+        notes: attendanceComments[studentId] || ''
+      }));
+
+    console.log('OptimizedTeacherScheduleDashboard - Processed attendance array:', attendanceArray);
+
     try {
       const response = await fetch('/api/attendance', {
         method: 'POST',
@@ -442,29 +476,29 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           'x-user-id': teacherId
         },
         body: JSON.stringify({
-          timetableId: selectedTimetable.id,
-          classId: selectedTimetable.class.id,
-          subjectId: selectedTimetable.subject.id,
+          timetableId: parseInt(selectedTimetable.id),
+          classId: parseInt(selectedTimetable.class.id),
+          subjectId: parseInt(selectedTimetable.subject.id),
           date: selectedTimetable.fullDate,
-          attendance: Object.entries(attendanceData)
-            .filter(([studentId, status]) => studentId && !isNaN(parseInt(studentId)) && status)
-            .map(([studentId, status]) => ({
-              studentId: parseInt(studentId),
-              status: status.toUpperCase()
-            }))
+          attendance: attendanceArray
         })
       });
 
       if (response.ok) {
+        const result = await response.json();
+        console.log('OptimizedTeacherScheduleDashboard - Attendance saved successfully:', result);
         setShowAttendanceModal(false);
         setAttendanceData({});
         // Show success message or refresh data
-        console.log('Attendance saved successfully');
+        alert(`✅ Attendance saved successfully! Saved ${result.savedRecords || attendanceArray.length} records.`);
       } else {
-        console.error('Failed to save attendance');
+        const errorData = await response.json();
+        console.error('OptimizedTeacherScheduleDashboard - Failed to save attendance:', errorData);
+        alert(`❌ Failed to save attendance: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error saving attendance:', error);
+      console.error('OptimizedTeacherScheduleDashboard - Error saving attendance:', error);
+      alert(`💥 Error saving attendance: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }, [selectedTimetable, students, attendanceData, teacherId]);
 
@@ -478,16 +512,32 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
       subjectId: selectedTimetable.subject.id,
       date: selectedTimetable.fullDate,
       grades: Object.entries(gradeData)
-        .filter(([studentId, points]) => studentId && !isNaN(parseInt(studentId)))
+        .filter(([studentId, points]) => {
+          const isValid = studentId && points !== null && points !== undefined && points > 0;
+          console.log(`Filtering student ${studentId}: points=${points}, type=${typeof points}, isValid=${isValid}`);
+          return isValid;
+        })
         .map(([studentId, points]) => ({
-          studentId: parseInt(studentId),
-          points: points || 0
+          studentId: studentId,
+          points: points,
+          comments: gradeComments[studentId] || ''
         }))
     };
     
     console.log("Sending grades data:", requestData);
     console.log("Grade data state:", gradeData);
+    console.log("Grade data entries:", Object.entries(gradeData));
     console.log("Students data:", students);
+    console.log("Student IDs from students:", students.map(s => s.id));
+    console.log("Student IDs from gradeData keys:", Object.keys(gradeData));
+    
+    if (requestData.grades.length === 0) {
+      console.log("No valid grades found. Showing all grade data for debugging:");
+      console.log("All grade entries:", Object.entries(gradeData));
+      console.log("All grade comments:", Object.entries(gradeComments));
+      alert('Please enter at least one grade with a score greater than 0.');
+      return;
+    }
     
     try {
       const response = await fetch('/api/grades', {
@@ -502,8 +552,13 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
       if (response.ok) {
         setShowGradeModal(false);
         setGradeData({});
-        // Show success message or refresh data
+        setGradeComments({});
+        // Show success message
+        alert('✅ Grades saved successfully!');
         console.log('Grades saved successfully');
+        
+        // Trigger refresh of Grade Tracker
+        window.dispatchEvent(new CustomEvent('gradeSaved'));
       } else {
         const errorData = await response.json();
         console.error('Failed to save grades:', errorData);
@@ -989,48 +1044,95 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     {formatTime(selectedTimetable.startTime)} – {formatTime(selectedTimetable.endTime)}
                   </p>
                 </div>
+                {/* Search Bar */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search students by name or ID..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-3">
                   <h4 className="font-medium text-gray-900">Student Grades</h4>
-                  {loadingStudents ? (
+                    {loadingStudents ? (
                     <div className="text-center py-4">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mx-auto"></div>
                       <p className="text-sm text-gray-500 mt-2">Loading students...</p>
                     </div>
                   ) : students.length > 0 ? (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {students.map((student) => (
-                        <div key={student.id} className="flex items-center justify-between p-2 sm:p-3 bg-white border border-gray-200 rounded-lg">
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs sm:text-sm font-medium text-purple-700">
-                                {student.firstName[0]}{student.lastName[0]}
-                              </span>
+                      {students
+                        .filter(student => 
+                          searchTerm === '' || 
+                          student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          student.studentId.toLowerCase().includes(searchTerm.toLowerCase())
+                        )
+                        .map((student) => (
+                        <div key={student.id} className="p-3 bg-white border border-gray-200 rounded-lg space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-xs sm:text-sm font-medium text-purple-700">
+                                  {student.firstName[0]}{student.lastName[0]}
+                                </span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm sm:text-base font-medium text-gray-900 truncate">
+                                  {student.firstName} {student.lastName}
+                                </p>
+                                <p className="text-xs text-gray-500">ID: {student.studentId}</p>
+                              </div>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm sm:text-base font-medium text-gray-900 truncate">
-                                {student.firstName} {student.lastName}
-                              </p>
-                              <p className="text-xs text-gray-500">ID: {student.studentId}</p>
+                            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={gradeData[student.id] ?? ''}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  const numericValue = value ? parseInt(value) : null;
+                                  const newGradeData = {
+                                    ...gradeData,
+                                    [student.id]: numericValue
+                                  };
+                                  console.log("Updating grade data:", newGradeData, "for student:", student.id, "value:", value, "numericValue:", numericValue);
+                                  setGradeData(newGradeData);
+                                }}
+                                className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center"
+                                placeholder="1-100"
+                              />
+                              <span className="text-xs sm:text-sm text-gray-500">/100</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={gradeData[student.id] || 0}
+                          
+                          {/* Comments Section */}
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">Comments (Optional)</label>
+                            <textarea
+                              value={gradeComments[student.id] || ''}
                               onChange={(e) => {
-                                const newGradeData = {
-                                  ...gradeData,
-                                  [student.id]: parseInt(e.target.value) || 0
+                                const newComments = {
+                                  ...gradeComments,
+                                  [student.id]: e.target.value
                                 };
-                                console.log("Updating grade data:", newGradeData, "for student:", student.id);
-                                setGradeData(newGradeData);
+                                setGradeComments(newComments);
                               }}
-                              className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center"
-                              placeholder="0"
+                              placeholder="Add comments about this student's performance..."
+                              rows={2}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm"
                             />
-                            <span className="text-xs sm:text-sm text-gray-500">/100</span>
                           </div>
                         </div>
                       ))}
@@ -1041,6 +1143,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     </div>
                   )}
                 </div>
+                
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={() => setShowGradeModal(false)}
@@ -1079,7 +1182,11 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Take Attendance</h3>
                 <button
-                  onClick={() => setShowAttendanceModal(false)}
+                  onClick={() => {
+                    setShowAttendanceModal(false);
+                    // Clear the ref when modal is closed
+                    commentsRef.current = {};
+                  }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   ✕
@@ -1094,6 +1201,19 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     {formatTime(selectedTimetable.startTime)} – {formatTime(selectedTimetable.endTime)}
                   </p>
                 </div>
+                
+                {/* Search Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Search Students</label>
+                  <input
+                    type="text"
+                    placeholder="Search by name or student ID..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+
                 <div className="space-y-3">
                   <h4 className="font-medium text-gray-900">Student Attendance</h4>
                   {loadingStudents ? (
@@ -1102,34 +1222,65 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                       <p className="text-sm text-gray-500 mt-2">Loading students...</p>
                     </div>
                   ) : students.length > 0 ? (
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {students.map((student) => (
-                        <div key={student.id} className="flex items-center justify-between p-2 sm:p-3 bg-white border border-gray-200 rounded-lg">
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs sm:text-sm font-medium text-green-700">
-                                {student.firstName[0]}{student.lastName[0]}
-                              </span>
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {students
+                        .filter(student => {
+                          if (!searchTerm) return true;
+                          const searchLower = searchTerm.toLowerCase();
+                          return (
+                            student.firstName.toLowerCase().includes(searchLower) ||
+                            student.lastName.toLowerCase().includes(searchLower) ||
+                            student.studentId.toLowerCase().includes(searchLower)
+                          );
+                        })
+                        .map((student) => (
+                        <div key={student.id} className="p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-sm font-medium text-green-700">
+                                  {student.firstName[0]}{student.lastName[0]}
+                                </span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {student.firstName} {student.lastName}
+                                </p>
+                                <p className="text-xs text-gray-500">ID: {student.studentId}</p>
+                              </div>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm sm:text-base font-medium text-gray-900 truncate">
-                                {student.firstName} {student.lastName}
-                              </p>
-                              <p className="text-xs text-gray-500">ID: {student.studentId}</p>
-                            </div>
+                            <select
+                              value={attendanceData[student.id] || 'present'}
+                              onChange={(e) => setAttendanceData(prev => ({
+                                ...prev,
+                                [student.id]: e.target.value as 'present' | 'absent' | 'late' | 'excused'
+                              }))}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent flex-shrink-0"
+                            >
+                              <option value="present">Present</option>
+                              <option value="absent">Absent</option>
+                              <option value="late">Late</option>
+                              <option value="excused">Excused</option>
+                            </select>
                           </div>
-                          <select
-                            value={attendanceData[student.id] || 'present'}
-                            onChange={(e) => setAttendanceData(prev => ({
-                              ...prev,
-                              [student.id]: e.target.value as 'present' | 'absent' | 'late'
-                            }))}
-                            className="px-2 py-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent flex-shrink-0"
-                          >
-                            <option value="present">Present</option>
-                            <option value="absent">Absent</option>
-                            <option value="late">Late</option>
-                          </select>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-gray-600">Comment (optional)</label>
+                            <textarea
+                              placeholder="Add a comment about this student's attendance..."
+                              value={attendanceComments[student.id] || ''}
+                              onChange={(e) => {
+                                const newValue = e.target.value;
+                                setAttendanceComments(prev => ({
+                                  ...prev,
+                                  [student.id]: newValue
+                                }));
+                                // Also update the ref to preserve comments
+                                commentsRef.current[student.id] = newValue;
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                              rows={2}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1141,7 +1292,11 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button
-                    onClick={() => setShowAttendanceModal(false)}
+                    onClick={() => {
+                      setShowAttendanceModal(false);
+                      // Clear the ref when modal is closed
+                      commentsRef.current = {};
+                    }}
                     className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
                   >
                     Cancel

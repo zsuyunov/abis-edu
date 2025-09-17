@@ -78,7 +78,7 @@ export default function AttendancePage() {
       });
 
       const [recordsRes, statsRes] = await Promise.all([
-        fetch(`/api/attendance?${params}`),
+        fetch(`/api/attendance/history?${params}`),
         fetch(`/api/attendance/statistics?${params}`),
       ]);
 

@@ -41,6 +41,8 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   lessonData,
   teacherId,
 }) => {
+  console.log('AttendanceForm - Component mounted with:', { isOpen, lessonData, teacherId });
+
   const { t } = useLanguage();
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -57,25 +59,33 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `/api/attendance/students?classId=${lessonData.classId}&subjectId=${lessonData.subjectId}&branchId=${lessonData.branchId}&academicYearId=${lessonData.academicYearId}`,
-        {
-          headers: {
-            'x-user-id': teacherId,
-          },
-        }
-      );
+      console.log('AttendanceForm - Fetching students with lessonData:', lessonData);
+      console.log('AttendanceForm - Teacher ID:', teacherId);
+      
+      // First, fetch students
+      const studentsApiUrl = `/api/attendance/students?classId=${lessonData.classId}&subjectId=${lessonData.subjectId}&branchId=${lessonData.branchId}&academicYearId=${lessonData.academicYearId}`;
+      console.log('AttendanceForm - Students API URL:', studentsApiUrl);
+      
+      const studentsResponse = await fetch(studentsApiUrl, {
+        headers: {
+          'x-user-id': teacherId,
+        },
+      });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('AttendanceForm - Students fetched:', data);
-        
-        // Handle different response structures
-        const studentsData = data.data || data.students || data || [];
-        console.log('AttendanceForm - Processed students data:', studentsData);
-        console.log('AttendanceForm - Students count:', studentsData.length);
-        
-        if (studentsData.length === 0) {
+      if (!studentsResponse.ok) {
+        const errorData = await studentsResponse.text();
+        console.error('AttendanceForm - Students API Error:', errorData);
+        alert(`❌ Failed to fetch students:\n\nStatus: ${studentsResponse.status}\nError: ${errorData}`);
+        setStudents([]);
+        setAttendance([]);
+        return;
+      }
+
+      const studentsData = await studentsResponse.json();
+      const students = studentsData.data || studentsData.students || studentsData || [];
+      console.log('AttendanceForm - Students fetched:', students.length);
+      
+      if (students.length === 0) {
           console.warn('AttendanceForm - No students found for class:', lessonData.classId);
           alert('❌ No students found for this class.\n\nPlease check if:\n• The class has students assigned\n• The class ID is correct\n• Students are active in the system');
           setStudents([]);
@@ -83,34 +93,66 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
           return;
         }
         
-        setStudents(studentsData);
+      setStudents(students);
+
+      // Now fetch existing attendance data for this specific lesson
+      const attendanceApiUrl = `/api/attendance/lesson?timetableId=${lessonData.id}&date=${lessonData.date}`;
+      console.log('AttendanceForm - Attendance API URL:', attendanceApiUrl);
+      console.log('AttendanceForm - Lesson Data:', lessonData);
+      
+      const attendanceResponse = await fetch(attendanceApiUrl, {
+        headers: {
+          'x-user-id': teacherId,
+        },
+      });
+
+      let existingAttendance: any[] = [];
+      if (attendanceResponse.ok) {
+        const attendanceData = await attendanceResponse.json();
+        existingAttendance = attendanceData.data || [];
+        console.log('AttendanceForm - Existing attendance fetched:', existingAttendance.length);
+        console.log('AttendanceForm - Existing attendance data:', existingAttendance);
+      } else {
+        console.log('AttendanceForm - No existing attendance found for this lesson');
+        console.log('AttendanceForm - Response status:', attendanceResponse.status);
+        const errorText = await attendanceResponse.text();
+        console.log('AttendanceForm - Error response:', errorText);
+      }
+
+      // Create attendance records, pre-populating with existing data if available
+      const initialAttendance = students.map((student: Student) => {
+        // Use the original studentId string format for consistency
+        const studentIdString = student.studentId || student.id;
+        const studentIdNumeric = student.studentId ? parseInt(student.studentId.replace('S', '')) : parseInt(student.id);
         
-        // Initialize attendance records
-        const initialAttendance = studentsData.map((student: Student) => {
-          // Use the numeric studentId field instead of the string id
-          const studentId = student.studentId ? parseInt(student.studentId.replace('S', '')) : parseInt(student.id);
-          const record = {
-            studentId: studentId, // Use the numeric student ID
+        // Look for existing attendance record for this student
+        const existingRecord = existingAttendance.find(record => 
+          record.studentId === studentIdString
+        );
+        
+        if (existingRecord) {
+          console.log('AttendanceForm - Found existing record for student:', studentIdString, existingRecord);
+          return {
+            studentId: studentIdNumeric, // Use numeric for internal processing
+            status: existingRecord.status.toLowerCase() as 'present' | 'absent' | 'late' | 'excused',
+            notes: existingRecord.notes || ''
+          };
+        } else {
+          // No existing record, use defaults
+          return {
+            studentId: studentIdNumeric, // Use numeric for internal processing
             status: 'present' as const,
             notes: ''
           };
-          console.log('AttendanceForm - Created attendance record:', record);
-          return record;
+        }
         });
         
         console.log('AttendanceForm - Initial attendance records:', initialAttendance);
         setAttendance(initialAttendance);
-      } else {
-        const errorData = await response.text();
-        console.error('AttendanceForm - Error response:', errorData);
-        console.error('AttendanceForm - Response status:', response.status);
-        alert(`❌ Failed to fetch students:\n\nStatus: ${response.status}\nError: ${errorData}`);
-        setStudents([]);
-        setAttendance([]);
-      }
+      
     } catch (error) {
-      console.error("Error fetching students:", error);
-      alert(`💥 Error fetching students:\n\n${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Error fetching data:", error);
+      alert(`💥 Error fetching data:\n\n${error instanceof Error ? error.message : 'Unknown error'}`);
       setStudents([]);
       setAttendance([]);
     } finally {
@@ -119,14 +161,22 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
   };
 
   const updateAttendance = (studentId: string, field: 'status' | 'notes', value: string) => {
+    console.log('AttendanceForm - updateAttendance called:', { studentId, field, value });
     const numericStudentId = parseInt(studentId.replace('S', ''));
-    setAttendance(prev =>
-      prev.map(record =>
-        record.studentId === numericStudentId
-          ? { ...record, [field]: value }
-          : record
-      )
-    );
+    console.log('AttendanceForm - Converted studentId:', numericStudentId);
+    console.log('AttendanceForm - Current attendance state before update:', attendance);
+    
+    setAttendance(prev => {
+      const updated = prev.map(record => {
+        if (record.studentId === numericStudentId) {
+          console.log('AttendanceForm - Updating record for student:', numericStudentId, 'field:', field, 'value:', value);
+          return { ...record, [field]: value };
+        }
+        return record;
+      });
+      console.log('AttendanceForm - Updated attendance state:', updated);
+      return updated;
+    });
   };
 
   const markAllAs = (status: 'present' | 'absent' | 'late' | 'excused') => {
@@ -139,8 +189,13 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
     try {
       setSaving(true);
       
+      console.log('AttendanceForm - handleSave called');
+      console.log('AttendanceForm - Current attendance state:', attendance);
+      console.log('AttendanceForm - Students state:', students);
+      
       // Validate attendance data
       if (attendance.length === 0) {
+        console.log('AttendanceForm - No attendance records found');
         alert('❌ No attendance records to save. Please mark attendance for at least one student.');
         return;
       }
@@ -160,9 +215,9 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
           'x-user-id': teacherId,
         },
         body: JSON.stringify({
-          timetableId: lessonData.id,
-          classId: lessonData.classId,
-          subjectId: lessonData.subjectId, // Added missing subjectId
+          timetableId: parseInt(lessonData.id),
+          classId: parseInt(lessonData.classId),
+          subjectId: parseInt(lessonData.subjectId),
           date: lessonData.date,
           attendance: attendance
         }),
@@ -278,7 +333,8 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
               <div className="max-h-96 overflow-y-auto">
                 <div className="space-y-3">
                   {students.map((student) => {
-                    const studentAttendance = attendance.find(a => a.studentId === parseInt(student.id));
+                    const studentIdNumeric = student.studentId ? parseInt(student.studentId.replace('S', '')) : parseInt(student.id);
+                    const studentAttendance = attendance.find(a => a.studentId === studentIdNumeric);
                     
                     return (
                       <div key={student.id} className="bg-gray-50 rounded-lg p-4">
@@ -300,7 +356,10 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
                             {['present', 'late', 'excused', 'absent'].map((status) => (
                               <button
                                 key={status}
-                                onClick={() => updateAttendance(student.id, 'status', status)}
+                                onClick={() => {
+                                  const studentId = student.studentId || student.id;
+                                  updateAttendance(studentId, 'status', status);
+                                }}
                                 className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                                   studentAttendance?.status === status
                                     ? status === 'present' ? 'bg-blue-600 text-white'
@@ -321,7 +380,10 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
                             type="text"
                             placeholder="Add notes (optional)"
                             value={studentAttendance?.notes || ''}
-                            onChange={(e) => updateAttendance(student.id, 'notes', e.target.value)}
+                            onChange={(e) => {
+                              const studentId = student.studentId || student.id;
+                              updateAttendance(studentId, 'notes', e.target.value);
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         </div>

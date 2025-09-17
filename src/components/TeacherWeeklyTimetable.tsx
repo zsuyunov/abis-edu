@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import ClassworkTopicsModal from "./ClassworkTopicsModal";
 import AttendanceForm from "./AttendanceForm";
-import GradeModal from "./GradeModal";
+// import GradeModal from "./GradeModal";
 import TeacherHomeworkCreationForm from "./TeacherHomeworkCreationForm";
 // Remove any potential import conflicts
 // import HomeworkAssignmentModal from "./HomeworkAssignmentModal";
@@ -625,7 +625,7 @@ const TeacherWeeklyTimetable = ({
       )}
 
       {/* Grade Modal */}
-      {showGradeModal && selectedGradeSlot && (
+      {/* {showGradeModal && selectedGradeSlot && (
         <GradeModal
           isOpen={showGradeModal}
           onClose={() => {
@@ -635,7 +635,7 @@ const TeacherWeeklyTimetable = ({
           lessonData={selectedGradeSlot}
           teacherId={teacherId}
         />
-      )}
+      )} */}
 
       {/* Homework Creation Form */}
       {showHomeworkModal && selectedHomeworkSlot && (

@@ -141,7 +141,7 @@ export const useAttendance = (filters: Record<string, string> = {}) => {
   
   return useQuery({
     queryKey: ['attendance', filters],
-    queryFn: () => fetcher(`/api/attendance?${params}`),
+    queryFn: () => fetcher(`/api/attendance/history?${params}`),
     staleTime: 1 * 60 * 1000, // Cache for 1 minute (attendance changes frequently)
     gcTime: 3 * 60 * 1000, // Keep in cache for 3 minutes
     retry: 1,

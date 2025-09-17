@@ -321,11 +321,17 @@ const TimetableManagementPage: React.FC = () => {
       if (typeof time === 'string') {
         // Handle different string formats
         if (time.includes('T')) {
-          // ISO string format
-          date = new Date(time);
+          // ISO string format - check if it has timezone info
+          if (time.endsWith('Z')) {
+            // UTC time - convert to local
+            date = new Date(time);
+          } else {
+            // Local time - treat as local
+            date = new Date(time);
+          }
         } else if (time.includes(':')) {
-          // Time format like "08:20" - convert to full date
-          date = new Date(`1970-01-01T${time}:00Z`);
+          // Time format like "08:20" - treat as local time
+          date = new Date(`1970-01-01T${time}:00`);
         } else {
           // Try direct conversion
           date = new Date(time);
@@ -342,10 +348,10 @@ const TimetableManagementPage: React.FC = () => {
         return 'Invalid';
       }
       
-      // Since we're storing times as UTC in the database, we need to convert to local time
-      // The times are stored as 1970-01-01T08:20:00Z (UTC) but we want to display 08:20 (local)
-      const hours = date.getUTCHours().toString().padStart(2, '0');
-      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+      // Use local time methods since times are stored as local time in the database
+      // The times are stored as 1970-01-01T08:20:00 (local) and we want to display 08:20 (local)
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
       
       const result = `${hours}:${minutes}`;
       console.log('🔍 formatted result:', result);

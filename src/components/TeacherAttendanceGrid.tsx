@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Users, BookOpen, GraduationCap, Calendar, Filter } from 'lucide-react';
+import { formatDatabaseTime } from '@/lib/utils';
 
 interface Student {
   id: string;
@@ -17,6 +18,18 @@ interface AttendanceRecord {
   date: string;
   status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
   studentId: string;
+  notes?: string;
+  timetable?: {
+    id: string;
+    startTime: string;
+    endTime: string;
+    subject: {
+      name: string;
+    };
+    class: {
+      name: string;
+    };
+  };
 }
 
 interface TeacherClass {
@@ -62,6 +75,10 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
   const [students, setStudents] = useState<Student[]>([]);
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [editingAttendance, setEditingAttendance] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editStatus, setEditStatus] = useState<'present' | 'absent' | 'late' | 'excused'>('present');
+  const [editNotes, setEditNotes] = useState('');
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -94,12 +111,14 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
         ...(selectedBranch && { branchId: selectedBranch })
       });
 
-      const response = await fetch(`/api/attendance?${params}`);
+      const response = await fetch(`/api/attendance/history?${params}`);
       if (response.ok) {
         const result = await response.json();
         console.log('Attendance API Response:', result);
-        const attendanceRecords = result.data?.attendanceRecords || result.attendanceRecords || result.data || [];
-        setAttendanceData(Array.isArray(attendanceRecords) ? attendanceRecords : []);
+        // The attendance history API returns data directly as an array
+        const attendanceRecords = Array.isArray(result) ? result : [];
+        console.log('Processed attendance records:', attendanceRecords);
+        setAttendanceData(attendanceRecords);
       }
     } catch (error) {
       console.error('Error fetching attendance data:', error);
@@ -117,12 +136,13 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
   }, [selectedClass, selectedSubject, selectedAcademicYear, selectedBranch, currentDate, refreshTrigger]);
 
   const getAttendanceForStudentAndDate = (studentId: string, date: Date) => {
-    if (!Array.isArray(attendanceData)) return undefined;
-    return attendanceData.find(record => 
+    if (!Array.isArray(attendanceData)) return [];
+    return attendanceData.filter(record => 
       record.studentId === studentId && 
       format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
     );
   };
+
 
   const getStatusIcon = (status: string | undefined) => {
     switch (status) {
@@ -148,6 +168,49 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
     setCurrentDate(prev => 
       direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
     );
+  };
+
+  const handleEditAttendance = (attendance: any) => {
+    setEditingAttendance(attendance);
+    setEditStatus(attendance.status.toLowerCase() as 'present' | 'absent' | 'late' | 'excused');
+    setEditNotes(attendance.notes || '');
+    setShowEditModal(true);
+  };
+
+  const handleUpdateAttendance = async () => {
+    if (!editingAttendance) return;
+
+    try {
+      const response = await fetch('/api/attendance', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: editingAttendance.id,
+          status: editStatus.toUpperCase(),
+          notes: editNotes,
+        }),
+      });
+
+      if (response.ok) {
+        // Update local state
+        setAttendanceData(prev => 
+          prev.map(record => 
+            record.id === editingAttendance.id 
+              ? { ...record, status: editStatus.toUpperCase() as 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED', notes: editNotes }
+              : record
+          )
+        );
+        setShowEditModal(false);
+        setEditingAttendance(null);
+        setEditNotes('');
+      } else {
+        console.error('Failed to update attendance');
+      }
+    } catch (error) {
+      console.error('Error updating attendance:', error);
+    }
   };
 
   return (
@@ -317,12 +380,47 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                         <div className="text-xs text-gray-500 mt-1">{student.studentId}</div>
                       </td>
                       {monthDays.map(day => {
-                        const attendance = getAttendanceForStudentAndDate(student.id, day);
+                        const attendanceRecords = getAttendanceForStudentAndDate(student.id, day);
                         return (
-                          <td key={day.toISOString()} className={`px-2 py-3 text-center border-r border-gray-200 min-w-[40px] transition-colors ${getStatusColor(attendance?.status)}`}>
-                            <div className="flex items-center justify-center">
-                              {getStatusIcon(attendance?.status)}
-                            </div>
+                          <td 
+                            key={day.toISOString()} 
+                            className="px-2 py-3 text-center border-r border-gray-200 min-w-[60px] group relative"
+                          >
+                            {attendanceRecords.length === 0 ? (
+                              <div className="text-gray-300 text-xs sm:text-sm">-</div>
+                            ) : (
+                              <div className="space-y-1">
+                                {attendanceRecords.map((attendance, recordIndex) => (
+                                  <div
+                                    key={`${attendance.id}-${recordIndex}`}
+                                    className={`px-1 py-1 rounded text-xs cursor-pointer hover:shadow-md transition-colors ${getStatusColor(attendance.status)}`}
+                                    title={attendance.notes ? `Comment: ${attendance.notes}` : 'Click to edit'}
+                                    onClick={() => handleEditAttendance(attendance)}
+                                  >
+                                    <div className="flex items-center justify-center gap-1">
+                                      {getStatusIcon(attendance.status)}
+                                      {attendance.timetable && (
+                                        <span className="text-xs text-gray-600">
+                                          {formatDatabaseTime(attendance.timetable.startTime)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {attendance.notes && (
+                                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20 max-w-xs">
+                                        <div className="font-medium">{attendance.status}</div>
+                                        <div className="text-gray-300">{attendance.notes}</div>
+                                        {attendance.timetable && (
+                                          <div className="text-gray-400 text-xs">
+                                            {formatDatabaseTime(attendance.timetable.startTime)} - {formatDatabaseTime(attendance.timetable.endTime)}
+                                          </div>
+                                        )}
+                                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </td>
                         );
                       })}
@@ -355,6 +453,13 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                   <span className="text-gray-300">-</span>
                   <span className="text-gray-700">No Record</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 text-xs">9:00 AM</span>
+                  <span className="text-gray-700">Time</span>
+                </div>
+              </div>
+              <div className="text-center text-xs text-gray-500 mt-2">
+                Multiple lessons on the same day are shown vertically with time indicators
               </div>
             </div>
           </motion.div>
@@ -368,6 +473,91 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
             <div className="text-4xl mb-4">📊</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Select Filters</h3>
             <p className="text-gray-600">Please select both a class and subject to view attendance history.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Attendance Modal */}
+      <AnimatePresence>
+        {showEditModal && editingAttendance && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Edit Attendance</h3>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-900 mb-1">
+                    {editingAttendance.student?.firstName} {editingAttendance.student?.lastName}
+                  </h4>
+                  <p className="text-sm text-gray-600">
+                    {format(new Date(editingAttendance.date), 'MMMM dd, yyyy')}
+                  </p>
+                  {editingAttendance.timetable && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      {formatDatabaseTime(editingAttendance.timetable.startTime)} - {formatDatabaseTime(editingAttendance.timetable.endTime)}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as 'present' | 'absent' | 'late' | 'excused')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="present">Present</option>
+                    <option value="absent">Absent</option>
+                    <option value="late">Late</option>
+                    <option value="excused">Excused</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Comment</label>
+                  <textarea
+                    placeholder="Add a comment about this student's attendance..."
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateAttendance}
+                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"
+                  >
+                    Update
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

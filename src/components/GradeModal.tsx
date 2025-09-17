@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Save, Users } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, Save, Users, Search, MessageSquare } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Student {
@@ -33,22 +33,26 @@ interface GradeRecord {
   studentId: string;
   score: number;
   feedback: string;
+  comments: string;
 }
 
-const GradeModal: React.FC<GradeModalProps> = ({
+const GradeModal = ({
   isOpen,
   onClose,
   lessonData,
   teacherId,
-}) => {
+}: GradeModalProps) => {
   const { t } = useLanguage();
   const [students, setStudents] = useState<Student[]>([]);
+  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [gradeType, setGradeType] = useState('DAILY_GRADE');
   const [maxScore, setMaxScore] = useState(100);
   const [assignmentTitle, setAssignmentTitle] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showGradesGrid, setShowGradesGrid] = useState(false);
 
   useEffect(() => {
     if (isOpen && lessonData) {
@@ -85,12 +89,14 @@ const GradeModal: React.FC<GradeModalProps> = ({
         }
         
         setStudents(studentsData);
+        setFilteredStudents(studentsData);
         
         // Initialize grade records
         const initialGrades = studentsData.map((student: Student) => ({
           studentId: student.id,
           score: 0,
-          feedback: ''
+          feedback: '',
+          comments: ''
         }));
         setGrades(initialGrades);
       } else {
@@ -108,7 +114,21 @@ const GradeModal: React.FC<GradeModalProps> = ({
     }
   };
 
-  const updateGrade = (studentId: string, field: 'score' | 'feedback', value: string | number) => {
+  // Search functionality
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredStudents(students);
+    } else {
+      const filtered = students.filter(student => 
+        student.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.studentId.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredStudents(filtered);
+    }
+  }, [searchTerm, students]);
+
+  const updateGrade = (studentId: string, field: 'score' | 'feedback' | 'comments', value: string | number) => {
     setGrades(prev => 
       prev.map(record => 
         record.studentId === studentId 
@@ -128,7 +148,7 @@ const GradeModal: React.FC<GradeModalProps> = ({
     try {
       setSaving(true);
       
-      // Filter out grades with 0 scores unless explicitly set
+      // Filter out grades with 0 scores - only save grades that have been explicitly entered
       const validGrades = grades.filter(grade => grade.score > 0);
       
       if (validGrades.length === 0) {
@@ -286,64 +306,212 @@ const GradeModal: React.FC<GradeModalProps> = ({
                 </div>
               </div>
 
-              {/* Student Grades */}
-              <div className="max-h-96 overflow-y-auto">
-                <div className="space-y-3">
-                  {students.map((student) => {
-                    const studentGrade = grades.find(g => g.studentId === student.id);
-                    
-                    return (
-                      <div key={student.id} className="bg-gray-50 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="font-medium text-gray-900">
-                            {student.firstName} {student.lastName}
-                            <span className="text-sm text-gray-500 ml-2">({student.studentId})</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">
-                              Score: {studentGrade?.score || 0}/{maxScore}
-                            </span>
-                            {studentGrade?.score && (
-                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                {Math.round((studentGrade.score / maxScore) * 100)}%
+              {/* Search Bar */}
+              <div className="mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Search students by name or ID..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <p className="text-sm text-gray-600 mt-2">
+                  Showing {filteredStudents.length} of {students.length} students
+                </p>
+              </div>
+
+              {/* View Toggle */}
+              <div className="mb-6 flex gap-2">
+                <button
+                  onClick={() => setShowGradesGrid(false)}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    !showGradesGrid 
+                      ? 'bg-green-600 text-white' 
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Input Grades
+                </button>
+                <button
+                  onClick={() => setShowGradesGrid(true)}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    showGradesGrid 
+                      ? 'bg-green-600 text-white' 
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  View Grid
+                </button>
+              </div>
+
+              {/* Student Grades Input */}
+              {!showGradesGrid && (
+                <div className="max-h-96 overflow-y-auto">
+                  <div className="space-y-3">
+                    {filteredStudents.map((student) => {
+                      const studentGrade = grades.find(g => g.studentId === student.id);
+                      
+                      return (
+                        <div key={student.id} className="bg-gray-50 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="font-medium text-gray-900">
+                              {student.firstName} {student.lastName}
+                              <span className="text-sm text-gray-500 ml-2">({student.studentId})</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">
+                                Score: {studentGrade?.score || 0}/{maxScore}
                               </span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* Score Input */}
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">Score</label>
-                            <input
-                              type="number"
-                              value={studentGrade?.score || ''}
-                              onChange={(e) => updateGrade(student.id, 'score', parseFloat(e.target.value) || 0)}
-                              min="0"
-                              max={maxScore}
-                              step="0.5"
-                              placeholder={`0 - ${maxScore}`}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            />
+                              {studentGrade?.score && (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                  {Math.round((studentGrade.score / maxScore) * 100)}%
+                                </span>
+                              )}
+                            </div>
                           </div>
                           
-                          {/* Feedback */}
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">Feedback (Optional)</label>
-                            <input
-                              type="text"
-                              value={studentGrade?.feedback || ''}
-                              onChange={(e) => updateGrade(student.id, 'feedback', e.target.value)}
-                              placeholder="Add feedback..."
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {/* Score Input */}
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Score</label>
+                              <input
+                                type="number"
+                                value={studentGrade?.score || ''}
+                                onChange={(e) => updateGrade(student.id, 'score', parseFloat(e.target.value) || '')}
+                                min="1"
+                                max={maxScore}
+                                step="0.5"
+                                placeholder={`Enter score (1-${maxScore})`}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                              />
+                            </div>
+                            
+                            {/* Feedback */}
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Feedback (Optional)</label>
+                              <input
+                                type="text"
+                                value={studentGrade?.feedback || ''}
+                                onChange={(e) => updateGrade(student.id, 'feedback', e.target.value)}
+                                placeholder="Add feedback..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                          
+                          {/* Comments Section */}
+                          <div className="mt-3">
+                            <label className="block text-xs text-gray-600 mb-1 flex items-center gap-1">
+                              <MessageSquare className="w-3 h-3" />
+                              Comments (Optional)
+                            </label>
+                            <textarea
+                              value={studentGrade?.comments || ''}
+                              onChange={(e) => updateGrade(student.id, 'comments', e.target.value)}
+                              placeholder="Add detailed comments about the student's performance..."
+                              rows={2}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                             />
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Grades Grid View */}
+              {showGradesGrid && (
+                <div className="max-h-96 overflow-y-auto">
+                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                      <h3 className="text-lg font-semibold text-gray-900">Grades Overview</h3>
+                      <p className="text-sm text-gray-600">
+                        {lessonData.subjectName} • {lessonData.className} • {new Date(lessonData.date).toLocaleDateString()} • {lessonData.startTime} - {lessonData.endTime}
+                      </p>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feedback</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comments</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredStudents.map((student) => {
+                            const studentGrade = grades.find(g => g.studentId === student.id);
+                            const hasGrade = studentGrade && studentGrade.score > 0;
+                            
+                            return (
+                              <tr key={student.id} className={hasGrade ? 'bg-green-50' : 'bg-white'}>
+                                <td className="px-4 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="flex-shrink-0 h-8 w-8">
+                                      <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                                        <span className="text-sm font-medium text-green-800">
+                                          {student.firstName.charAt(0)}{student.lastName.charAt(0)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="ml-3">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {student.firstName} {student.lastName}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {student.studentId}
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-center">
+                                  {hasGrade ? (
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-lg font-semibold text-gray-900">
+                                        {studentGrade.score}/{maxScore}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        {Math.round((studentGrade.score / maxScore) * 100)}%
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm text-gray-400">No grade</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 text-sm text-gray-900 max-w-xs">
+                                  {hasGrade && studentGrade.feedback ? (
+                                    <div className="truncate" title={studentGrade.feedback}>
+                                      {studentGrade.feedback}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 text-sm text-gray-900 max-w-xs">
+                                  {hasGrade && studentGrade.comments ? (
+                                    <div className="truncate" title={studentGrade.comments}>
+                                      {studentGrade.comments}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Summary */}
               <div className="mt-6 bg-blue-50 rounded-lg p-4">
@@ -354,7 +522,7 @@ const GradeModal: React.FC<GradeModalProps> = ({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600">Total Students:</span>
-                    <span className="font-semibold ml-2">{students.length}</span>
+                    <span className="font-semibold ml-2">{filteredStudents.length}</span>
                   </div>
                   <div>
                     <span className="text-gray-600">Graded:</span>

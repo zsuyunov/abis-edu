@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Users, BookOpen, GraduationCap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, BookOpen, GraduationCap, X, Clock, MessageSquare, Edit3 } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -17,6 +17,19 @@ interface GradeRecord {
   value: number;
   description?: string;
   studentId: string;
+  student?: {
+    firstName: string;
+    lastName: string;
+    studentId: string;
+  };
+  timetable?: {
+    id: number;
+    startTime: string;
+    endTime: string;
+    subject: {
+      name: string;
+    };
+  };
 }
 
 interface TeacherClass {
@@ -62,6 +75,11 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
   const [students, setStudents] = useState<Student[]>([]);
   const [gradeData, setGradeData] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedGrade, setSelectedGrade] = useState<GradeRecord | null>(null);
+  const [showGradeModal, setShowGradeModal] = useState(false);
+  const [editValue, setEditValue] = useState<number>(0);
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -148,6 +166,88 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
     if (gradeData.length === 0) return 0;
     const sum = gradeData.reduce((acc, grade) => acc + grade.value, 0);
     return Math.round(sum / gradeData.length);
+  };
+
+  const handleGradeClick = (grade: GradeRecord) => {
+    setSelectedGrade(grade);
+    setEditValue(grade.value);
+    setEditDescription(grade.description || '');
+    setShowGradeModal(true);
+  };
+
+  const handleUpdateGrade = async () => {
+    if (!selectedGrade || editValue < 1 || editValue > 100) return;
+
+    setIsUpdating(true);
+    try {
+      const response = await fetch('/api/grades', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': localStorage.getItem('userId') || ''
+        },
+        body: JSON.stringify({
+          gradeId: selectedGrade.id,
+          value: editValue,
+          description: editDescription
+        })
+      });
+
+      if (response.ok) {
+        // Update the grade in local state
+        setGradeData(prev => prev.map(grade => 
+          grade.id === selectedGrade.id 
+            ? { ...grade, value: editValue, description: editDescription }
+            : grade
+        ));
+        setShowGradeModal(false);
+        alert('✅ Grade updated successfully!');
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to update grade: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error updating grade:', error);
+      alert('Failed to update grade. Please try again.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const formatTime = (timeString: string) => {
+    try {
+      // Handle DateTime @db.Time format from Prisma
+      if (!timeString) return 'No time';
+      
+      // If it's already a time string like "08:30:00"
+      if (typeof timeString === 'string' && timeString.includes(':')) {
+        const [hours, minutes] = timeString.split(':').map(Number);
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          const date = new Date();
+          date.setHours(hours, minutes, 0, 0);
+          return date.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+          });
+        }
+      }
+      
+      // If it's a Date object or ISO string
+      const date = new Date(timeString);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        });
+      }
+      
+      return timeString; // Return original if all else fails
+    } catch (error) {
+      console.error('Error formatting time:', error, 'Input:', timeString);
+      return timeString;
+    }
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -323,7 +423,12 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
                       {monthDays.map(day => {
                         const grade = getGradeForStudentAndDate(student.id, day);
                         return (
-                          <td key={day.toISOString()} className={`px-1 sm:px-3 py-2 sm:py-3 text-center text-xs sm:text-sm font-medium border-r border-gray-200 min-w-[40px] sm:min-w-[60px] ${getGradeColor(grade?.value)}`}>
+                          <td 
+                            key={day.toISOString()} 
+                            className={`px-1 sm:px-3 py-2 sm:py-3 text-center text-xs sm:text-sm font-medium border-r border-gray-200 min-w-[40px] sm:min-w-[60px] ${getGradeColor(grade?.value)} ${grade ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                            onClick={() => grade && handleGradeClick(grade)}
+                            title={grade ? `Click to edit grade` : ''}
+                          >
                             {grade ? `${grade.value}%` : '-'}
                           </td>
                         );
@@ -367,6 +472,103 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-gray-100 border border-gray-200 rounded"></div>
             <span>No Grade</span>
+          </div>
+        </div>
+      )}
+
+      {/* Grade Edit Modal */}
+      {showGradeModal && selectedGrade && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-blue-600" />
+                Edit Grade
+              </h3>
+              <button
+                onClick={() => setShowGradeModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Student Info */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="font-medium text-gray-900">
+                {selectedGrade.student?.firstName} {selectedGrade.student?.lastName}
+              </div>
+              <div className="text-sm text-gray-500">
+                ID: {selectedGrade.student?.studentId}
+              </div>
+              <div className="text-sm text-gray-500">
+                Date: {format(new Date(selectedGrade.date), 'MMM dd, yyyy')}
+              </div>
+            </div>
+
+            {/* Lesson Time Info */}
+            {selectedGrade.timetable && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-2 text-blue-800 font-medium mb-1">
+                  <Clock className="w-4 h-4" />
+                  Lesson Time
+                </div>
+                <div className="text-sm text-blue-700">
+                  {formatTime(selectedGrade.timetable.startTime)} - {formatTime(selectedGrade.timetable.endTime)}
+                </div>
+                <div className="text-sm text-blue-600">
+                  Subject: {selectedGrade.timetable.subject?.name}
+                </div>
+              </div>
+            )}
+
+            {/* Grade Input */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Grade (1-100)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={editValue}
+                onChange={(e) => setEditValue(parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter grade (1-100)"
+              />
+            </div>
+
+            {/* Comments Input */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <MessageSquare className="w-4 h-4 inline mr-1" />
+                Comments
+              </label>
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Enter comments about this grade..."
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowGradeModal(false)}
+                className="flex-1 px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateGrade}
+                disabled={isUpdating || editValue < 1 || editValue > 100}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isUpdating ? 'Updating...' : 'Update Grade'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -12,27 +12,27 @@ const Announcements = async () => {
       OR: [
         { targetAudience: "ALL_TEACHERS" },
         { targetAudience: "ALL_USERS" },
-        { teacherIds: { has: userId! } },
+        { teacherIds: { hasSome: [userId!] } },
       ],
     },
     student: {
       OR: [
         { targetAudience: "ALL_STUDENTS" },
         { targetAudience: "ALL_USERS" },
-        { studentIds: { has: userId! } },
+        { studentIds: { hasSome: [userId!] } },
       ],
     },
     parent: {
       OR: [
         { targetAudience: "ALL_PARENTS" },
         { targetAudience: "ALL_USERS" },
-        { parentIds: { has: userId! } },
+        { parentIds: { hasSome: [userId!] } },
       ],
     },
     user: {
       OR: [
         { targetAudience: "ALL_USERS" },
-        { userIds: { has: userId! } },
+        { userIds: { hasSome: [userId!] } },
       ],
     },
   } as const;

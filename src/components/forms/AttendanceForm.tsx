@@ -40,61 +40,114 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      console.log('Attendance Form Data:', data);
+      console.log('Forms/AttendanceForm - Data:', data);
+      console.log('Forms/AttendanceForm - Teacher ID:', data?.teacherId);
       
-      const apiUrl = `/api/attendance/students?classId=${data?.classId}&subjectId=${data?.subjectId}&branchId=${data?.branchId}&academicYearId=${data?.academicYearId}`;
-      console.log('Fetching students from:', apiUrl);
+      // First, fetch students
+      const studentsApiUrl = `/api/attendance/students?classId=${data?.classId}&subjectId=${data?.subjectId}&branchId=${data?.branchId}&academicYearId=${data?.academicYearId}`;
+      console.log('Forms/AttendanceForm - Students API URL:', studentsApiUrl);
       
-      const response = await fetch(apiUrl, {
+      const studentsResponse = await fetch(studentsApiUrl, {
         headers: {
           'x-user-id': data?.teacherId || '',
         },
       });
 
-      console.log('Response status:', response.status);
+      if (!studentsResponse.ok) {
+        const errorData = await studentsResponse.text();
+        console.error('Forms/AttendanceForm - Students API Error:', errorData);
+        setStudents([]);
+        setAttendance([]);
+        return;
+      }
+
+      const studentsData = await studentsResponse.json();
+      const students = studentsData.data || studentsData.students || studentsData || [];
+      console.log('Forms/AttendanceForm - Students fetched:', students.length);
       
-      if (response.ok) {
-        const responseData = await response.json();
-        console.log('API Response:', responseData);
+      setStudents(students);
+
+      // Now fetch existing attendance data for this specific lesson
+      const attendanceApiUrl = `/api/attendance/lesson?timetableId=${data?.timetableId}&date=${data?.date}`;
+      console.log('Forms/AttendanceForm - Attendance API URL:', attendanceApiUrl);
+      console.log('Forms/AttendanceForm - Data:', data);
+      
+      const attendanceResponse = await fetch(attendanceApiUrl, {
+        headers: {
+          'x-user-id': data?.teacherId || '',
+        },
+      });
+
+      let existingAttendance: any[] = [];
+      if (attendanceResponse.ok) {
+        const attendanceData = await attendanceResponse.json();
+        existingAttendance = attendanceData.data || [];
+        console.log('Forms/AttendanceForm - Existing attendance fetched:', existingAttendance.length);
+        console.log('Forms/AttendanceForm - Existing attendance data:', existingAttendance);
+      } else {
+        console.log('Forms/AttendanceForm - No existing attendance found for this lesson');
+        console.log('Forms/AttendanceForm - Response status:', attendanceResponse.status);
+        const errorText = await attendanceResponse.text();
+        console.log('Forms/AttendanceForm - Error response:', errorText);
+      }
+
+      // Create attendance records, pre-populating with existing data if available
+      const initialAttendance = students.map((student: Student) => {
+        // Use the original studentId string format for consistency
+        const studentIdString = student.studentId || student.id;
+        const studentIdNumeric = student.studentId ? parseInt(student.studentId.replace('S', '')) : parseInt(student.id);
         
-        const studentsData = responseData.data || responseData.students || responseData || [];
-        console.log('Students data:', studentsData);
+        // Look for existing attendance record for this student
+        const existingRecord = existingAttendance.find(record => 
+          record.studentId === studentIdString
+        );
         
-        setStudents(studentsData);
-        
-        // Initialize attendance records
-        const initialAttendance = studentsData.map((student: Student) => {
-          // Use the numeric studentId field instead of the string id
-          const studentId = student.studentId ? parseInt(student.studentId.replace('S', '')) : parseInt(student.id);
+        if (existingRecord) {
+          console.log('Forms/AttendanceForm - Found existing record for student:', studentIdString, existingRecord);
           return {
-            studentId: studentId, // Use the numeric student ID
+            studentId: studentIdNumeric, // Use numeric for internal processing
+            status: existingRecord.status.toLowerCase() as 'present' | 'absent' | 'late' | 'excused',
+            notes: existingRecord.notes || ''
+          };
+        } else {
+          // No existing record, use defaults
+          return {
+            studentId: studentIdNumeric, // Use numeric for internal processing
             status: 'present' as const,
             notes: ''
           };
+        }
         });
+      
+      console.log('Forms/AttendanceForm - Initial attendance records:', initialAttendance);
         setAttendance(initialAttendance);
-      } else {
-        const errorData = await response.text();
-        console.error('API Error:', response.status, errorData);
-        setStudents([]);
-        setAttendance([]);
-      }
+      
     } catch (error) {
-      console.error("Error fetching students:", error);
+      console.error("Error fetching data:", error);
+      setStudents([]);
+      setAttendance([]);
     } finally {
       setLoading(false);
     }
   };
 
   const updateAttendance = (studentId: string, field: 'status' | 'notes', value: string) => {
+    console.log('Forms/AttendanceForm - updateAttendance called:', { studentId, field, value });
     const numericStudentId = parseInt(studentId.replace('S', ''));
-    setAttendance(prev =>
-      prev.map(record =>
-        record.studentId === numericStudentId.toString()
-          ? { ...record, [field]: value }
-          : record
-      )
-    );
+    console.log('Forms/AttendanceForm - Converted studentId:', numericStudentId);
+    console.log('Forms/AttendanceForm - Current attendance state before update:', attendance);
+    
+    setAttendance(prev => {
+      const updated = prev.map(record => {
+        if (record.studentId === numericStudentId.toString()) {
+          console.log('Forms/AttendanceForm - Updating record for student:', numericStudentId, 'field:', field, 'value:', value);
+          return { ...record, [field]: value };
+        }
+        return record;
+      });
+      console.log('Forms/AttendanceForm - Updated attendance state:', updated);
+      return updated;
+    });
   };
 
   const markAllAs = (status: 'present' | 'absent' | 'late' | 'excused') => {
@@ -107,8 +160,13 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
     try {
       setSaving(true);
       
+      console.log('Forms/AttendanceForm - handleSave called');
+      console.log('Forms/AttendanceForm - Current attendance state:', attendance);
+      console.log('Forms/AttendanceForm - Students state:', students);
+      
       // Validate attendance data
       if (attendance.length === 0) {
+        console.log('Forms/AttendanceForm - No attendance records found');
         alert('❌ No attendance records to save. Please mark attendance for at least one student.');
         return;
       }
@@ -128,11 +186,11 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
           'x-user-id': data?.teacherId || '',
         },
         body: JSON.stringify({
-          timetableId: data?.id,
-          classId: data?.classId,
-          subjectId: data?.subjectId,
+          timetableId: parseInt(data?.id || '0'),
+          classId: parseInt(data?.classId || '0'),
+          subjectId: parseInt(data?.subjectId || '0'),
           date: data?.date,
-          attendance: attendance // Fixed: was attendanceData
+          attendance: attendance
         }),
       });
 
@@ -265,7 +323,8 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
               ) : (
                 <div className="divide-y divide-gray-200">
                   {students.map((student, index) => {
-                    const studentAttendance = attendance.find(a => a.studentId === student.id);
+                    const studentIdNumeric = student.studentId ? parseInt(student.studentId.replace('S', '')) : parseInt(student.id);
+                    const studentAttendance = attendance.find(a => a.studentId === studentIdNumeric.toString());
                     
                     return (
                       <div key={student.id} className="p-4 hover:bg-gray-50 transition-colors">
@@ -297,7 +356,10 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
                             {['present', 'late', 'excused', 'absent'].map((status) => (
                               <button
                                 key={status}
-                                onClick={() => updateAttendance(student.id, 'status', status)}
+                                onClick={() => {
+                                  const studentId = student.studentId || student.id;
+                                  updateAttendance(studentId, 'status', status);
+                                }}
                                 className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                                   studentAttendance?.status === status
                                     ? status === 'present' ? 'bg-blue-600 text-white shadow-lg scale-105'
@@ -318,7 +380,10 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
                             type="text"
                             placeholder="Add notes (optional)"
                             value={studentAttendance?.notes || ''}
-                            onChange={(e) => updateAttendance(student.id, 'notes', e.target.value)}
+                            onChange={(e) => {
+                              const studentId = student.studentId || student.id;
+                              updateAttendance(studentId, 'notes', e.target.value);
+                            }}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                           />
                         </div>

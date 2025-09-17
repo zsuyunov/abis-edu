@@ -11,7 +11,7 @@ const BigCalendarContainer = async ({
 }) => {
   const dataRes = await prisma.timetable.findMany({
     where: type === "teacherId"
-      ? { teacherIds: { has: String(id) } }
+      ? { teacherIds: { hasSome: [String(id)] } }
       : { classId: typeof id === "number" ? id : parseInt(String(id), 10) },
     include: {
       subject: { select: { name: true } },

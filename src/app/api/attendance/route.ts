@@ -3,6 +3,73 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+export async function PUT(request: NextRequest) {
+  try {
+    const teacherId = request.headers.get('x-user-id');
+    if (!teacherId) {
+      console.log('❌ Unauthorized: No teacher ID provided');
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.log('📝 Processing attendance update request for teacher:', teacherId);
+    
+    const body = await request.json();
+    console.log('📋 Update request body:', JSON.stringify(body, null, 2));
+    
+    const { id, status, notes } = body;
+
+    if (!id || !status) {
+      console.log('❌ Missing required fields: id and status are required');
+      return NextResponse.json({ 
+        error: "Missing required fields: id and status are required" 
+      }, { status: 400 });
+    }
+
+    // Validate status
+    const validStatuses = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'];
+    if (!validStatuses.includes(status.toUpperCase())) {
+      console.log('❌ Invalid status:', status);
+      return NextResponse.json({ 
+        error: "Invalid status. Must be one of: PRESENT, ABSENT, LATE, EXCUSED" 
+      }, { status: 400 });
+    }
+
+    // Update the attendance record
+    const updatedAttendance = await prisma.attendance.update({
+      where: { id: parseInt(id) },
+      data: {
+        status: status.toUpperCase(),
+        notes: notes || null,
+        updatedAt: new Date()
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    console.log('✅ Attendance updated successfully:', updatedAttendance.id);
+
+    return NextResponse.json({ 
+      success: true, 
+      message: "Attendance updated successfully",
+      data: updatedAttendance
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating attendance:', error);
+    return NextResponse.json({ 
+      error: "Failed to update attendance",
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
@@ -45,14 +112,24 @@ export async function POST(request: NextRequest) {
     console.log('Raw attendance data:', attendance);
     
     const validAttendance = attendance.filter(record => {
-      const isValid = record && 
-        typeof record.studentId === 'number' && 
-        !isNaN(record.studentId) && 
-        typeof record.status === 'string' && 
-        record.status.trim() !== '';
-      
+      if (!record) {
+        console.log('❌ Invalid record: null or undefined');
+        return false;
+      }
+
+      // Validate studentId and status
+      const isValid = typeof record.studentId === 'string' &&
+        record.studentId.length > 0 &&
+        typeof record.status === 'string' &&
+        record.status.trim() !== '' &&
+        ['present', 'absent', 'late', 'excused', 'PRESENT', 'ABSENT', 'LATE', 'EXCUSED'].includes(record.status.trim().toUpperCase()) &&
+        (record.notes === undefined || typeof record.notes === 'string');
+
       if (!isValid) {
         console.log('❌ Invalid record:', record);
+      } else {
+        // Normalize the record for consistent processing
+        record.status = record.status.trim().toUpperCase();
       }
       return isValid;
     });
@@ -63,7 +140,7 @@ export async function POST(request: NextRequest) {
       console.log('❌ No valid attendance records provided');
       return NextResponse.json({ 
         error: "No valid attendance records provided",
-        details: "All attendance records failed validation"
+        details: "All attendance records failed validation. Please ensure you have marked attendance for at least one student."
       }, { status: 400 });
     }
 
@@ -85,15 +162,16 @@ export async function POST(request: NextRequest) {
       
       try {
         // First, try to find existing record
-        console.log(`🔍 Looking for existing attendance for student ${record.studentId}...`);
+        console.log(`🔍 Looking for existing attendance for student ${record.studentId} with timetableId ${timetableId} on date ${date}...`);
         const existing = await prisma.attendance.findFirst({
           where: {
             studentId: record.studentId.toString(),
-            classId: parseInt(classId),
-            subjectId: parseInt(subjectId),
+            timetableId: parseInt(timetableId),
             date: new Date(date)
           }
         });
+        
+        console.log(`🔍 Existing record found:`, existing ? `ID: ${existing.id}, Status: ${existing.status}, Notes: ${existing.notes}` : 'None');
 
         let attendanceRecord;
         if (existing) {
@@ -103,6 +181,7 @@ export async function POST(request: NextRequest) {
             where: { id: existing.id },
             data: {
               status: record.status,
+              notes: record.notes || null,
               teacherId: teacherId,
               updatedAt: new Date()
             }
@@ -118,6 +197,7 @@ export async function POST(request: NextRequest) {
               subjectId: parseInt(subjectId),
               date: new Date(date),
               status: record.status,
+              notes: record.notes || null,
               teacherId: teacherId,
               timetableId: parseInt(timetableId),
               academicYearId: 1, // Default academic year

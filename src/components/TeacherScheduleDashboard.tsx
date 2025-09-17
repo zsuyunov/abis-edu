@@ -282,11 +282,11 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
     }
 
     const lessonData = {
-      id: timetable.id,
-      classId: timetable.class.id,
-      subjectId: timetable.subject.id,
-      academicYearId: timetable.academicYear?.id || "",
-      branchId: timetable.branch.id,
+      id: timetable.id.toString(),
+      classId: timetable.class.id.toString(),
+      subjectId: timetable.subject.id.toString(),
+      academicYearId: timetable.academicYear?.id?.toString() || "1",
+      branchId: timetable.branch.id.toString(),
       className: timetable.class.name,
       subjectName: timetable.subject.name,
       date: timetable.fullDate,
@@ -294,6 +294,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
       endTime: timetable.endTime
     };
 
+    console.log('TeacherScheduleDashboard - Attendance lesson data:', lessonData);
     setLessonData(lessonData);
     setAttendanceModalOpen(true);
   };

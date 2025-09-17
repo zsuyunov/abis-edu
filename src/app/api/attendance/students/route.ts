@@ -16,14 +16,15 @@ export async function GET(request: NextRequest) {
     const academicYearId = searchParams.get('academicYearId');
     const branchId = searchParams.get('branchId');
 
-    console.log('Fetching students with params:', { teacherId, classId, subjectId, academicYearId, branchId });
+    console.log('🔍 Fetching students with params:', { teacherId, classId, subjectId, academicYearId, branchId });
 
     if (!classId) {
+      console.log('❌ No classId provided');
       return NextResponse.json({ error: 'Class ID is required' }, { status: 400 });
     }
 
     // Skip teacher assignment verification for now to debug
-    console.log('Skipping teacher verification, fetching students directly');
+    console.log('⏭️ Skipping teacher verification, fetching students directly');
 
     // First check if the class exists
     const classExists = await prisma.class.findUnique({
@@ -32,11 +33,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!classExists) {
-      console.error('Class not found:', classId);
+      console.error('❌ Class not found:', classId);
       return NextResponse.json({ error: 'Class not found' }, { status: 404 });
     }
 
-    console.log('Class found:', classExists);
+    console.log('✅ Class found:', classExists);
 
     // Get all students in the class (remove status filter temporarily)
     const students = await prisma.student.findMany({
@@ -56,15 +57,22 @@ export async function GET(request: NextRequest) {
       ]
     });
 
-    console.log('Students found:', students.length, 'for class:', classId);
-    console.log('Sample student:', students[0]);
+    console.log(`📊 Students found: ${students.length} for class: ${classId}`);
+    if (students.length > 0) {
+      console.log('👥 Sample student:', students[0]);
+    } else {
+      console.log('⚠️ No students found in class');
+    }
 
-    return NextResponse.json({
+    const response = {
       success: true,
       data: students,
       students: students, // Also include as 'students' key for compatibility
       count: students.length
-    });
+    };
+    
+    console.log('📤 Sending response:', { success: response.success, count: response.count });
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Error fetching students:', error);

@@ -135,7 +135,12 @@ const GradeInputForm: React.FC<GradeInputFormProps> = ({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const gradeEntries = Object.values(grades).filter(entry => entry.grade !== null);
+      const gradeEntries = Object.values(grades).filter(entry => entry.grade !== null && entry.grade > 0);
+      
+      if (gradeEntries.length === 0) {
+        alert('Please enter at least one grade with a score greater than 0.');
+        return;
+      }
       
       const response = await fetch('/api/grades', {
         method: 'POST',
@@ -239,16 +244,16 @@ const GradeInputForm: React.FC<GradeInputFormProps> = ({
                 <div className="flex items-center gap-4">
                   <div className="flex flex-col">
                     <label className="text-sm font-medium text-gray-700 mb-1">
-                      Grade (0-100)
+                      Grade (1-100)
                     </label>
                     <input
                       type="number"
-                      min="0"
+                      min="1"
                       max="100"
                       value={grades[student.id]?.grade || ''}
                       onChange={(e) => handleGradeChange(student.id, e.target.value)}
                       className="w-20 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
-                      placeholder="0-100"
+                      placeholder="1-100"
                     />
                   </div>
                   

@@ -52,6 +52,53 @@ export function formatTime(date: Date | string): string {
   })
 }
 
+// Format time from database (handles both string and Date inputs)
+export function formatDatabaseTime(timeInput: string | Date): string {
+  try {
+    let date: Date;
+    
+    if (typeof timeInput === 'string') {
+      // Handle different string formats
+      if (timeInput.includes('T')) {
+        // ISO string format - check if it has timezone info
+        if (timeInput.endsWith('Z')) {
+          // UTC time - convert to local
+          date = new Date(timeInput);
+        } else {
+          // Local time - treat as local
+          date = new Date(timeInput);
+        }
+      } else if (timeInput.includes(':')) {
+        // Time format like "08:20" - treat as local time
+        date = new Date(`1970-01-01T${timeInput}:00`);
+      } else {
+        // Try direct conversion
+        date = new Date(timeInput);
+      }
+    } else {
+      // Already a Date object - check if it's stored as UTC or local
+      date = timeInput;
+    }
+    
+    if (isNaN(date.getTime())) {
+      console.error('Invalid time input:', timeInput);
+      return 'Invalid';
+    }
+    
+    // Use local time methods since times are stored as local time in the database
+    // The times are stored as 1970-01-01T08:20:00 (local) and we want to display 08:20 (local)
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    
+    return `${displayHour}:${minutes.toString().padStart(2, '0')} ${period}`;
+  } catch (error) {
+    console.error('Error formatting database time:', error, 'for input:', timeInput);
+    return 'Error';
+  }
+}
+
 export function formatNumber(num: number, options?: Intl.NumberFormatOptions): string {
   return num.toLocaleString('en-US', options)
 }

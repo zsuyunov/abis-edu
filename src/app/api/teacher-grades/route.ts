@@ -72,17 +72,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Filter out records with 0 or invalid scores
+    const validRecords = records.filter((record: any) => 
+      record && 
+      record.studentId && 
+      record.score && 
+      parseFloat(record.score) > 0
+    );
+
+    console.log('Valid records after filtering:', validRecords.length, 'out of', records.length);
+
+    if (validRecords.length === 0) {
+      return NextResponse.json({ 
+        error: 'No valid grade records provided. Please enter at least one grade with a score greater than 0.' 
+      }, { status: 400 });
+    }
+
     // Create grade records
-    const gradeRecords = records.map((record: any) => ({
+    const gradeRecords = validRecords.map((record: any) => ({
       studentId: record.studentId,
       timetableId: parseInt(timetableId),
       classId: parseInt(classId),
       subjectId: parseInt(subjectId),
       academicYearId: validAcademicYearId,
       branchId: parseInt(branchId),
-        teacherId,
+      teacherId,
       date: new Date(date),
-      value: parseFloat(record.score) || 0,
+      value: parseFloat(record.score),
       maxValue: parseFloat(maxScore) || 100,
       type: type || 'DAILY_GRADE',
       description: record.feedback || assignmentTitle || 'Daily Grade',
