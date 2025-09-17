@@ -101,16 +101,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Create start and end time Date objects
-    // Fix timezone issue: Create local time instead of UTC
-    const createLocalTime = (timeString: string) => {
-      const [hours, minutes] = timeString.split(':').map(Number);
-      // Use a fixed date in local timezone to avoid UTC conversion
-      const date = new Date(1970, 0, 1, hours, minutes, 0, 0);
-      return date;
-    };
-
-    const startTimeDate = createLocalTime(startTime);
-    const endTimeDate = createLocalTime(endTime);
+    const startTimeDate = new Date(`1970-01-01T${startTime}`);
+    const endTimeDate = new Date(`1970-01-01T${endTime}`);
 
     // Validate time range
     if (startTimeDate >= endTimeDate) {

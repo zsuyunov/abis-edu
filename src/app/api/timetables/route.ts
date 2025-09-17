@@ -147,8 +147,8 @@ export async function GET(request: NextRequest) {
     const transformedTimetables = timetablesWithSubjects.map(timetable => ({
       ...timetable,
       fullDate: new Date().toISOString().split('T')[0], // Use current date as fallback
-      startTime: timetable.startTime?.toISOString() || timetable.startTime,
-      endTime: timetable.endTime?.toISOString() || timetable.endTime,
+      startTime: timetable.startTime,
+      endTime: timetable.endTime,
     }));
 
     return NextResponse.json(transformedTimetables);
@@ -164,21 +164,29 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
-    // Fix timezone issue: Create local time instead of UTC
-    const createLocalTime = (timeInput: string | Date) => {
-      if (typeof timeInput === 'string') {
-        // If it's a time string like "08:30", convert to local time
-        if (timeInput.includes(':') && !timeInput.includes('T')) {
-          const [hours, minutes] = timeInput.split(':').map(Number);
-          return new Date(1970, 0, 1, hours, minutes, 0, 0);
-        }
-        // If it's a full date string, use it as is
-        return new Date(timeInput);
+
+    // Helper function to create Date object with time
+    const createTimeDate = (timeString: string | Date) => {
+      if (!timeString) return new Date();
+
+      // If it's already a Date object, return as is
+      if (timeString instanceof Date) {
+        return timeString;
       }
-      return timeInput;
+
+      // If it's an ISO string, parse it
+      if (typeof timeString === 'string' && timeString.includes('T')) {
+        return new Date(timeString);
+      }
+
+      // Handle time string format "HH:mm" - use fixed date to avoid timezone issues
+      if (typeof timeString === 'string') {
+        return new Date(`1970-01-01T${timeString}:00`);
+      }
+
+      return new Date();
     };
-    
+
     const timetable = await prisma.timetable.create({
       data: {
         branchId: body.branchId,
@@ -187,8 +195,8 @@ export async function POST(request: NextRequest) {
         subjectId: body.subjectId,
         teacherIds: body.teacherId ? [body.teacherId] : [],
         dayOfWeek: body.dayOfWeek,
-        startTime: createLocalTime(body.startTime),
-        endTime: createLocalTime(body.endTime),
+        startTime: createTimeDate(body.startTime),
+        endTime: createTimeDate(body.endTime),
         roomNumber: body.roomNumber,
         buildingName: body.buildingName || null,
         isActive: body.isActive !== undefined ? body.isActive : true,
@@ -199,7 +207,7 @@ export async function POST(request: NextRequest) {
         academicYear: { select: { id: true, name: true } },
       },
     });
-    
+
     return NextResponse.json(timetable, { status: 201 });
   } catch (error) {
     console.error("Error creating timetable:", error);

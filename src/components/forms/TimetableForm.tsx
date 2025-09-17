@@ -121,12 +121,22 @@ const TimetableForm = ({
 
   const onSubmit = handleSubmit((formData) => {
     const formDataObj = new FormData();
-    
+
     // Add all form data
     Object.keys(formData).forEach((key) => {
       const value = formData[key as keyof TimetableSchema];
       if (value !== undefined && value !== null) {
-        if (value instanceof Date) {
+        // Handle time fields specially to preserve local time
+        if (key === 'startTime' || key === 'endTime') {
+          if (value instanceof Date) {
+            // Convert to local time string format (HH:mm)
+            const hours = value.getHours().toString().padStart(2, '0');
+            const minutes = value.getMinutes().toString().padStart(2, '0');
+            formDataObj.append(key, `${hours}:${minutes}`);
+          } else {
+            formDataObj.append(key, value.toString());
+          }
+        } else if (value instanceof Date) {
           formDataObj.append(key, value.toISOString());
         } else {
           formDataObj.append(key, value.toString());

@@ -45,21 +45,29 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    
-    // Fix timezone issue: Create local time instead of UTC
-    const createLocalTime = (timeInput: string | Date) => {
-      if (typeof timeInput === 'string') {
-        // If it's a time string like "08:30", convert to local time
-        if (timeInput.includes(':') && !timeInput.includes('T')) {
-          const [hours, minutes] = timeInput.split(':').map(Number);
-          return new Date(1970, 0, 1, hours, minutes, 0, 0);
-        }
-        // If it's a full date string, use it as is
-        return new Date(timeInput);
+
+    // Helper function to create Date object with time
+    const createTimeDate = (timeString: string | Date) => {
+      if (!timeString) return undefined;
+
+      // If it's already a Date object, return as is
+      if (timeString instanceof Date) {
+        return timeString;
       }
-      return timeInput;
+
+      // If it's an ISO string, parse it
+      if (typeof timeString === 'string' && timeString.includes('T')) {
+        return new Date(timeString);
+      }
+
+      // Handle time string format "HH:mm" - use fixed date to avoid timezone issues
+      if (typeof timeString === 'string') {
+        return new Date(`1970-01-01T${timeString}:00`);
+      }
+
+      return undefined;
     };
-    
+
     const timetable = await prisma.timetable.update({
       where: { id: parseInt(params.id) },
       data: {
@@ -69,8 +77,8 @@ export async function PUT(
         subjectId: body.subjectId,
         teacherIds: body.teacherId ? [body.teacherId] : [],
         dayOfWeek: body.dayOfWeek,
-        startTime: createLocalTime(body.startTime),
-        endTime: createLocalTime(body.endTime),
+        ...(body.startTime && { startTime: createTimeDate(body.startTime) }),
+        ...(body.endTime && { endTime: createTimeDate(body.endTime) }),
         roomNumber: body.roomNumber,
         buildingName: body.buildingName || null,
         isActive: body.isActive !== undefined ? body.isActive : true,
@@ -82,7 +90,7 @@ export async function PUT(
         subject: { select: { id: true, name: true } },
       },
     });
-    
+
     return NextResponse.json(timetable);
   } catch (error) {
     console.error("Error updating timetable:", error);
