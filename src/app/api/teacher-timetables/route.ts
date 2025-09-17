@@ -210,22 +210,32 @@ export async function GET(request: NextRequest) {
     console.log(`Found ${timetables.length} timetables matching the criteria`);
     
     // Transform the data to match the expected format
-    const transformedTimetables = timetables.map(timetable => ({
-      ...timetable,
-      fullDate: timetable.startTime ? new Date(timetable.startTime).toISOString().split('T')[0] : '',
-      startTime: timetable.startTime?.toISOString() || null,
-      endTime: timetable.endTime?.toISOString() || null,
-      class: {
-        ...timetable.class,
-        name: timetable.class?.name || `Class ${timetable.classId}`,
-        academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
+    const transformedTimetables = timetables.map(timetable => {
+      // Convert Date objects to time strings using UTC to avoid timezone issues
+      const formatTime = (date: Date) => {
+        // Use UTC methods to avoid timezone conversion issues
+        const hours = date.getUTCHours().toString().padStart(2, '0');
+        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+
+      return {
+        ...timetable,
+        fullDate: timetable.startTime ? new Date(timetable.startTime).toISOString().split('T')[0] : '',
+        startTime: timetable.startTime ? formatTime(timetable.startTime) : '00:00',
+        endTime: timetable.endTime ? formatTime(timetable.endTime) : '00:00',
+        class: {
+          ...timetable.class,
+          name: timetable.class?.name || `Class ${timetable.classId}`,
+          academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
+          branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
+        },
+        subject: timetable.subject || { id: 'none', name: 'General' },
         branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
-      },
-      subject: timetable.subject || { id: 'none', name: 'General' },
-      branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
-      topics: timetable.topics || [],
-      teacherIds: Array.isArray(timetable.teacherIds) ? timetable.teacherIds : [],
-    }));
+        topics: timetable.topics || [],
+        teacherIds: Array.isArray(timetable.teacherIds) ? timetable.teacherIds : [],
+      };
+    });
 
     return NextResponse.json({
       timetables: transformedTimetables,

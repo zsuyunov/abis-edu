@@ -109,21 +109,31 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform timetables to include fullDate field and ensure consistent data structure
-    const transformTimetable = (timetable: any): TransformedTimetable => ({
-      ...timetable,
-      fullDate: new Date().toISOString().split('T')[0],
-      startTime: timetable.startTime?.toISOString() || timetable.startTime,
-      endTime: timetable.endTime?.toISOString() || timetable.endTime,
-      class: {
-        ...timetable.class,
-        name: timetable.class?.name || `Class ${timetable.classId}`,
-        academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
-        branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' }
-      },
-      subject: timetable.subject || { id: 'none', name: 'General' },
-      branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
-      topics: timetable.topics || []
-    });
+    const transformTimetable = (timetable: any): TransformedTimetable => {
+      // Convert Date objects to time strings using UTC to avoid timezone issues
+      const formatTime = (date: Date) => {
+        // Use UTC methods to avoid timezone conversion issues
+        const hours = date.getUTCHours().toString().padStart(2, '0');
+        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+
+      return {
+        ...timetable,
+        fullDate: new Date().toISOString().split('T')[0],
+        startTime: timetable.startTime ? formatTime(timetable.startTime) : '00:00',
+        endTime: timetable.endTime ? formatTime(timetable.endTime) : '00:00',
+        class: {
+          ...timetable.class,
+          name: timetable.class?.name || `Class ${timetable.classId}`,
+          academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
+          branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' }
+        },
+        subject: timetable.subject || { id: 'none', name: 'General' },
+        branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
+        topics: timetable.topics || []
+      };
+    };
 
     const transformedTodaysTimetables = todaysTimetables.map(transformTimetable);
     const transformedUpcomingToday = upcomingToday.map(transformTimetable);

@@ -40,23 +40,25 @@ export async function GET(request: NextRequest) {
     });
 
     // Transform the data
-    const schedule = todayTimetables.map(timetable => ({
-      id: timetable.id,
-      startTime: timetable.startTime?.toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      }) || "00:00",
-      endTime: timetable.endTime?.toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      }) || "00:00",
-      subject: timetable.subject?.name || 'Unknown Subject',
-      class: timetable.class?.name || 'Unknown Class',
-      room: timetable.roomNumber || timetable.buildingName || 'TBA',
-      status: timetable.isActive ? 'ACTIVE' : 'INACTIVE'
-    }));
+    const schedule = todayTimetables.map(timetable => {
+      // Convert Date objects to time strings using UTC to avoid timezone issues
+      const formatTime = (date: Date) => {
+        // Use UTC methods to avoid timezone conversion issues
+        const hours = date.getUTCHours().toString().padStart(2, '0');
+        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+
+      return {
+        id: timetable.id,
+        startTime: timetable.startTime ? formatTime(timetable.startTime) : "00:00",
+        endTime: timetable.endTime ? formatTime(timetable.endTime) : "00:00",
+        subject: timetable.subject?.name || 'Unknown Subject',
+        class: timetable.class?.name || 'Unknown Class',
+        room: timetable.roomNumber || timetable.buildingName || 'TBA',
+        status: timetable.isActive ? 'ACTIVE' : 'INACTIVE'
+      };
+    });
 
     return NextResponse.json({
       success: true,
