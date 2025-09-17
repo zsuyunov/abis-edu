@@ -182,6 +182,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Create timetable entry in database
+    // Fix timezone issue: Create local time instead of UTC
+    const createLocalTime = (timeString: string) => {
+      const [hours, minutes] = timeString.split(':').map(Number);
+      // Use a fixed date in local timezone to avoid UTC conversion
+      const date = new Date(1970, 0, 1, hours, minutes, 0, 0);
+      return date;
+    };
+
     const timetableData = {
       branchId: parseInt(body.branchId),
       classId: parseInt(body.classId),
@@ -189,8 +197,8 @@ export async function POST(request: NextRequest) {
       dayOfWeek: dayOfWeek,
       subjectId: primarySubjectId,
       teacherIds: teacherIds, // Use auto-assigned teachers
-      startTime: new Date(`1970-01-01T${body.startTime}:00`),
-      endTime: new Date(`1970-01-01T${body.endTime}:00`),
+      startTime: createLocalTime(body.startTime),
+      endTime: createLocalTime(body.endTime),
       roomNumber: body.roomNumber || '',
       buildingName: body.buildingName || '',
       isActive: true,

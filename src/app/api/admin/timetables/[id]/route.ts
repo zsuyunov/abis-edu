@@ -43,11 +43,19 @@ export async function PUT(
     const updateData = { ...body };
 
     // Convert time strings to Date objects if provided
+    // Fix timezone issue: Create local time instead of UTC
+    const createLocalTime = (timeString: string) => {
+      const [hours, minutes] = timeString.split(':').map(Number);
+      // Use a fixed date in local timezone to avoid UTC conversion
+      const date = new Date(1970, 0, 1, hours, minutes, 0, 0);
+      return date;
+    };
+
     if (updateData.startTime) {
-      updateData.startTime = new Date(`1970-01-01T${updateData.startTime}:00`);
+      updateData.startTime = createLocalTime(updateData.startTime);
     }
     if (updateData.endTime) {
-      updateData.endTime = new Date(`1970-01-01T${updateData.endTime}:00`);
+      updateData.endTime = createLocalTime(updateData.endTime);
     }
 
     // Convert day of week to uppercase if provided

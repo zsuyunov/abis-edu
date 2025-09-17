@@ -46,6 +46,20 @@ export async function PUT(
   try {
     const body = await request.json();
     
+    // Fix timezone issue: Create local time instead of UTC
+    const createLocalTime = (timeInput: string | Date) => {
+      if (typeof timeInput === 'string') {
+        // If it's a time string like "08:30", convert to local time
+        if (timeInput.includes(':') && !timeInput.includes('T')) {
+          const [hours, minutes] = timeInput.split(':').map(Number);
+          return new Date(1970, 0, 1, hours, minutes, 0, 0);
+        }
+        // If it's a full date string, use it as is
+        return new Date(timeInput);
+      }
+      return timeInput;
+    };
+    
     const timetable = await prisma.timetable.update({
       where: { id: parseInt(params.id) },
       data: {
@@ -55,8 +69,8 @@ export async function PUT(
         subjectId: body.subjectId,
         teacherIds: body.teacherId ? [body.teacherId] : [],
         dayOfWeek: body.dayOfWeek,
-        startTime: new Date(body.startTime),
-        endTime: new Date(body.endTime),
+        startTime: createLocalTime(body.startTime),
+        endTime: createLocalTime(body.endTime),
         roomNumber: body.roomNumber,
         buildingName: body.buildingName || null,
         isActive: body.isActive !== undefined ? body.isActive : true,
