@@ -428,8 +428,7 @@ const TeacherWeeklyTimetable = ({
                             <div className="flex items-center gap-2">
                               <Clock className="w-4 h-4 text-gray-600" />
                               <span className="text-xs text-gray-600">
-                                {new Date(timetable.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
-                                {new Date(timetable.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                {timetable.startTime} - {timetable.endTime}
                               </span>
                           </div>
                         </div>
@@ -549,7 +548,7 @@ const TeacherWeeklyTimetable = ({
                   <div key={timetable.id} className="bg-white/50 rounded-lg p-2 border border-gray-100">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-medium text-blue-600">
-                        {new Date(timetable.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {timetable.startTime}
                       </span>
                       <span className="text-xs text-gray-600">•</span>
                       <span className="text-xs text-gray-700 truncate">

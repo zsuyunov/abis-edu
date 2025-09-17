@@ -161,8 +161,7 @@ const TeacherTimetableCalendar = ({ teacherId, teacherData, relatedData, filters
                       <div className="font-medium text-blue-800">{timetable.subjectName}</div>
                       <div className="text-blue-600">{timetable.className}</div>
                       <div className="text-blue-500">
-                        {new Date(timetable.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
-                        {new Date(timetable.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {timetable.startTime} - {timetable.endTime}
                       </div>
                       <div className="text-blue-500">{timetable.room}</div>
                       <button
@@ -230,8 +229,7 @@ const TeacherTimetableCalendar = ({ teacherId, teacherData, relatedData, filters
                       <div className="font-medium text-blue-800">{timetable.subjectName}</div>
                       <div className="text-xs text-blue-600">{timetable.className}</div>
                       <div className="text-xs text-blue-500">
-                        {new Date(timetable.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
-                        {new Date(timetable.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {timetable.startTime} - {timetable.endTime}
                       </div>
                       <div className="text-xs text-blue-500">{timetable.room}</div>
                       <button
@@ -356,8 +354,7 @@ const TeacherTimetableCalendar = ({ teacherId, teacherData, relatedData, filters
                       <div className="font-medium text-green-800">{timetable.subjectName}</div>
                       <div className="text-green-600">{timetable.className}</div>
                       <div className="text-green-500">
-                        {new Date(timetable.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
-                        {new Date(timetable.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {timetable.startTime} - {timetable.endTime}
                       </div>
                       <div className="text-green-500">{timetable.room}</div>
                       <button

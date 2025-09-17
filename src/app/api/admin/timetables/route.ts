@@ -47,8 +47,24 @@ export async function GET(request: NextRequest) {
 
     console.log('Timetables found:', timetables.length);
 
+    // Format times correctly for display using UTC to avoid timezone issues
+    const formattedTimetables = timetables.map(timetable => {
+      const formatTime = (date: Date) => {
+        // Use UTC methods to avoid timezone conversion issues
+        const hours = date.getUTCHours().toString().padStart(2, '0');
+        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+
+      return {
+        ...timetable,
+        startTime: formatTime(timetable.startTime),
+        endTime: formatTime(timetable.endTime),
+      };
+    });
+
     return NextResponse.json({
-      timetables: timetables,
+      timetables: formattedTimetables,
       total: timetables.length
     });
 
@@ -189,8 +205,18 @@ export async function POST(request: NextRequest) {
       dayOfWeek: dayOfWeek,
       subjectId: primarySubjectId,
       teacherIds: teacherIds, // Use auto-assigned teachers
-      startTime: new Date(`1970-01-01T${body.startTime}:00`),
-      endTime: new Date(`1970-01-01T${body.endTime}:00`),
+      startTime: (() => {
+        const [hours, minutes] = body.startTime.split(':').map(Number);
+        const utcDate = new Date('1970-01-01T00:00:00.000Z');
+        utcDate.setUTCHours(hours, minutes, 0, 0);
+        return utcDate;
+      })(),
+      endTime: (() => {
+        const [hours, minutes] = body.endTime.split(':').map(Number);
+        const utcDate = new Date('1970-01-01T00:00:00.000Z');
+        utcDate.setUTCHours(hours, minutes, 0, 0);
+        return utcDate;
+      })(),
       roomNumber: body.roomNumber || '',
       buildingName: body.buildingName || '',
       isActive: true,
@@ -251,12 +277,18 @@ export async function PUT(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Convert time strings to Date objects if provided
+    // Convert time strings to Date objects if provided using UTC
     if (updateData.startTime) {
-      updateData.startTime = new Date(`1970-01-01T${updateData.startTime}:00`);
+      const [hours, minutes] = updateData.startTime.split(':').map(Number);
+      const utcDate = new Date('1970-01-01T00:00:00.000Z');
+      utcDate.setUTCHours(hours, minutes, 0, 0);
+      updateData.startTime = utcDate;
     }
     if (updateData.endTime) {
-      updateData.endTime = new Date(`1970-01-01T${updateData.endTime}:00`);
+      const [hours, minutes] = updateData.endTime.split(':').map(Number);
+      const utcDate = new Date('1970-01-01T00:00:00.000Z');
+      utcDate.setUTCHours(hours, minutes, 0, 0);
+      updateData.endTime = utcDate;
     }
 
     // Convert day of week to uppercase if provided

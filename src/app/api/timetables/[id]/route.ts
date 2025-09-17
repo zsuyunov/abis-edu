@@ -29,7 +29,21 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(timetable);
+    // Format times correctly for display using UTC to avoid timezone issues
+    const formatTime = (date: Date) => {
+      // Use UTC methods to avoid timezone conversion issues
+      const hours = date.getUTCHours().toString().padStart(2, '0');
+      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    };
+
+    const formattedTimetable = {
+      ...timetable,
+      startTime: formatTime(timetable.startTime),
+      endTime: formatTime(timetable.endTime),
+    };
+
+    return NextResponse.json(formattedTimetable);
   } catch (error) {
     console.error("Error fetching timetable:", error);
     return NextResponse.json(
@@ -46,25 +60,26 @@ export async function PUT(
   try {
     const body = await request.json();
 
-    // Helper function to create Date object with time
+    // Helper function to create Date object with time, using UTC to avoid timezone issues
     const createTimeDate = (timeString: string | Date) => {
       if (!timeString) return undefined;
 
-      // If it's already a Date object, return as is
       if (timeString instanceof Date) {
         return timeString;
       }
 
-      // If it's an ISO string, parse it
-      if (typeof timeString === 'string' && timeString.includes('T')) {
-        return new Date(timeString);
-      }
-
-      // Handle time string format "HH:mm" - use fixed date to avoid timezone issues
       if (typeof timeString === 'string') {
-        return new Date(`1970-01-01T${timeString}:00`);
-      }
+        // If it's an ISO string, parse it as is
+        if (timeString.includes('T')) {
+          return new Date(timeString);
+        }
 
+        // Handle time string format "HH:mm" - create in UTC to avoid timezone issues
+        const [hours, minutes] = timeString.split(':').map(Number);
+        const utcDate = new Date('1970-01-01T00:00:00.000Z'); // Start with UTC date
+        utcDate.setUTCHours(hours, minutes, 0, 0); // Set hours and minutes in UTC
+        return utcDate;
+      }
       return undefined;
     };
 
@@ -77,8 +92,8 @@ export async function PUT(
         subjectId: body.subjectId,
         teacherIds: body.teacherId ? [body.teacherId] : [],
         dayOfWeek: body.dayOfWeek,
-        ...(body.startTime && { startTime: createTimeDate(body.startTime) }),
-        ...(body.endTime && { endTime: createTimeDate(body.endTime) }),
+        ...(body.startTime && { startTime: createTimeDate(body.startTime) || new Date('1970-01-01T00:00:00.000Z') }),
+        ...(body.endTime && { endTime: createTimeDate(body.endTime) || new Date('1970-01-01T00:00:00.000Z') }),
         roomNumber: body.roomNumber,
         buildingName: body.buildingName || null,
         isActive: body.isActive !== undefined ? body.isActive : true,
@@ -91,7 +106,21 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(timetable);
+    // Format times correctly for display using UTC to avoid timezone issues
+    const formatTime = (date: Date) => {
+      // Use UTC methods to avoid timezone conversion issues
+      const hours = date.getUTCHours().toString().padStart(2, '0');
+      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    };
+
+    const formattedTimetable = {
+      ...timetable,
+      startTime: formatTime(timetable.startTime),
+      endTime: formatTime(timetable.endTime),
+    };
+
+    return NextResponse.json(formattedTimetable);
   } catch (error) {
     console.error("Error updating timetable:", error);
     return NextResponse.json(

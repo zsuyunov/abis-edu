@@ -143,13 +143,23 @@ export async function GET(request: NextRequest) {
       })
     );
     
-    // Transform timetables to include fullDate field
-    const transformedTimetables = timetablesWithSubjects.map(timetable => ({
-      ...timetable,
-      fullDate: new Date().toISOString().split('T')[0], // Use current date as fallback
-      startTime: timetable.startTime,
-      endTime: timetable.endTime,
-    }));
+    // Transform timetables to include fullDate field and format times correctly
+    const transformedTimetables = timetablesWithSubjects.map(timetable => {
+      // Convert Date objects to time strings using UTC to avoid timezone issues
+      const formatTime = (date: Date) => {
+        // Use UTC methods to avoid timezone conversion issues
+        const hours = date.getUTCHours().toString().padStart(2, '0');
+        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+
+      return {
+        ...timetable,
+        fullDate: new Date().toISOString().split('T')[0], // Use current date as fallback
+        startTime: formatTime(timetable.startTime),
+        endTime: formatTime(timetable.endTime),
+      };
+    });
 
     return NextResponse.json(transformedTimetables);
   } catch (error) {
@@ -165,26 +175,27 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Helper function to create Date object with time
+    // Helper function to create Date object with time, using UTC to avoid timezone issues
     const createTimeDate = (timeString: string | Date) => {
-      if (!timeString) return new Date();
+      if (!timeString) return undefined;
 
-      // If it's already a Date object, return as is
       if (timeString instanceof Date) {
         return timeString;
       }
 
-      // If it's an ISO string, parse it
-      if (typeof timeString === 'string' && timeString.includes('T')) {
-        return new Date(timeString);
-      }
-
-      // Handle time string format "HH:mm" - use fixed date to avoid timezone issues
       if (typeof timeString === 'string') {
-        return new Date(`1970-01-01T${timeString}:00`);
-      }
+        // If it's an ISO string, parse it as is
+        if (timeString.includes('T')) {
+          return new Date(timeString);
+        }
 
-      return new Date();
+        // Handle time string format "HH:mm" - create in UTC to avoid timezone issues
+        const [hours, minutes] = timeString.split(':').map(Number);
+        const utcDate = new Date('1970-01-01T00:00:00.000Z'); // Start with UTC date
+        utcDate.setUTCHours(hours, minutes, 0, 0); // Set hours and minutes in UTC
+        return utcDate;
+      }
+      return undefined;
     };
 
     const timetable = await prisma.timetable.create({
@@ -195,8 +206,8 @@ export async function POST(request: NextRequest) {
         subjectId: body.subjectId,
         teacherIds: body.teacherId ? [body.teacherId] : [],
         dayOfWeek: body.dayOfWeek,
-        startTime: createTimeDate(body.startTime),
-        endTime: createTimeDate(body.endTime),
+        startTime: createTimeDate(body.startTime) || new Date('1970-01-01T00:00:00.000Z'),
+        endTime: createTimeDate(body.endTime) || new Date('1970-01-01T00:00:00.000Z'),
         roomNumber: body.roomNumber,
         buildingName: body.buildingName || null,
         isActive: body.isActive !== undefined ? body.isActive : true,

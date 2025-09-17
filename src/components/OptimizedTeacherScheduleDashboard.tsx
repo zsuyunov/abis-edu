@@ -164,12 +164,8 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         return uniqueTimetables.map((timetable: any) => ({
           id: timetable.id,
           fullDate: formattedDate,
-          startTime: timetable.startTime ? new Date(timetable.startTime).toLocaleTimeString('en-US', { 
-            hour12: false, hour: '2-digit', minute: '2-digit' 
-          }) : "00:00",
-          endTime: timetable.endTime ? new Date(timetable.endTime).toLocaleTimeString('en-US', { 
-            hour12: false, hour: '2-digit', minute: '2-digit' 
-          }) : "00:00",
+          startTime: timetable.startTime || "00:00",
+          endTime: timetable.endTime || "00:00",
           lessonNumber: timetable.lessonNumber || 1,
           classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
           class: {
