@@ -240,6 +240,7 @@ const TeacherAssignmentForm = ({
   const [teachers, setTeachers] = useState(relatedData?.teachers || []);
   const [classes, setClasses] = useState<{[assignmentId: string]: any[]}>({});
   const [subjects, setSubjects] = useState(relatedData?.subjects || []);
+  const [filteredSubjects, setFilteredSubjects] = useState<any[]>([]);
   const [academicYears, setAcademicYears] = useState(relatedData?.academicYears || []);
   const [branches, setBranches] = useState(relatedData?.branches || []);
   const [loading, setLoading] = useState(false);
@@ -266,6 +267,33 @@ const TeacherAssignmentForm = ({
       );
     }
   }, [isSupervisor]);
+
+  // Initialize filteredSubjects when subjects change
+  useEffect(() => {
+    setFilteredSubjects(subjects);
+  }, [subjects]);
+
+  // Refresh subjects when form opens to get latest data
+  useEffect(() => {
+    const refreshSubjects = async () => {
+      try {
+        const response = await fetch('/api/subjects', {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setSubjects(Array.isArray(data) ? data : (data.subjects || []));
+        }
+      } catch (error) {
+        console.error('Error refreshing subjects:', error);
+      }
+    };
+    
+    refreshSubjects();
+  }, []);
 
   useEffect(() => {
     const fetchInitial = async () => {
@@ -373,6 +401,29 @@ const TeacherAssignmentForm = ({
     }
   };
 
+  // Fetch subjects by branch
+  const fetchSubjectsByBranch = async (branchId: string) => {
+    try {
+      const response = await fetch(`/api/subjects/by-branch?branchId=${branchId}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setFilteredSubjects(data);
+      } else {
+        // Fallback to all subjects if branch-specific fetch fails
+        setFilteredSubjects(subjects);
+      }
+    } catch (error) {
+      console.error('Error fetching subjects by branch:', error);
+      // Fallback to all subjects
+      setFilteredSubjects(subjects);
+    }
+  };
+
   // Assignment management functions
   const addAssignment = () => {
     const newAssignment = {
@@ -408,6 +459,8 @@ const TeacherAssignmentForm = ({
     // Fetch classes when branch changes
     if (field === 'branchId' && value) {
       fetchClassesForAssignment(value, assignmentId);
+      // Also fetch subjects for this branch
+      fetchSubjectsByBranch(value);
     }
   };
 
@@ -717,7 +770,7 @@ const TeacherAssignmentForm = ({
                   disabled={loading || isSubmitting}
                 >
                   <option value="">Select Subject</option>
-                  {subjects.map((subject: any) => (
+                  {(filteredSubjects.length > 0 ? filteredSubjects : subjects).map((subject: any) => (
                     <option key={subject.id} value={subject.id}>
                       {subject.name}
                     </option>

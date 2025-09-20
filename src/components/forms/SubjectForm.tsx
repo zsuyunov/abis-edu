@@ -9,6 +9,7 @@ import { useFormState } from "react-dom";
 import { Dispatch, SetStateAction, useEffect } from "react";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
+import { useCacheManager } from "@/lib/cacheUtils";
 
 const SubjectForm = ({
   type,
@@ -46,14 +47,17 @@ const SubjectForm = ({
   });
 
   const router = useRouter();
+  const { invalidate } = useCacheManager();
 
   useEffect(() => {
     if (state.success) {
       toast(`Subject has been ${type === "create" ? "created" : "updated"}!`);
+      // Invalidate subjects cache to ensure fresh data
+      invalidate('subjects');
       setOpen(false);
       router.refresh();
     }
-  }, [state, router, type, setOpen]);
+  }, [state, router, type, setOpen, invalidate]);
 
   return (
     <form className="flex flex-col gap-8" onSubmit={onSubmit}>
