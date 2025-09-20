@@ -22,6 +22,8 @@ interface Timetable {
   id: number;
   dayOfWeek: string;
   subjectId: number | null;
+  subjectIds: number[];
+  teacherIds: string[];
   startTime: string;
   endTime: string;
   roomNumber: string | null;
@@ -35,6 +37,15 @@ interface Timetable {
     id: number;
     name: string;
   } | null;
+  subjects: {
+    id: number;
+    name: string;
+  }[];
+  teachers: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  }[];
   branch: {
     id: number;
     shortName: string;
@@ -71,7 +82,14 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
       const response = await fetch(`/api/teacher-timetables?teacherId=${teacherId}`);
       if (response.ok) {
         const data = await response.json();
-        setTimetables(data);
+        console.log('Teacher timetable data:', data);
+        console.log('Timetables array:', data.timetables);
+        if (data.timetables && data.timetables.length > 0) {
+          console.log('First timetable:', data.timetables[0]);
+          console.log('First timetable subjects:', data.timetables[0].subjects);
+          console.log('First timetable teachers:', data.timetables[0].teachers);
+        }
+        setTimetables(data.timetables || []);
       } else {
         throw new Error('Failed to fetch timetables');
       }
@@ -97,7 +115,7 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
 
   const getTimetablesForDay = (day: string) => {
     return timetables
-      .filter(t => t.dayOfWeek === day && t.isActive)
+      .filter(t => t.dayOfWeek?.toUpperCase() === day.toUpperCase() && t.isActive)
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
@@ -265,7 +283,9 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
                               className="p-3 rounded-lg mb-2 bg-blue-50 border border-blue-200"
                             >
                               <div className="font-medium text-gray-900 text-sm mb-1">
-                                {timetable.subject?.name || 'No Subject'}
+                                {timetable.subjects && timetable.subjects.length > 0 
+                                  ? timetable.subjects.map(s => s.name).join(' | ')
+                                  : timetable.subject?.name || 'No Subject'}
                               </div>
                               <div className="text-xs text-gray-600 mb-1">
                                 Class: {timetable.class.name}
@@ -336,7 +356,9 @@ const TeacherTimetableView: React.FC<TeacherTimetableViewProps> = ({ teacherId }
                       </div>
                       
                       <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                        {timetable.subject?.name || 'No Subject'}
+                        {timetable.subjects && timetable.subjects.length > 0 
+                          ? timetable.subjects.map(s => s.name).join(' | ')
+                          : timetable.subject?.name || 'No Subject'}
                       </h3>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">

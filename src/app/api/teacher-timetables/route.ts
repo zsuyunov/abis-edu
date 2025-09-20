@@ -209,9 +209,32 @@ export async function GET(request: NextRequest) {
     
     console.log(`Found ${timetables.length} timetables matching the criteria`);
     
-    // Transform the data to match the expected format
-    const transformedTimetables = timetables.map(timetable => {
-      // Convert Date objects to time strings using UTC to avoid timezone issues
+    // Get all unique teacher IDs from all timetables
+    const allTeacherIds = Array.from(new Set(
+      timetables.flatMap(t => t.teacherIds || [])
+    ));
+
+    // Fetch teacher details for all teacher IDs
+    const teachers = allTeacherIds.length > 0 ? await prisma.teacher.findMany({
+      where: {
+        id: { in: allTeacherIds }
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        teacherId: true,
+        email: true
+      }
+    }) : [];
+
+    // Create a map for quick teacher lookup
+    const teacherMap = new Map(teachers.map(teacher => [teacher.id, teacher]));
+
+    // Group timetables by time slot and day to combine multiple subjects/teachers
+    const groupedTimetables = new Map();
+    
+    timetables.forEach(timetable => {
       const formatTime = (date: Date) => {
         // Use UTC methods to avoid timezone conversion issues
         const hours = date.getUTCHours().toString().padStart(2, '0');
@@ -219,22 +242,67 @@ export async function GET(request: NextRequest) {
         return `${hours}:${minutes}`;
       };
 
-      return {
-        ...timetable,
-        fullDate: timetable.startTime ? new Date(timetable.startTime).toISOString().split('T')[0] : '',
-        startTime: timetable.startTime ? formatTime(timetable.startTime) : '00:00',
-        endTime: timetable.endTime ? formatTime(timetable.endTime) : '00:00',
-        class: {
-          ...timetable.class,
-          name: timetable.class?.name || `Class ${timetable.classId}`,
-          academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
+      const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
+      
+      if (!groupedTimetables.has(timeKey)) {
+        groupedTimetables.set(timeKey, {
+          id: timetable.id, // Use first timetable ID as primary
+          branchId: timetable.branchId,
+          classId: timetable.classId,
+          academicYearId: timetable.academicYearId,
+          dayOfWeek: timetable.dayOfWeek,
+          startTime: formatTime(timetable.startTime),
+          endTime: formatTime(timetable.endTime),
+          roomNumber: timetable.roomNumber,
+          buildingName: timetable.buildingName,
+          isActive: timetable.isActive,
+          createdAt: timetable.createdAt,
+          updatedAt: timetable.updatedAt,
           branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
-        },
-        subject: timetable.subject || { id: 'none', name: 'General' },
-        branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
-        topics: timetable.topics || [],
-        teacherIds: Array.isArray(timetable.teacherIds) ? timetable.teacherIds : [],
-      };
+          class: {
+            ...timetable.class,
+            name: timetable.class?.name || `Class ${timetable.classId}`,
+            academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
+            branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
+          },
+          academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
+          subjectIds: [],
+          subjects: [],
+          teacherIds: [],
+          teachers: [],
+          topics: timetable.topics || [],
+          fullDate: timetable.startTime ? new Date(timetable.startTime).toISOString().split('T')[0] : '',
+        });
+      }
+      
+      const grouped = groupedTimetables.get(timeKey);
+      
+      // Add subject if not already present
+      if (timetable.subject && !grouped.subjectIds.includes(timetable.subject.id)) {
+        grouped.subjectIds.push(timetable.subject.id);
+        grouped.subjects.push(timetable.subject);
+      }
+      
+      // Add teachers if not already present
+      if (timetable.teacherIds && timetable.teacherIds.length > 0) {
+        timetable.teacherIds.forEach(teacherId => {
+          if (!grouped.teacherIds.includes(teacherId)) {
+            grouped.teacherIds.push(teacherId);
+            // Add teacher details if available
+            const teacher = teacherMap.get(teacherId);
+            if (teacher) {
+              grouped.teachers.push(teacher);
+            }
+          }
+        });
+      }
+    });
+
+    // Convert map to array and sort by start time
+    const transformedTimetables = Array.from(groupedTimetables.values()).sort((a, b) => {
+      const timeA = a.startTime.split(':').map(Number);
+      const timeB = b.startTime.split(':').map(Number);
+      return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
     });
 
     return NextResponse.json({

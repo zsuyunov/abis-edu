@@ -304,7 +304,9 @@ const ParentWeeklyTimetable = ({
                       <div className="h-full flex flex-col justify-between">
                         <div>
                           <div className="text-sm font-medium text-gray-900 mb-1">
-                            {timetable.subject.name}
+                            {timetable.subjects && timetable.subjects.length > 0 
+                              ? timetable.subjects.map(s => s.name).join(' | ')
+                              : timetable.subject?.name || 'No Subject'}
                           </div>
                           <div className="text-xs text-gray-600 mb-1">
                             {timetable.teacher.firstName} {timetable.teacher.lastName}

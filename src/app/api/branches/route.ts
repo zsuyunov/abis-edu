@@ -9,7 +9,13 @@ export async function GET() {
       orderBy: { shortName: "asc" },
     });
 
-    return NextResponse.json(branches);
+    const response = NextResponse.json(branches);
+    // Ensure no caching for fresh data
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    
+    return response;
   } catch (error) {
     console.error('Error fetching branches:', error);
     return NextResponse.json({ error: 'Failed to fetch branches' }, { status: 500 });

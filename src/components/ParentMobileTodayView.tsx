@@ -166,7 +166,9 @@ const ParentMobileTodayView = ({
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <h3 className="font-semibold text-gray-900 text-lg mb-1">
-              {timetable.subject.name}
+              {timetable.subjects && timetable.subjects.length > 0 
+                ? timetable.subjects.map(s => s.name).join(' | ')
+                : timetable.subject?.name || 'No Subject'}
             </h3>
             <div className="text-sm text-gray-600 mb-2">
               {timetable.teacher.firstName} {timetable.teacher.lastName}

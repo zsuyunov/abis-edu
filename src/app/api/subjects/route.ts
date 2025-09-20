@@ -20,7 +20,13 @@ export async function GET() {
       }
     });
     
-    return NextResponse.json(subjects);
+    const response = NextResponse.json(subjects);
+    // Ensure no caching for fresh data
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    
+    return response;
   } catch (error) {
     console.error("Failed to fetch subjects:", error);
     return NextResponse.json(

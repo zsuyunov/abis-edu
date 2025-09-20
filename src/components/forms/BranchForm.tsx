@@ -15,6 +15,7 @@ import {
 } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { useCacheManager } from "@/lib/cacheUtils";
 
 const BranchForm = ({
   type,
@@ -48,14 +49,17 @@ const BranchForm = ({
   });
 
   const router = useRouter();
+  const { invalidate } = useCacheManager();
 
   useEffect(() => {
     if (state.success) {
       toast(`Branch has been ${type === "create" ? "created" : "updated"}!`);
+      // Invalidate branches cache to ensure fresh data
+      invalidate('branches');
       setOpen(false);
       router.refresh();
     }
-  }, [state, router, type, setOpen]);
+  }, [state, router, type, setOpen, invalidate]);
 
   return (
     <form className="flex flex-col gap-8" onSubmit={onSubmit}>

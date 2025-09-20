@@ -57,6 +57,7 @@ interface Timetable {
   academicYearId: number;
   dayOfWeek: string;
   subjectId: number | null;
+  subjectIds: number[];
   teacherIds: string[];
   startTime: string | Date;
   endTime: string | Date;
@@ -69,6 +70,7 @@ interface Timetable {
   class: Class;
   academicYear: AcademicYear;
   subject: Subject | null;
+  subjects: Subject[];
   teachers?: Teacher[];
 }
 
@@ -110,8 +112,11 @@ const TimetableManagementPage: React.FC = () => {
     startTime: '',
     endTime: '',
     subjectId: '',
+    subjectIds: [] as number[],
     teacherIds: [] as string[]
   });
+  const [filteredEditTeachers, setFilteredEditTeachers] = useState<any[]>([]);
+  const [loadingEditTeachers, setLoadingEditTeachers] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
@@ -133,6 +138,13 @@ const TimetableManagementPage: React.FC = () => {
   useEffect(() => {
     applyFilters();
   }, [timetables, searchTerm, showInactive]);
+
+  // Watch for changes in edit form subjectIds to filter teachers
+  useEffect(() => {
+    if (editModalOpen && editFormData.subjectIds) {
+      fetchTeachersForEditSubjects(editFormData.subjectIds);
+    }
+  }, [editFormData.subjectIds, editModalOpen, selectedClass, selectedAcademicYear]);
 
   const fetchInitialData = async () => {
     try {
@@ -383,14 +395,64 @@ const TimetableManagementPage: React.FC = () => {
     }).join(', ');
   };
 
+  const fetchTeachersForEditSubjects = async (subjectIds: number[]) => {
+    if (!subjectIds || subjectIds.length === 0) {
+      setFilteredEditTeachers(teachers);
+      return;
+    }
+
+    if (!selectedClass || !selectedAcademicYear) {
+      setFilteredEditTeachers(teachers);
+      return;
+    }
+
+    try {
+      setLoadingEditTeachers(true);
+      const response = await fetch(`/api/teachers/by-subjects?subjectIds=${subjectIds.join(',')}&classId=${selectedClass}&academicYearId=${selectedAcademicYear}`);
+      
+      if (response.ok) {
+        const teachers = await response.json();
+        setFilteredEditTeachers(teachers);
+      } else {
+        console.error('Failed to fetch teachers for subjects');
+        setFilteredEditTeachers(teachers);
+      }
+    } catch (error) {
+      console.error('Error fetching teachers for subjects:', error);
+      setFilteredEditTeachers(teachers);
+    } finally {
+      setLoadingEditTeachers(false);
+    }
+  };
+
+  const handleEditSubjectSelection = (subjectId: number) => {
+    const currentIds = editFormData.subjectIds || [];
+    const isSelected = currentIds.includes(subjectId);
+    
+    let newSubjectIds;
+    if (isSelected) {
+      newSubjectIds = currentIds.filter(id => id !== subjectId);
+    } else {
+      newSubjectIds = [...currentIds, subjectId];
+    }
+    
+    setEditFormData({...editFormData, subjectIds: newSubjectIds});
+  };
+
   const handleEdit = (timetable: any) => {
     setEditingTimetable(timetable);
+    const subjectIds = timetable.subjectIds || (timetable.subjectId ? [timetable.subjectId] : []);
     setEditFormData({
       startTime: timetable.startTime,
       endTime: timetable.endTime,
-      subjectId: timetable.subjectId.toString(),
+      subjectId: subjectIds.length > 0 ? subjectIds[0].toString() : '',
+      subjectIds: subjectIds,
       teacherIds: timetable.teacherIds || []
     });
+    
+    // Initialize filtered teachers
+    setFilteredEditTeachers(teachers);
+    fetchTeachersForEditSubjects(subjectIds);
     setEditModalOpen(true);
   };
 
@@ -407,8 +469,13 @@ const TimetableManagementPage: React.FC = () => {
       if (editFormData.endTime !== editingTimetable.endTime) {
         updateData.endTime = editFormData.endTime;
       }
-      if (editFormData.subjectId !== editingTimetable.subjectId.toString()) {
+      // Handle subject updates - use subjectIds array for new structure
+      if (editFormData.subjectIds && editFormData.subjectIds.length > 0) {
+        updateData.subjectIds = editFormData.subjectIds;
+        updateData.subjectId = editFormData.subjectIds[0]; // Keep for backward compatibility
+      } else if (editFormData.subjectId) {
         updateData.subjectId = parseInt(editFormData.subjectId);
+        updateData.subjectIds = [parseInt(editFormData.subjectId)];
       }
       if (JSON.stringify(editFormData.teacherIds) !== JSON.stringify(editingTimetable.teacherIds)) {
         updateData.teacherIds = editFormData.teacherIds;
@@ -426,14 +493,17 @@ const TimetableManagementPage: React.FC = () => {
         body: JSON.stringify(updateData)
       });
 
-      if (response.ok) {
-        setSuccess('Timetable updated successfully');
-        setEditModalOpen(false);
-        fetchTimetables();
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        throw new Error('Failed to update timetable');
-      }
+              if (response.ok) {
+                const result = await response.json();
+                setSuccess('Timetable updated successfully');
+                setEditModalOpen(false);
+                // Refresh the timetable list to show the updated/created entries
+                fetchTimetables();
+                setTimeout(() => setSuccess(null), 3000);
+              } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to update timetable');
+              }
     } catch (error) {
       console.error('Error updating timetable:', error);
       setError('Failed to update timetable');
@@ -486,26 +556,35 @@ const TimetableManagementPage: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this timetable? This action cannot be undone.')) {
+    console.log('🗑️ Attempting to delete timetable with ID:', id);
+    
+    if (!confirm('Are you sure you want to delete this timetable entry? This action cannot be undone.')) {
       return;
     }
 
     try {
+      console.log('📡 Sending DELETE request to:', `/api/admin/timetables/${id}`);
       const response = await fetch(`/api/admin/timetables/${id}`, {
         method: 'DELETE'
       });
 
+      console.log('📡 Delete response status:', response.status);
+      
       if (response.ok) {
-        setSuccess('Timetable deleted successfully');
+        const result = await response.json();
+        console.log('✅ Delete successful:', result);
+        setSuccess('Timetable entry deleted successfully');
         fetchTimetables();
         setTimeout(() => setSuccess(null), 3000);
       } else {
-        throw new Error('Failed to delete timetable');
+        const errorData = await response.json();
+        console.error('❌ Delete failed:', errorData);
+        throw new Error(`Failed to delete timetable: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error deleting timetable:', error);
-      setError('Failed to delete timetable');
-      setTimeout(() => setError(null), 3000);
+      console.error('❌ Error deleting timetable:', error);
+      setError(`Failed to delete timetable: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -553,8 +632,11 @@ const TimetableManagementPage: React.FC = () => {
       const dayOfWeek = convertDayOfWeek(timetable.dayOfWeek);
       
       console.log(`Placing timetable in grid: ${timetable.dayOfWeek} -> ${dayOfWeek} at ${timeSlot}`);
+      console.log(`Timetable subjects:`, timetable.subjects?.map(s => s.name).join(', ') || 'No subjects');
+      console.log(`Timetable teachers:`, timetable.teachers?.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'No teachers');
       
       if (grid[timeSlot]) {
+        // Use the grouped timetable data directly (it already contains all subjects and teachers)
         grid[timeSlot][dayOfWeek] = timetable;
         console.log(`✅ Successfully placed timetable in grid slot: ${timeSlot} for ${dayOfWeek}`);
       } else {
@@ -779,12 +861,16 @@ const TimetableManagementPage: React.FC = () => {
                           {timetable ? (
                             <div className="p-2 rounded-md min-h-[55px] shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
                               <div className="font-semibold text-gray-900 mb-1 text-center text-xs leading-tight">
-                                {getSubjectNames(timetable.subjectId ? [timetable.subjectId] : null)}
+                                {timetable.subjects && timetable.subjects.length > 0 
+                                  ? timetable.subjects.map(s => s.name).join(' | ')
+                                  : 'No subjects'}
                               </div>
                               {(
                                 <>
                                   <div className="text-[10px] text-gray-600 mb-1 text-center">
-                                    {getTeacherNames(timetable.teacherIds)}
+                                    {timetable.teachers && timetable.teachers.length > 0 
+                                      ? timetable.teachers.map(t => `${t.firstName} ${t.lastName}`).join(' | ')
+                                      : 'No teacher assigned'}
                                   </div>
                                   {(timetable.roomNumber || timetable.buildingName) && (
                                     <div className="text-[10px] text-gray-500 mb-1 text-center">
@@ -853,76 +939,189 @@ const TimetableManagementPage: React.FC = () => {
       {/* Edit Modal */}
       {editModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Timetable</h3>
             
-            <div className="space-y-4">
-              {/* Start Time */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Start Time (optional)
-                </label>
-                <input
-                  type="time"
-                  value={editFormData.startTime}
-                  onChange={(e) => setEditFormData({...editFormData, startTime: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            <div className="space-y-6">
+              {/* Time Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Start Time */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={editFormData.startTime}
+                    onChange={(e) => setEditFormData({...editFormData, startTime: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* End Time */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Time
+                  </label>
+                  <input
+                    type="time"
+                    value={editFormData.endTime}
+                    onChange={(e) => setEditFormData({...editFormData, endTime: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
 
-              {/* End Time */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  End Time (optional)
+              {/* Subject Selection */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Subjects
                 </label>
-                <input
-                  type="time"
-                  value={editFormData.endTime}
-                  onChange={(e) => setEditFormData({...editFormData, endTime: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                
+                {/* Selected Subjects Display */}
+                {editFormData.subjectIds && editFormData.subjectIds.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-500 font-medium">Selected Subjects:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {editFormData.subjectIds.map(subjectId => {
+                        const subject = subjects.find(s => s.id === subjectId);
+                        return (
+                          <div
+                            key={subjectId}
+                            className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
+                          >
+                            <span>{subject?.name}</span>
+                            <button
+                              onClick={() => {
+                                const newSubjectIds = editFormData.subjectIds.filter(id => id !== subjectId);
+                                setEditFormData({...editFormData, subjectIds: newSubjectIds});
+                              }}
+                              className="text-blue-600 hover:text-blue-800 transition-colors hover:bg-blue-200 rounded-full p-0.5"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Subject Selection Grid */}
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
+                  {subjects.map(subject => {
+                    const isSelected = editFormData.subjectIds?.includes(subject.id) || false;
+                    return (
+                      <div key={subject.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                        <span className="text-sm font-medium text-gray-700">{subject.name}</span>
+                        <button
+                          onClick={() => handleEditSubjectSelection(subject.id)}
+                          className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <> ✓ Added </>
+                          ) : (
+                            <> + Add </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Subject */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Subject (optional)
+              {/* Teacher Selection */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Teachers
                 </label>
-                <select
-                  value={editFormData.subjectId}
-                  onChange={(e) => setEditFormData({...editFormData, subjectId: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select a subject</option>
-                  {subjects.map(subject => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                
+                {/* Selected Teachers Display */}
+                {editFormData.teacherIds && editFormData.teacherIds.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-500 font-medium">Selected Teachers:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {editFormData.teacherIds.map(teacherId => {
+                        const teacher = teachers.find(t => t.id === teacherId);
+                        return (
+                          <div
+                            key={teacherId}
+                            className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm"
+                          >
+                            <span>{teacher ? `${teacher.firstName} ${teacher.lastName}` : `Teacher ${teacherId}`}</span>
+                            <button
+                              onClick={() => {
+                                const newTeacherIds = editFormData.teacherIds.filter(id => id !== teacherId);
+                                setEditFormData({...editFormData, teacherIds: newTeacherIds});
+                              }}
+                              className="text-green-600 hover:text-green-800 transition-colors hover:bg-green-200 rounded-full p-0.5"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
-              {/* Teachers */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Teachers (optional)
-                </label>
-                <select
-                  multiple
-                  value={editFormData.teacherIds}
-                  onChange={(e) => {
-                    const selectedIds = Array.from(e.target.selectedOptions, option => option.value);
-                    setEditFormData({...editFormData, teacherIds: selectedIds});
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-32"
-                >
-                  {teachers.map(teacher => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.firstName} {teacher.lastName}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple teachers</p>
+                {/* Teacher Selection Grid */}
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
+                  {loadingEditTeachers ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                      <p className="text-sm">Loading teachers...</p>
+                    </div>
+                  ) : filteredEditTeachers.length > 0 ? (
+                    filteredEditTeachers.map(teacher => {
+                      const isSelected = editFormData.teacherIds?.includes(teacher.id) || false;
+                      return (
+                        <div key={teacher.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${isSelected ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-gray-700">{teacher.firstName} {teacher.lastName}</span>
+                            <span className="text-xs text-gray-500">ID: {teacher.teacherId}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const currentIds = editFormData.teacherIds || [];
+                              if (isSelected) {
+                                const newIds = currentIds.filter(id => id !== teacher.id);
+                                setEditFormData({...editFormData, teacherIds: newIds});
+                              } else {
+                                const newIds = [...currentIds, teacher.id];
+                                setEditFormData({...editFormData, teacherIds: newIds});
+                              }
+                            }}
+                            className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full transition-all duration-200 ${
+                              isSelected
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md'
+                            }`}
+                          >
+                            {isSelected ? (
+                              <> ✓ Added </>
+                            ) : (
+                              <> + Add </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">
+                        {editFormData.subjectIds.length === 0
+                          ? "Please select subjects first"
+                          : "No teachers assigned to selected subjects"}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

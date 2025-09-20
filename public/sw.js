@@ -54,23 +54,16 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API routes - cache first, then network
+  // API routes - network first, no caching for fresh data
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
-      caches.open(API_CACHE).then((cache) => {
-        return cache.match(request).then((response) => {
-          if (response) {
-            // Return cached response instantly
-            return response;
-          }
-          
-          // Fetch from network and cache
-          return fetch(request).then((networkResponse) => {
-            if (networkResponse.ok) {
-              cache.put(request, networkResponse.clone());
-            }
-            return networkResponse;
-          });
+      fetch(request).then((networkResponse) => {
+        // Don't cache API responses to ensure fresh data
+        return networkResponse;
+      }).catch(() => {
+        // Only fallback to cache if network fails
+        return caches.open(API_CACHE).then((cache) => {
+          return cache.match(request);
         });
       })
     );

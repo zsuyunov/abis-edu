@@ -16,7 +16,13 @@ export async function GET() {
       }
     });
     
-    return NextResponse.json(academicYears);
+    const response = NextResponse.json(academicYears);
+    // Ensure no caching for fresh data
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    
+    return response;
   } catch (error) {
     console.error("Failed to fetch academic years:", error);
     return NextResponse.json(

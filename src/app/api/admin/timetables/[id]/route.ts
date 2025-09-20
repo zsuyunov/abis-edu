@@ -33,31 +33,18 @@ export async function GET(
   }
 }
 
-// PUT - Update single timetable
+// PUT - Update timetable (handles single to multiple subjects transition)
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const body = await request.json();
-    const updateData = { ...body };
+    const { subjectIds, teacherIds, startTime, endTime, dayOfWeek, ...otherData } = body;
 
-    // Convert time strings to Date objects if provided
-    if (updateData.startTime) {
-      updateData.startTime = new Date(`1970-01-01T${updateData.startTime}:00`);
-    }
-    if (updateData.endTime) {
-      updateData.endTime = new Date(`1970-01-01T${updateData.endTime}:00`);
-    }
-
-    // Convert day of week to uppercase if provided
-    if (updateData.dayOfWeek) {
-      updateData.dayOfWeek = updateData.dayOfWeek.toUpperCase();
-    }
-
-    const updatedTimetable = await prisma.timetable.update({
+    // Get the current timetable to understand its structure
+    const currentTimetable = await prisma.timetable.findUnique({
       where: { id: parseInt(params.id) },
-      data: updateData,
       include: {
         subject: true,
         class: true,
@@ -66,10 +53,129 @@ export async function PUT(
       }
     });
 
-    return NextResponse.json({ 
-      message: 'Timetable updated successfully', 
-      data: updatedTimetable
-    });
+    if (!currentTimetable) {
+      return NextResponse.json({ 
+        error: 'Timetable not found' 
+      }, { status: 404 });
+    }
+
+    // Convert time strings to Date objects if provided
+    let startTimeDate, endTimeDate;
+    if (startTime) {
+      startTimeDate = new Date(`1970-01-01T${startTime}:00`);
+    }
+    if (endTime) {
+      endTimeDate = new Date(`1970-01-01T${endTime}:00`);
+    }
+
+    // Convert day of week to uppercase if provided
+    const dayOfWeekUpper = dayOfWeek ? dayOfWeek.toUpperCase() : currentTimetable.dayOfWeek;
+
+    // If we have subjectIds (multiple subjects), we need to handle the transition
+    if (subjectIds && subjectIds.length > 0) {
+      // Find all timetables that share the same time slot (same day, time, class, room)
+      const timeSlotTimetables = await prisma.timetable.findMany({
+        where: {
+          dayOfWeek: dayOfWeekUpper || currentTimetable.dayOfWeek,
+          startTime: startTimeDate || currentTimetable.startTime,
+          endTime: endTimeDate || currentTimetable.endTime,
+          classId: currentTimetable.classId,
+          roomNumber: currentTimetable.roomNumber,
+          branchId: currentTimetable.branchId,
+          academicYearId: currentTimetable.academicYearId,
+        }
+      });
+
+      // Delete all existing timetables in this time slot
+      await prisma.timetable.deleteMany({
+        where: {
+          id: { in: timeSlotTimetables.map(t => t.id) }
+        }
+      });
+
+      // Create new timetables for each subject
+      const newTimetables = [];
+      for (const subjectId of subjectIds) {
+        // Find teachers specifically assigned to this subject
+        let subjectTeacherIds = [];
+        
+        if (teacherIds && teacherIds.length > 0) {
+          // Use the provided teachers for all subjects
+          subjectTeacherIds = teacherIds;
+        } else {
+          // Auto-assign teachers specifically for this subject
+          const subjectTeacherAssignments = await prisma.teacherAssignment.findMany({
+            where: {
+              classId: currentTimetable.classId,
+              subjectId: subjectId,
+              academicYearId: currentTimetable.academicYearId,
+              status: 'ACTIVE',
+              role: 'TEACHER'
+            },
+            include: {
+              Teacher: true
+            }
+          });
+          
+          subjectTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
+          console.log(`📚 Subject ${subjectId} assigned teachers: [${subjectTeacherIds.join(', ')}]`);
+        }
+
+        const newTimetable = await prisma.timetable.create({
+          data: {
+            branchId: currentTimetable.branchId,
+            classId: currentTimetable.classId,
+            academicYearId: currentTimetable.academicYearId,
+            dayOfWeek: dayOfWeekUpper || currentTimetable.dayOfWeek,
+            startTime: startTimeDate || currentTimetable.startTime,
+            endTime: endTimeDate || currentTimetable.endTime,
+            roomNumber: currentTimetable.roomNumber,
+            buildingName: currentTimetable.buildingName,
+            subjectId: subjectId,
+            teacherIds: subjectTeacherIds,
+            isActive: currentTimetable.isActive,
+            ...otherData
+          },
+          include: {
+            subject: true,
+            class: true,
+            branch: true,
+            academicYear: true,
+          }
+        });
+        newTimetables.push(newTimetable);
+      }
+
+      return NextResponse.json({ 
+        message: 'Timetable updated successfully', 
+        data: newTimetables[0], // Return the first one as the main result
+        allTimetables: newTimetables // Include all created timetables
+      });
+    } else {
+      // Single subject update - update the existing timetable
+      const updateData: any = { ...otherData };
+      
+      if (startTimeDate) updateData.startTime = startTimeDate;
+      if (endTimeDate) updateData.endTime = endTimeDate;
+      if (dayOfWeekUpper) updateData.dayOfWeek = dayOfWeekUpper;
+      if (teacherIds) updateData.teacherIds = teacherIds;
+
+      const updatedTimetable = await prisma.timetable.update({
+        where: { id: parseInt(params.id) },
+        data: updateData,
+        include: {
+          subject: true,
+          class: true,
+          branch: true,
+          academicYear: true,
+        }
+      });
+
+      return NextResponse.json({ 
+        message: 'Timetable updated successfully', 
+        data: updatedTimetable
+      });
+    }
 
   } catch (error) {
     console.error('Error updating timetable:', error);

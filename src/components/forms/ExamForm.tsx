@@ -98,9 +98,24 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
     const fetchData = async () => {
       try {
         const [branchesRes, academicYearsRes, subjectsRes] = await Promise.all([
-          fetch('/api/branches'),
-          fetch('/api/academic-years'),
-          fetch('/api/subjects')
+          fetch('/api/branches', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch('/api/academic-years', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch('/api/subjects', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          })
         ]);
 
         const [branchesData, academicYearsData, subjectsData] = await Promise.all([

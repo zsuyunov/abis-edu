@@ -131,9 +131,24 @@ const StudentAssignmentForm = ({
       try {
         setLoading(true);
         const [branchesRes, yearsRes, studentsRes] = await Promise.all([
-          fetch('/api/branches'),
-          fetch('/api/academic-years'),
-          fetch('/api/students?status=ACTIVE')
+          fetch('/api/branches', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch('/api/academic-years', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch('/api/students?status=ACTIVE', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          })
         ]);
 
         const branchesData = await branchesRes.json();

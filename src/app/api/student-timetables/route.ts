@@ -83,11 +83,103 @@ export async function GET(request: NextRequest) {
     const timetables = await prisma.timetable.findMany({
       where: whereClause,
       include: {
+        subject: true,
         class: true,
+        branch: true,
+        academicYear: true,
       },
       orderBy: {
         startTime: "asc",
       },
+    });
+
+    // Get all unique teacher IDs from all timetables
+    const allTeacherIds = Array.from(new Set(
+      timetables.flatMap(t => t.teacherIds || [])
+    ));
+
+    // Fetch teacher details for all teacher IDs
+    const teachers = allTeacherIds.length > 0 ? await prisma.teacher.findMany({
+      where: {
+        id: { in: allTeacherIds }
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        teacherId: true,
+        email: true
+      }
+    }) : [];
+
+    // Create a map for quick teacher lookup
+    const teacherMap = new Map(teachers.map(teacher => [teacher.id, teacher]));
+
+    // Group timetables by time slot and day to combine multiple subjects/teachers
+    const groupedTimetables = new Map();
+    
+    timetables.forEach(timetable => {
+      const formatTime = (date: Date) => {
+        // Use UTC methods to avoid timezone conversion issues
+        const hours = date.getUTCHours().toString().padStart(2, '0');
+        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      };
+
+      const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
+      
+      if (!groupedTimetables.has(timeKey)) {
+        groupedTimetables.set(timeKey, {
+          id: timetable.id, // Use first timetable ID as primary
+          branchId: timetable.branchId,
+          classId: timetable.classId,
+          academicYearId: timetable.academicYearId,
+          dayOfWeek: timetable.dayOfWeek,
+          startTime: formatTime(timetable.startTime),
+          endTime: formatTime(timetable.endTime),
+          roomNumber: timetable.roomNumber,
+          buildingName: timetable.buildingName,
+          isActive: timetable.isActive,
+          createdAt: timetable.createdAt,
+          updatedAt: timetable.updatedAt,
+          branch: timetable.branch,
+          class: timetable.class,
+          academicYear: timetable.academicYear,
+          subjectIds: [],
+          subjects: [],
+          teacherIds: [],
+          teachers: []
+        });
+      }
+      
+      const grouped = groupedTimetables.get(timeKey);
+      
+      // Add subject if not already present
+      if (timetable.subject && !grouped.subjectIds.includes(timetable.subject.id)) {
+        grouped.subjectIds.push(timetable.subject.id);
+        grouped.subjects.push(timetable.subject);
+      }
+      
+      // Add teachers if not already present
+      if (timetable.teacherIds && timetable.teacherIds.length > 0) {
+        timetable.teacherIds.forEach(teacherId => {
+          if (!grouped.teacherIds.includes(teacherId)) {
+            grouped.teacherIds.push(teacherId);
+            // Add teacher details if available
+            const teacher = teacherMap.get(teacherId);
+            if (teacher) {
+              grouped.teachers.push(teacher);
+            }
+          }
+        });
+      }
+    });
+
+    // Convert map to array and sort by start time
+    const formattedTimetables = Array.from(groupedTimetables.values()).sort((a, b) => {
+      const timeA = a.startTime.split(':').map(Number);
+      const timeB = b.startTime.split(':').map(Number);
+      return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
     });
 
     // Get subjects for filter
@@ -129,7 +221,7 @@ export async function GET(request: NextRequest) {
         class: student.class || null,
         branch: student.branch || null,
       },
-      timetables,
+      timetables: formattedTimetables,
       subjects,
       availableAcademicYears,
       filters: {

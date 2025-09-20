@@ -151,7 +151,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         const filteredTimetables = rawTimetables.filter((timetable: any) => {
           if (!timetable || typeof timetable !== 'object') return false;
           // For recurring timetables, match by dayOfWeek instead of fullDate
-          return timetable.dayOfWeek === selectedDay;
+          return timetable.dayOfWeek?.toUpperCase() === selectedDay;
         });
 
         const uniqueTimetables = filteredTimetables.filter((timetable: any, index: number, array: any[]) => {

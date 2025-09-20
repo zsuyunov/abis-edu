@@ -15,7 +15,7 @@ const powerFetcher = async (url: string, options?: RequestInit) => {
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'max-age=300, must-revalidate', // 5 minutes - reasonable cache
+        'Cache-Control': 'no-cache, no-store, must-revalidate', // No caching for fresh data
         'Pragma': 'no-cache',
         ...options?.headers,
       },

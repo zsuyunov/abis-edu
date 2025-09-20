@@ -36,7 +36,13 @@ export async function GET(request: NextRequest) {
         name: "asc" 
       }
     });
-    return NextResponse.json(classes);
+    const response = NextResponse.json(classes);
+    // Ensure no caching for fresh data
+    response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    
+    return response;
   } catch (error) {
     console.error("Failed to fetch classes:", error);
     return NextResponse.json(

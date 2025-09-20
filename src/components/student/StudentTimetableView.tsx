@@ -68,7 +68,14 @@ const StudentTimetableView: React.FC<StudentTimetableViewProps> = ({ studentId }
       const response = await fetch(`/api/student-timetables?studentId=${studentId}`);
       if (response.ok) {
         const data = await response.json();
-        setTimetables(data);
+        console.log('Student timetable data:', data);
+        console.log('Timetables array:', data.timetables);
+        if (data.timetables && data.timetables.length > 0) {
+          console.log('First timetable:', data.timetables[0]);
+          console.log('First timetable subjects:', data.timetables[0].subjects);
+          console.log('First timetable teachers:', data.timetables[0].teachers);
+        }
+        setTimetables(data.timetables || []);
       } else {
         throw new Error('Failed to fetch timetables');
       }
@@ -95,7 +102,7 @@ const StudentTimetableView: React.FC<StudentTimetableViewProps> = ({ studentId }
 
   const getTimetablesForDay = (day: string) => {
     return timetables
-      .filter(t => t.dayOfWeek === day && t.isActive)
+      .filter(t => t.dayOfWeek?.toUpperCase() === day.toUpperCase() && t.isActive)
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
@@ -273,13 +280,13 @@ const StudentTimetableView: React.FC<StudentTimetableViewProps> = ({ studentId }
                               >
                                 <div className="font-medium text-gray-900 text-sm mb-1">
                                   {timetable.subjects && timetable.subjects.length > 0 
-                                    ? timetable.subjects.map(s => s.name).join(', ')
+                                    ? timetable.subjects.map(s => s.name).join(' | ')
                                     : 'No Subjects'}
                                 </div>
                                 
                                 {timetable.teachers && timetable.teachers.length > 0 && (
                                   <div className="text-xs text-gray-600 mb-1">
-                                    {timetable.teachers.map(t => `${t.firstName} ${t.lastName}`).join(', ')}
+                                    {timetable.teachers.map(t => `${t.firstName} ${t.lastName}`).join(' | ')}
                                   </div>
                                 )}
                                 
@@ -352,7 +359,7 @@ const StudentTimetableView: React.FC<StudentTimetableViewProps> = ({ studentId }
                         
                         <h3 className="text-lg font-semibold text-gray-900 mb-2">
                           {timetable.subjects && timetable.subjects.length > 0 
-                            ? timetable.subjects.map(s => s.name).join(', ')
+                            ? timetable.subjects.map(s => s.name).join(' | ')
                             : 'No Subjects'}
                         </h3>
                         
@@ -360,7 +367,7 @@ const StudentTimetableView: React.FC<StudentTimetableViewProps> = ({ studentId }
                           <div className="flex items-center gap-2">
                             <Users className="w-4 h-4" />
                             Teacher: {timetable.teachers && timetable.teachers.length > 0 ? 
-                              timetable.teachers.map(t => `${t.firstName} ${t.lastName}`).join(', ') : 
+                              timetable.teachers.map(t => `${t.firstName} ${t.lastName}`).join(' | ') : 
                               'TBA'
                             }
                           </div>

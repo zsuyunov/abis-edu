@@ -10,7 +10,7 @@ interface Student {
   lastName: string;
   studentId: string;
 }
-
+ 
 interface AttendanceFormProps {
   isOpen: boolean;
   onClose: () => void;

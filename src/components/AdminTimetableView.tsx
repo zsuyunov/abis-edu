@@ -48,9 +48,14 @@ interface TimetableEntry {
   classId?: number;
   subjectId?: number;
   teacherId?: string;
-  subject: { name: string };
+  // Support both single and multiple subjects/teachers for backward compatibility
+  subject?: { name: string };
+  subjects?: Array<{ id: number; name: string }>;
+  subjectIds?: number[];
   class: { name: string };
-  teacher: { firstName: string; lastName: string };
+  teacher?: { firstName: string; lastName: string };
+  teachers?: Array<{ id: string; firstName: string; lastName: string }>;
+  teacherIds?: string[];
   branch: { shortName: string; id?: number };
 }
 
@@ -98,11 +103,18 @@ const AdminTimetableView = ({ role, currentUserId, relatedData }: AdminTimetable
 
   const fetchTimetables = async () => {
     try {
-      const response = await fetch("/api/timetables", {
+      const response = await fetch("/api/admin/timetables", {
         headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
       });
       const data = await response.json();
-      setTimetables(data);
+
+      // Handle the grouped response structure from admin endpoint
+      if (data.timetables) {
+        setTimetables(data.timetables);
+      } else {
+        // Fallback for old format
+        setTimetables(data);
+      }
     } catch (error) {
       console.error("Failed to fetch timetables:", error);
       toast.error("Failed to fetch timetables");
@@ -117,13 +129,23 @@ const AdminTimetableView = ({ role, currentUserId, relatedData }: AdminTimetable
     // Apply search filter
     if (searchFilter) {
       const searchLower = searchFilter.toLowerCase();
-      filtered = filtered.filter(entry => 
-        entry.subject.name.toLowerCase().includes(searchLower) ||
-        entry.class.name.toLowerCase().includes(searchLower) ||
-        `${entry.teacher.firstName} ${entry.teacher.lastName}`.toLowerCase().includes(searchLower) ||
-        entry.roomNumber.toLowerCase().includes(searchLower) ||
-        entry.buildingName?.toLowerCase().includes(searchLower)
-      );
+      filtered = filtered.filter(entry => {
+        // Check subjects (both single and multiple)
+        const subjectMatch = entry.subjects
+          ? entry.subjects.some(sub => sub.name.toLowerCase().includes(searchLower))
+          : entry.subject?.name.toLowerCase().includes(searchLower);
+
+        // Check teachers (both single and multiple)
+        const teacherMatch = entry.teachers
+          ? entry.teachers.some(teacher => `${teacher.firstName} ${teacher.lastName}`.toLowerCase().includes(searchLower))
+          : entry.teacher ? `${entry.teacher.firstName} ${entry.teacher.lastName}`.toLowerCase().includes(searchLower) : false;
+
+        return subjectMatch ||
+               entry.class.name.toLowerCase().includes(searchLower) ||
+               teacherMatch ||
+               entry.roomNumber.toLowerCase().includes(searchLower) ||
+               entry.buildingName?.toLowerCase().includes(searchLower);
+      });
     }
 
     // Apply other filters
@@ -286,18 +308,30 @@ const AdminTimetableView = ({ role, currentUserId, relatedData }: AdminTimetable
 
   const handleExport = () => {
     const csvContent = [
-      ["Date", "Day", "Time", "Subject", "Class", "Teacher", "Room", "Building", "Status"],
-      ...filteredTimetables.map(entry => [
-        new Date(entry.fullDate).toLocaleDateString(),
-        entry.day,
-        `${new Date(entry.startTime).toLocaleTimeString()} - ${new Date(entry.endTime).toLocaleTimeString()}`,
-        entry.subject.name,
-        entry.class.name,
-        `${entry.teacher.firstName} ${entry.teacher.lastName}`,
-        entry.roomNumber,
-        entry.buildingName || "",
-        entry.status,
-      ])
+      ["Date", "Day", "Time", "Subjects", "Class", "Teachers", "Room", "Building", "Status"],
+      ...filteredTimetables.map(entry => {
+        // Format subjects
+        const subjectsText = entry.subjects && entry.subjects.length > 0
+          ? entry.subjects.map(s => s.name).join("; ")
+          : entry.subject?.name || "";
+
+        // Format teachers
+        const teachersText = entry.teachers && entry.teachers.length > 0
+          ? entry.teachers.map(t => `${t.firstName} ${t.lastName}`).join("; ")
+          : entry.teacher ? `${entry.teacher.firstName} ${entry.teacher.lastName}` : "";
+
+        return [
+          new Date(entry.fullDate).toLocaleDateString(),
+          entry.day,
+          `${new Date(entry.startTime).toLocaleTimeString()} - ${new Date(entry.endTime).toLocaleTimeString()}`,
+          subjectsText,
+          entry.class.name,
+          teachersText,
+          entry.roomNumber,
+          entry.buildingName || "",
+          entry.status,
+        ];
+      })
     ].map(row => row.join(",")).join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -637,10 +671,51 @@ const AdminTimetableView = ({ role, currentUserId, relatedData }: AdminTimetable
                     }`}
                   >
                     {entry && (
-                      <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg p-2 text-xs h-full">
-                        <div className="font-semibold text-blue-800">{entry.subject.name}</div>
+                      <div className="bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg p-2 text-xs h-full overflow-hidden">
+                        {/* Subjects */}
+                        <div className="font-semibold text-blue-800">
+                          {entry.subjects && entry.subjects.length > 0 ? (
+                            entry.subjects.length === 1 ? (
+                              entry.subjects[0].name
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                {entry.subjects.slice(0, 2).map((subject, idx) => (
+                                  <span key={idx} className="truncate">{subject.name}</span>
+                                ))}
+                                {entry.subjects.length > 2 && (
+                                  <span className="text-blue-600">+{entry.subjects.length - 2} more</span>
+                                )}
+                              </div>
+                            )
+                          ) : (
+                            entry.subject?.name || 'No subject'
+                          )}
+                        </div>
+
                         <div className="text-blue-700">{entry.class.name}</div>
-                        <div className="text-blue-600">{entry.teacher.firstName} {entry.teacher.lastName}</div>
+
+                        {/* Teachers */}
+                        <div className="text-blue-600">
+                          {entry.teachers && entry.teachers.length > 0 ? (
+                            entry.teachers.length === 1 ? (
+                              `${entry.teachers[0].firstName} ${entry.teachers[0].lastName}`
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                {entry.teachers.slice(0, 2).map((teacher, idx) => (
+                                  <span key={idx} className="truncate">
+                                    {teacher.firstName} {teacher.lastName}
+                                  </span>
+                                ))}
+                                {entry.teachers.length > 2 && (
+                                  <span className="text-blue-500">+{entry.teachers.length - 2} more</span>
+                                )}
+                              </div>
+                            )
+                          ) : (
+                            entry.teacher ? `${entry.teacher.firstName} ${entry.teacher.lastName}` : 'No teacher'
+                          )}
+                        </div>
+
                         <div className="text-blue-600">{entry.roomNumber}</div>
                         <div className="flex items-center justify-between mt-1">
                           <Badge variant={entry.status === "ACTIVE" ? "default" : "secondary"} className="text-xs">
@@ -729,18 +804,49 @@ const AdminTimetableView = ({ role, currentUserId, relatedData }: AdminTimetable
                     </span>
                   </div>
                   
+                  {/* Subjects */}
                   <div className="flex items-center gap-3 text-sm">
                     <BookOpen className="w-4 h-4 text-green-500" />
-                    <span className="font-semibold">{entry.subject.name}</span>
+                    <span className="font-semibold">
+                      {entry.subjects && entry.subjects.length > 0 ? (
+                        entry.subjects.length === 1 ? (
+                          entry.subjects[0].name
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {entry.subjects.map((subject, idx) => (
+                              <span key={idx}>{subject.name}</span>
+                            ))}
+                          </div>
+                        )
+                      ) : (
+                        entry.subject?.name || 'No subject'
+                      )}
+                    </span>
                   </div>
+
                   <div className="flex items-center gap-3 text-sm">
                     <Grid3X3 className="w-4 h-4 text-indigo-500" />
                     <span>{entry.class.name}</span>
                   </div>
-                  
+
+                  {/* Teachers */}
                   <div className="flex items-center gap-3 text-sm">
                     <User className="w-4 h-4 text-purple-500" />
-                    <span>{entry.teacher.firstName} {entry.teacher.lastName}</span>
+                    <span>
+                      {entry.teachers && entry.teachers.length > 0 ? (
+                        entry.teachers.length === 1 ? (
+                          `${entry.teachers[0].firstName} ${entry.teachers[0].lastName}`
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {entry.teachers.map((teacher, idx) => (
+                              <span key={idx}>{teacher.firstName} {teacher.lastName}</span>
+                            ))}
+                          </div>
+                        )
+                      ) : (
+                        entry.teacher ? `${entry.teacher.firstName} ${entry.teacher.lastName}` : 'No teacher'
+                      )}
+                    </span>
                   </div>
                   
                   <div className="flex items-center gap-3 text-sm">

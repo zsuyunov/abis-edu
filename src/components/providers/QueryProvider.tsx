@@ -1,7 +1,8 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { CacheManager } from '@/lib/cacheUtils';
 
 export default function QueryProvider({
   children,
@@ -13,11 +14,11 @@ export default function QueryProvider({
       new QueryClient({
         defaultOptions: {
           queries: {
-            // OPTIMIZED CACHING - Fast but balanced
-            staleTime: 5 * 60 * 1000, // 5 minutes - fresh data
-            gcTime: 10 * 60 * 1000, // 10 minutes - reasonable cache
+            // FRESH DATA CACHING - Always get latest data
+            staleTime: 0, // Always consider data stale - fetch fresh data
+            gcTime: 5 * 60 * 1000, // 5 minutes - keep in memory for performance
             retry: 1, // Single retry for reliability
-            refetchOnWindowFocus: false, // Don't refetch on focus
+            refetchOnWindowFocus: true, // Refetch on focus for fresh data
             refetchOnReconnect: true, // Refetch on reconnect for fresh data
             refetchOnMount: true, // Refetch on mount for latest data
             refetchInterval: false, // No automatic refetching
@@ -42,6 +43,11 @@ export default function QueryProvider({
         },
       }),
   );
+
+  // Set the query client for cache management
+  useEffect(() => {
+    CacheManager.setQueryClient(queryClient);
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

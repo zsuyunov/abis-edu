@@ -45,10 +45,34 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Get all unique teacher IDs from all timetables
+    const allTeacherIds = Array.from(new Set(
+      timetables.flatMap(t => t.teacherIds || [])
+    ));
+
+    // Fetch teacher details for all teacher IDs
+    const teachers = allTeacherIds.length > 0 ? await prisma.teacher.findMany({
+      where: {
+        id: { in: allTeacherIds }
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        teacherId: true,
+        email: true
+      }
+    }) : [];
+
+    // Create a map for quick teacher lookup
+    const teacherMap = new Map(teachers.map(teacher => [teacher.id, teacher]));
+
     console.log('Timetables found:', timetables.length);
 
-    // Format times correctly for display using UTC to avoid timezone issues
-    const formattedTimetables = timetables.map(timetable => {
+    // Group timetables by time slot and day to combine multiple subjects/teachers
+    const groupedTimetables = new Map();
+    
+    timetables.forEach(timetable => {
       const formatTime = (date: Date) => {
         // Use UTC methods to avoid timezone conversion issues
         const hours = date.getUTCHours().toString().padStart(2, '0');
@@ -56,16 +80,83 @@ export async function GET(request: NextRequest) {
         return `${hours}:${minutes}`;
       };
 
-      return {
-        ...timetable,
-        startTime: formatTime(timetable.startTime),
-        endTime: formatTime(timetable.endTime),
-      };
+      const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
+      
+      console.log(`Processing timetable ID ${timetable.id}:`);
+      console.log(`  Subject: ${timetable.subject?.name} (ID: ${timetable.subjectId})`);
+      console.log(`  Teachers: [${timetable.teacherIds.join(', ')}]`);
+      console.log(`  Time Key: ${timeKey}`);
+      
+      if (!groupedTimetables.has(timeKey)) {
+        console.log(`  Creating new group for time key: ${timeKey}`);
+        groupedTimetables.set(timeKey, {
+          id: timetable.id, // Use first timetable ID as primary
+          branchId: timetable.branchId,
+          classId: timetable.classId,
+          academicYearId: timetable.academicYearId,
+          dayOfWeek: timetable.dayOfWeek,
+          startTime: formatTime(timetable.startTime),
+          endTime: formatTime(timetable.endTime),
+          roomNumber: timetable.roomNumber,
+          buildingName: timetable.buildingName,
+          isActive: timetable.isActive,
+          createdAt: timetable.createdAt,
+          updatedAt: timetable.updatedAt,
+          branch: timetable.branch,
+          class: timetable.class,
+          academicYear: timetable.academicYear,
+          subjectIds: [],
+          subjects: [],
+          teacherIds: [],
+          teachers: []
+        });
+      }
+      
+      const grouped = groupedTimetables.get(timeKey);
+      
+      // Add subject if not already present
+      if (timetable.subject && !grouped.subjectIds.includes(timetable.subject.id)) {
+        grouped.subjectIds.push(timetable.subject.id);
+        grouped.subjects.push(timetable.subject);
+        console.log(`  Added subject: ${timetable.subject.name} to group`);
+      }
+      
+      // Add teachers if not already present
+      if (timetable.teacherIds && timetable.teacherIds.length > 0) {
+        timetable.teacherIds.forEach(teacherId => {
+          if (!grouped.teacherIds.includes(teacherId)) {
+            grouped.teacherIds.push(teacherId);
+            // Add teacher details if available
+            const teacher = teacherMap.get(teacherId);
+            if (teacher) {
+              grouped.teachers.push(teacher);
+              console.log(`  Added teacher: ${teacher.firstName} ${teacher.lastName} to group`);
+            }
+          }
+        });
+      }
+    });
+
+    // Convert map to array and sort by start time
+    const formattedTimetables = Array.from(groupedTimetables.values()).sort((a, b) => {
+      const timeA = a.startTime.split(':').map(Number);
+      const timeB = b.startTime.split(':').map(Number);
+      return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
+    });
+
+    console.log('Grouped timetables:', formattedTimetables.length);
+    
+    // Log each grouped timetable
+    formattedTimetables.forEach((timetable, index) => {
+      console.log(`Grouped Timetable ${index + 1}:`);
+      console.log(`  Subjects: [${timetable.subjects.map((s: any) => s.name).join(', ')}]`);
+      console.log(`  Teachers: [${timetable.teachers.map((t: any) => `${t.firstName} ${t.lastName}`).join(', ')}]`);
+      console.log(`  Day: ${timetable.dayOfWeek}, Time: ${timetable.startTime}-${timetable.endTime}`);
     });
 
     return NextResponse.json({
       timetables: formattedTimetables,
-      total: timetables.length
+      total: formattedTimetables.length
     });
 
   } catch (error) {
@@ -109,22 +200,23 @@ export async function POST(request: NextRequest) {
 
     // Handle both single subject and multiple subjects
     const subjectIds = body.subjectIds || (body.subjectId ? [body.subjectId] : []);
-    const primarySubjectId = subjectIds.length > 0 ? subjectIds[0] : null;
 
-    if (!primarySubjectId) {
+    if (subjectIds.length === 0) {
       return NextResponse.json({
         error: 'At least one subject must be specified'
       }, { status: 400 });
     }
 
-    // Validate that the subject exists
-    const subject = await prisma.subject.findUnique({
-      where: { id: primarySubjectId }
+    // Validate that all subjects exist
+    const subjects = await prisma.subject.findMany({
+      where: { id: { in: subjectIds } }
     });
 
-    if (!subject) {
+    if (subjects.length !== subjectIds.length) {
+      const foundIds = subjects.map((s: any) => s.id);
+      const missingIds = subjectIds.filter((id: any) => !foundIds.includes(id));
       return NextResponse.json({
-        error: `Subject with ID ${primarySubjectId} not found`
+        error: `Subjects with IDs ${missingIds.join(', ')} not found`
       }, { status: 400 });
     }
 
@@ -197,48 +289,78 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Create timetable entry in database
-    const timetableData = {
-      branchId: parseInt(body.branchId),
-      classId: parseInt(body.classId),
-      academicYearId: parseInt(body.academicYearId),
-      dayOfWeek: dayOfWeek,
-      subjectId: primarySubjectId,
-      teacherIds: teacherIds, // Use auto-assigned teachers
-      startTime: (() => {
-        const [hours, minutes] = body.startTime.split(':').map(Number);
-        const utcDate = new Date('1970-01-01T00:00:00.000Z');
-        utcDate.setUTCHours(hours, minutes, 0, 0);
-        return utcDate;
-      })(),
-      endTime: (() => {
-        const [hours, minutes] = body.endTime.split(':').map(Number);
-        const utcDate = new Date('1970-01-01T00:00:00.000Z');
-        utcDate.setUTCHours(hours, minutes, 0, 0);
-        return utcDate;
-      })(),
-      roomNumber: body.roomNumber || '',
-      buildingName: body.buildingName || '',
-      isActive: true,
-    };
-
-    console.log('Creating timetable with data:', timetableData);
-
-    const timetableEntry = await prisma.timetable.create({
-      data: timetableData,
-      include: {
-        subject: true,
-        class: true,
-        branch: true,
-        academicYear: true,
+    // Create timetable entries for each subject
+    const timetableEntries = [];
+    
+    for (const subjectId of subjectIds) {
+      // For each subject, find teachers specifically assigned to that subject
+      let subjectTeacherIds = [];
+      
+      // If specific teachers were selected, use them for all subjects
+      if (teacherIds.length > 0) {
+        subjectTeacherIds = teacherIds;
+      } else {
+        // Auto-assign teachers specifically for this subject
+        const subjectTeacherAssignments = await prisma.teacherAssignment.findMany({
+          where: {
+            classId: parseInt(body.classId),
+            subjectId: subjectId,
+            academicYearId: parseInt(body.academicYearId),
+            status: 'ACTIVE',
+            role: 'TEACHER'
+          },
+          include: {
+            Teacher: true
+          }
+        });
+        
+        subjectTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
+        console.log(`📚 Subject ${subjectId} assigned teachers: [${subjectTeacherIds.join(', ')}]`);
       }
-    });
 
-    console.log('Timetable created successfully with ID:', timetableEntry.id);
+      const timetableData = {
+        branchId: parseInt(body.branchId),
+        classId: parseInt(body.classId),
+        academicYearId: parseInt(body.academicYearId),
+        dayOfWeek: dayOfWeek,
+        subjectId: subjectId,
+        teacherIds: subjectTeacherIds,
+        startTime: (() => {
+          const [hours, minutes] = body.startTime.split(':').map(Number);
+          const utcDate = new Date('1970-01-01T00:00:00.000Z');
+          utcDate.setUTCHours(hours, minutes, 0, 0);
+          return utcDate;
+        })(),
+        endTime: (() => {
+          const [hours, minutes] = body.endTime.split(':').map(Number);
+          const utcDate = new Date('1970-01-01T00:00:00.000Z');
+          utcDate.setUTCHours(hours, minutes, 0, 0);
+          return utcDate;
+        })(),
+        roomNumber: body.roomNumber || '',
+        buildingName: body.buildingName || '',
+        isActive: true,
+      };
+
+      console.log(`Creating timetable for subject ${subjectId} with data:`, timetableData);
+
+      const timetableEntry = await prisma.timetable.create({
+        data: timetableData,
+        include: {
+          subject: true,
+          class: true,
+          branch: true,
+          academicYear: true,
+        }
+      });
+
+      timetableEntries.push(timetableEntry);
+      console.log(`Timetable created successfully for subject ${subjectId} with ID:`, timetableEntry.id);
+    }
 
     return NextResponse.json({ 
-      message: 'Timetable entry saved successfully', 
-      data: timetableEntry
+      message: `Timetable entries saved successfully for ${timetableEntries.length} subjects`, 
+      data: timetableEntries
     }, { status: 201 });
 
   } catch (error) {

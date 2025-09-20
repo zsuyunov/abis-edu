@@ -15,7 +15,9 @@ import {
   X,
   Check,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  UserCheck,
+  BookCheck
 } from 'lucide-react';
 
 interface Branch {
@@ -101,6 +103,16 @@ const TimetableCreationForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Confirmation state for selections
+  const [selectedSubjects, setSelectedSubjects] = useState<number[]>([]);
+  const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  const [showSubjectConfirmation, setShowSubjectConfirmation] = useState(false);
+  const [showTeacherConfirmation, setShowTeacherConfirmation] = useState(false);
+  const [currentSlotIndex, setCurrentSlotIndex] = useState<number | null>(null);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isProcessingSubject, setIsProcessingSubject] = useState<number | null>(null);
 
   // Fetch initial data
   useEffect(() => {
@@ -281,6 +293,16 @@ const TimetableCreationForm: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         console.log('👥 Teachers found:', data.length);
+        
+        if (data.length === 0) {
+          // Check if any of the subjects have no assigned teachers
+          const unassignedSubjects = await checkUnassignedSubjects(subjectIds, classId, academicYearId);
+          if (unassignedSubjects.length > 0) {
+            setError(`No teachers assigned to subjects: ${unassignedSubjects.map(s => s.name).join(', ')}. Please assign teachers to these subjects first.`);
+            setTimeout(() => setError(null), 5000);
+          }
+        }
+        
         setFilteredTeachers(data);
       } else {
         const errorText = await response.text();
@@ -290,6 +312,30 @@ const TimetableCreationForm: React.FC = () => {
     } catch (error) {
       console.error('❌ Error fetching teachers for subjects:', error);
       setFilteredTeachers(teachers); // Fallback to all teachers
+    }
+  };
+
+  const checkUnassignedSubjects = async (subjectIds: number[], classId: number, academicYearId: number) => {
+    try {
+      const unassignedSubjects = [];
+      
+      for (const subjectId of subjectIds) {
+        const assignments = await fetch(`/api/teachers/by-subjects?subjectIds=${subjectId}&classId=${classId}&academicYearId=${academicYearId}`);
+        if (assignments.ok) {
+          const teachers = await assignments.json();
+          if (teachers.length === 0) {
+            const subject = subjects.find(s => s.id === subjectId);
+            if (subject) {
+              unassignedSubjects.push(subject);
+            }
+          }
+        }
+      }
+      
+      return unassignedSubjects;
+    } catch (error) {
+      console.error('Error checking unassigned subjects:', error);
+      return [];
     }
   };
 
@@ -350,6 +396,157 @@ const TimetableCreationForm: React.FC = () => {
         i === index ? { ...slot, [field]: value } : slot
       ) || []
     }));
+  };
+
+  const handleSubjectSelection = (day: string, index: number, selectedIds: number[]) => {
+    setSelectedSubjects(selectedIds);
+    setCurrentSlotIndex(index);
+    setShowSubjectConfirmation(true);
+  };
+
+  const handleIndividualSubjectSelection = async (day: string, index: number, subjectId: number) => {
+    setCurrentSlotIndex(index);
+    
+    // Prevent multiple simultaneous requests for the same subject
+    if (isProcessingSubject === subjectId) {
+      return;
+    }
+    
+    // Check if this subject has assigned teachers
+    if (selectedClass && selectedAcademicYear) {
+      try {
+        // Show loading state immediately
+        setIsProcessingSubject(subjectId);
+        
+        const response = await fetch(`/api/teachers/by-subjects?subjectIds=${subjectId}&classId=${selectedClass}&academicYearId=${selectedAcademicYear}`);
+        if (response.ok) {
+          const teachers = await response.json();
+          
+          if (teachers.length === 0) {
+            // Show error modal for unassigned subject
+            const subject = subjects.find(s => s.id === subjectId);
+            setErrorMessage(`No teachers assigned to "${subject?.name || 'this subject'}" for this class. Please assign a teacher to this subject first.`);
+            setShowErrorModal(true);
+            setIsProcessingSubject(null);
+            return;
+          }
+          
+          // Add subject to current selection
+          const currentSlot = timetableSlots[day]?.[index];
+          const currentSubjects = currentSlot?.subjectIds || [];
+          const newSubjects = [...currentSubjects, subjectId];
+          
+          updateTimetableSlot(day, index, 'subjectIds', newSubjects);
+          
+          // Immediately update filtered teachers with the new teachers
+          setFilteredTeachers(teachers);
+          
+          setSuccess(`Subject "${subjects.find(s => s.id === subjectId)?.name}" added successfully!`);
+          setTimeout(() => setSuccess(null), 3000);
+        }
+      } catch (error) {
+        console.error('Error checking subject assignment:', error);
+        setError('Failed to check subject assignment');
+        setTimeout(() => setError(null), 3000);
+      } finally {
+        setIsProcessingSubject(null);
+      }
+    } else {
+      setError('Please select class and academic year first');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const confirmSubjectSelection = (day: string, index: number) => {
+    updateTimetableSlot(day, index, 'subjectIds', selectedSubjects);
+    
+    // Filter teachers based on selected subjects
+    fetchTeachersForSubjects(selectedSubjects, selectedClass || undefined, selectedAcademicYear || undefined);
+    
+    setShowSubjectConfirmation(false);
+    setSelectedSubjects([]);
+    setCurrentSlotIndex(null);
+  };
+
+  const cancelSubjectSelection = () => {
+    setShowSubjectConfirmation(false);
+    setSelectedSubjects([]);
+    setCurrentSlotIndex(null);
+  };
+
+  const handleTeacherSelection = (day: string, index: number, selectedIds: string[]) => {
+    setSelectedTeachers(selectedIds);
+    setCurrentSlotIndex(index);
+    setShowTeacherConfirmation(true);
+  };
+
+  const handleIndividualTeacherSelection = (day: string, index: number, teacherId: string) => {
+    setCurrentSlotIndex(index);
+    
+    // Add teacher to current selection
+    const currentSlot = timetableSlots[day]?.[index];
+    const currentTeachers = currentSlot?.teacherIds || [];
+    const newTeachers = [...currentTeachers, teacherId];
+    
+    updateTimetableSlot(day, index, 'teacherIds', newTeachers);
+    
+    // Remove the selected teacher from the filtered list to prevent re-selection
+    const updatedFilteredTeachers = filteredTeachers.filter(t => t.id !== teacherId);
+    setFilteredTeachers(updatedFilteredTeachers);
+    
+    const teacher = filteredTeachers.find(t => t.id === teacherId);
+    setSuccess(`Teacher "${teacher?.firstName} ${teacher?.lastName}" added successfully!`);
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  const confirmTeacherSelection = (day: string, index: number) => {
+    updateTimetableSlot(day, index, 'teacherIds', selectedTeachers);
+    setShowTeacherConfirmation(false);
+    setSelectedTeachers([]);
+    setCurrentSlotIndex(null);
+  };
+
+  const cancelTeacherSelection = () => {
+    setShowTeacherConfirmation(false);
+    setSelectedTeachers([]);
+    setCurrentSlotIndex(null);
+  };
+
+  const removeSubject = async (day: string, index: number, subjectId: number) => {
+    const currentSlot = timetableSlots[day]?.[index];
+    const currentSubjects = currentSlot?.subjectIds || [];
+    const newSubjects = currentSubjects.filter(id => id !== subjectId);
+    
+    updateTimetableSlot(day, index, 'subjectIds', newSubjects);
+    
+    // Re-filter teachers based on remaining subjects
+    if (newSubjects.length > 0 && selectedClass && selectedAcademicYear) {
+      try {
+        const response = await fetch(`/api/teachers/by-subjects?subjectIds=${newSubjects.join(',')}&classId=${selectedClass}&academicYearId=${selectedAcademicYear}`);
+        if (response.ok) {
+          const teachers = await response.json();
+          setFilteredTeachers(teachers);
+        }
+      } catch (error) {
+        console.error('Error fetching teachers for remaining subjects:', error);
+      }
+    } else {
+      setFilteredTeachers(teachers);
+    }
+  };
+
+  const removeTeacher = (day: string, index: number, teacherId: string) => {
+    const currentSlot = timetableSlots[day]?.[index];
+    const currentTeachers = currentSlot?.teacherIds || [];
+    const newTeachers = currentTeachers.filter(id => id !== teacherId);
+    
+    updateTimetableSlot(day, index, 'teacherIds', newTeachers);
+    
+    // Add the teacher back to the filtered list
+    const teacher = teachers.find(t => t.id === teacherId);
+    if (teacher) {
+      setFilteredTeachers(prev => [...prev, teacher]);
+    }
   };
 
   const removeTimetableSlot = (day: string, index: number) => {
@@ -498,6 +695,27 @@ const TimetableCreationForm: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white rounded-2xl shadow-lg">
+      {/* Error Modal */}
+      {showErrorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-red-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Subject Assignment Required</h2>
+            </div>
+            <p className="text-gray-600 mb-6">{errorMessage}</p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowErrorModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Meal Configuration Modal */}
       {showMealConfig && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -774,35 +992,98 @@ const TimetableCreationForm: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Subject Selection */}
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <label className="block text-sm font-medium text-gray-700">
-                        Subjects (Multi-select)
+                        Subjects
                       </label>
-                      <select
-                        multiple
-                        value={slot.subjectIds.map(String)}
-                        onChange={(e) => {
-                          const selectedIds = Array.from(e.target.selectedOptions, option => parseInt(option.value));
-                          updateTimetableSlot(currentDay, index, 'subjectIds', selectedIds);
-                          
-                          // Filter teachers based on selected subjects
-                          // @ts-ignore - TypeScript is not recognizing the updated function signature
-                          fetchTeachersForSubjects(selectedIds, selectedClass, selectedAcademicYear);
-                        }}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      >
-                        {subjects.map(subject => (
-                          <option key={subject.id} value={subject.id}>
-                            {subject.name}
-                          </option>
-                        ))}
-                      </select>
+                      
+                      {/* Selected Subjects Display */}
+                      {slot.subjectIds.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs text-gray-500 font-medium">Selected Subjects:</div>
+                          <div className="flex flex-wrap gap-2">
+                            <AnimatePresence>
+                              {slot.subjectIds.map(subjectId => {
+                                const subject = subjects.find(s => s.id === subjectId);
+                                return (
+                                  <motion.div
+                                    key={subjectId}
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
+                                  >
+                                    <span>{subject?.name}</span>
+                                    <button
+                                      onClick={() => removeSubject(currentDay, index, subjectId)}
+                                      className="text-blue-600 hover:text-blue-800 transition-colors hover:bg-blue-200 rounded-full p-0.5"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </motion.div>
+                                );
+                              })}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Subject Selection Grid */}
+                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
+                        {subjects.map(subject => {
+                          const isSelected = slot.subjectIds.includes(subject.id);
+                          return (
+                            <div
+                              key={subject.id}
+                              className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
+                                isSelected
+                                  ? 'bg-blue-50 border-blue-200'
+                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                              }`}
+                            >
+                              <span className="text-sm font-medium text-gray-700">
+                                {subject.name}
+                              </span>
+                              <motion.button
+                                onClick={() => handleIndividualSubjectSelection(currentDay, index, subject.id)}
+                                disabled={isSelected || isProcessingSubject === subject.id}
+                                whileHover={!isSelected && isProcessingSubject !== subject.id ? { scale: 1.05 } : {}}
+                                whileTap={!isSelected && isProcessingSubject !== subject.id ? { scale: 0.95 } : {}}
+                                className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full transition-all duration-200 ${
+                                  isSelected
+                                    ? 'bg-green-100 text-green-700 cursor-not-allowed'
+                                    : isProcessingSubject === subject.id
+                                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
+                                }`}
+                              >
+                                {isSelected ? (
+                                  <>
+                                    <BookCheck className="w-3 h-3" />
+                                    Added
+                                  </>
+                                ) : isProcessingSubject === subject.id ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                    Loading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-3 h-3" />
+                                    Add
+                                  </>
+                                )}
+                              </motion.button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Teacher Selection */}
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <label className="block text-sm font-medium text-gray-700">
-                        Teachers (Multi-select)
+                        Teachers
                         {slot.subjectIds.length > 0 && selectedClass && selectedAcademicYear && (
                           <span className="ml-2 text-xs text-blue-600 font-normal">
                             (Filtered by selected subjects)
@@ -814,31 +1095,102 @@ const TimetableCreationForm: React.FC = () => {
                           </span>
                         )}
                       </label>
-                      <select
-                        multiple
-                        value={slot.teacherIds}
-                        onChange={(e) => {
-                          const value = Array.from(e.target.selectedOptions, option => option.value);
-                          updateTimetableSlot(currentDay, index, 'teacherIds', value);
-                        }}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      >
-                        {filteredTeachers.length > 0 ? (
-                          filteredTeachers.map(teacher => (
-                            <option key={teacher.id} value={teacher.id}>
-                              {teacher.firstName} {teacher.lastName} ({teacher.teacherId})
-                            </option>
-                          ))
+                      
+                      {/* Selected Teachers Display */}
+                      {slot.teacherIds.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs text-gray-500 font-medium">Selected Teachers:</div>
+                          <div className="flex flex-wrap gap-2">
+                            <AnimatePresence>
+                              {slot.teacherIds.map(teacherId => {
+                                const teacher = filteredTeachers.find(t => t.id === teacherId);
+                                return (
+                                  <motion.div
+                                    key={teacherId}
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm"
+                                  >
+                                    <span>{teacher ? `${teacher.firstName} ${teacher.lastName}` : teacherId}</span>
+                                    <button
+                                      onClick={() => removeTeacher(currentDay, index, teacherId)}
+                                      className="text-green-600 hover:text-green-800 transition-colors hover:bg-green-200 rounded-full p-0.5"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </motion.div>
+                                );
+                              })}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Teacher Selection Grid */}
+                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
+                        {loading ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                            <p className="text-sm">Loading teachers...</p>
+                          </div>
+                        ) : filteredTeachers.length > 0 ? (
+                          filteredTeachers.map(teacher => {
+                            const isSelected = slot.teacherIds.includes(teacher.id);
+                            return (
+                              <div
+                                key={teacher.id}
+                                className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
+                                  isSelected
+                                    ? 'bg-green-50 border-green-200'
+                                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                                }`}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {teacher.firstName} {teacher.lastName}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    ID: {teacher.teacherId}
+                                  </span>
+                                </div>
+                                <motion.button
+                                  onClick={() => handleIndividualTeacherSelection(currentDay, index, teacher.id)}
+                                  disabled={isSelected}
+                                  whileHover={!isSelected ? { scale: 1.05 } : {}}
+                                  whileTap={!isSelected ? { scale: 0.95 } : {}}
+                                  className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full transition-all duration-200 ${
+                                    isSelected
+                                      ? 'bg-green-100 text-green-700 cursor-not-allowed'
+                                      : 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md'
+                                  }`}
+                                >
+                                  {isSelected ? (
+                                    <>
+                                      <UserCheck className="w-3 h-3" />
+                                      Added
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="w-3 h-3" />
+                                      Add
+                                    </>
+                                  )}
+                                </motion.button>
+                              </div>
+                            );
+                          })
                         ) : (
-                          <option disabled>
-                            {slot.subjectIds.length === 0
-                              ? "Please select subjects first"
-                              : slot.subjectIds.length > 0 && selectedClass && selectedAcademicYear
-                              ? "No teachers assigned to selected subjects"
-                              : "Select class and academic year to see teachers"}
-                          </option>
+                          <div className="text-center py-8 text-gray-500">
+                            <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">
+                              {slot.subjectIds.length === 0
+                                ? "Please select subjects first"
+                                : "Select class and academic year to see teachers"}
+                            </p>
+                          </div>
                         )}
-                      </select>
+                      </div>
                     </div>
 
                     {/* Start Time */}

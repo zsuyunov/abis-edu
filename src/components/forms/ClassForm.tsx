@@ -9,6 +9,7 @@ import { useFormState } from "react-dom";
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
+import { useCacheManager } from "@/lib/cacheUtils";
 
 const ClassForm = ({
   type,
@@ -52,6 +53,7 @@ const ClassForm = ({
   );
 
   const router = useRouter();
+  const { invalidate } = useCacheManager();
 
   const [branches, setBranches] = useState(relatedData?.branches || []);
   const [teachers, setTeachers] = useState(relatedData?.teachers || []);
@@ -59,13 +61,23 @@ const ClassForm = ({
 
   const selectedBranchId = watch("branchId");
 
-  // Fetch latest data when form opens
+  // Fetch latest data when form opens - always fetch fresh data
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [branchesRes, academicYearsRes] = await Promise.all([
-          fetch('/api/branches'),
-          fetch('/api/academic-years')
+          fetch('/api/branches', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch('/api/academic-years', {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          })
         ]);
         
         if (branchesRes.ok) {
@@ -91,6 +103,9 @@ const ClassForm = ({
     console.log("Class form state:", state);
     if (state.success) {
       toast(`Class has been ${type === "create" ? "created" : "updated"}!`);
+      // Invalidate classes and branches cache to ensure fresh data
+      invalidate('classes');
+      invalidate('branches');
       setOpen(false);
       router.refresh();
     }

@@ -73,11 +73,36 @@ const DocumentForm = ({ type, data, onClose, onSuccess }: DocumentFormProps) => 
     const fetchFilterData = async () => {
       try {
         const [branchesRes, classesRes, academicYearsRes, teachersRes, studentsRes] = await Promise.all([
-          fetch("/api/branches"),
-          fetch("/api/classes"),
-          fetch("/api/academic-years"),
-          fetch("/api/teachers"),
-          fetch("/api/students"),
+          fetch("/api/branches", {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch("/api/classes", {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch("/api/academic-years", {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch("/api/teachers", {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
+          fetch("/api/students", {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          }),
         ]);
 
         const branches = await branchesRes.json();

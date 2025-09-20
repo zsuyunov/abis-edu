@@ -91,12 +91,17 @@ const ParentForm = ({
   }, [isCreatingFromStudent, data?.studentId, methods]);
 
 
-  // Fetch branches when form opens
+  // Fetch branches when form opens - always fetch fresh data
   useEffect(() => {
     if (isCreatingFromStudent || isEditing) return; // Don't fetch branches if creating from student context or editing
     const fetchBranches = async () => {
       try {
-        const res = await fetch('/api/branches');
+        const res = await fetch('/api/branches', {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        });
         if (res.ok) {
           const json = await res.json();
           setBranches(json.branches || []);
