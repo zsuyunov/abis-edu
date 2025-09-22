@@ -143,6 +143,13 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         
         const data = await response.json();
         
+        // Debug: Log the raw data structure
+        console.log('Raw API response:', data);
+        console.log('Timetables array:', data.timetables);
+        if (data.timetables && data.timetables.length > 0) {
+          console.log('First timetable structure:', data.timetables[0]);
+        }
+        
         // Ensure data.timetables is an array
         const rawTimetables = Array.isArray(data.timetables) ? data.timetables : [];
         
@@ -161,22 +168,34 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           ) === index;
         });
         
-        return uniqueTimetables.map((timetable: any) => ({
-          id: timetable.id,
-          fullDate: formattedDate,
-          startTime: timetable.startTime || "00:00",
-          endTime: timetable.endTime || "00:00",
-          lessonNumber: timetable.lessonNumber || 1,
-          classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
-          class: {
-            ...timetable.class,
-            academicYear: timetable.class.academicYear || timetable.academicYear || { id: 1, name: "Default" }
-          },
-          subject: timetable.subject,
-          branch: timetable.branch,
-          topics: timetable.topics || [],
-          homework: timetable.homework || []
-        }));
+        return uniqueTimetables.map((timetable: any) => {
+          // Handle both single subject and subjects array formats
+          const subject = timetable.subject || (timetable.subjects && timetable.subjects.length > 0 ? timetable.subjects[0] : null);
+          
+          return {
+            id: timetable.id,
+            fullDate: formattedDate,
+            startTime: timetable.startTime || "00:00",
+            endTime: timetable.endTime || "00:00",
+            lessonNumber: timetable.lessonNumber || 1,
+            classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
+            class: {
+              id: timetable.class?.id || 'unknown',
+              name: timetable.class?.name || 'Unknown Class',
+              academicYear: timetable.class?.academicYear || timetable.academicYear || { id: 1, name: "Default" }
+            },
+            subject: {
+              id: subject?.id || 'unknown',
+              name: subject?.name || 'Unknown Subject'
+            },
+            branch: {
+              id: timetable.branch?.id || 'unknown',
+              shortName: timetable.branch?.shortName || 'Unknown Branch'
+            },
+            topics: timetable.topics || [],
+            homework: timetable.homework || []
+          };
+        });
       } catch (error) {
         console.error('Error fetching timetables:', error);
         return []; // Return empty array on error
@@ -826,9 +845,9 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                       <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-lg">
                         #{getLessonNumber(index)}
                       </span>
-                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <div className="flex items-center gap-1 text-xs text-gray-600">
                         <MapPin size={12} />
-                        {timetable.branch.shortName} • {timetable.classroom}
+                        {timetable.branch?.shortName || 'Unknown Branch'} • {timetable.classroom || 'Unknown Room'}
                       </div>
                     </div>
                     <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border ${statusColor}`}>
@@ -841,7 +860,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">
-                        {timetable.class.name} • {timetable.subject.name}
+                        {timetable.class?.name || 'Unknown Class'} • {timetable.subject?.name || 'Unknown Subject'}
                       </h3>
                       
                       <div className="flex items-center gap-1 text-sm text-gray-600 mb-2">
@@ -1034,7 +1053,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
               <div className="space-y-4">
                 <div className="bg-purple-50 p-4 rounded-lg">
                   <h4 className="font-medium text-purple-900 mb-2">
-                    {selectedTimetable.class.name} • {selectedTimetable.subject.name}
+                    {selectedTimetable.class?.name || 'Unknown Class'} • {selectedTimetable.subject?.name || 'Unknown Subject'}
                   </h4>
                   <p className="text-sm text-purple-700">
                     {formatTime(selectedTimetable.startTime)} – {formatTime(selectedTimetable.endTime)}
@@ -1191,7 +1210,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
               <div className="space-y-4">
                 <div className="bg-green-50 p-4 rounded-lg">
                   <h4 className="font-medium text-green-900 mb-2">
-                    {selectedTimetable.class.name} • {selectedTimetable.subject.name}
+                    {selectedTimetable.class?.name || 'Unknown Class'} • {selectedTimetable.subject?.name || 'Unknown Subject'}
                   </h4>
                   <p className="text-sm text-green-700">
                     {formatTime(selectedTimetable.startTime)} – {formatTime(selectedTimetable.endTime)}
