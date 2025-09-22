@@ -25,6 +25,7 @@ interface Branch {
 }
 
 interface TeacherAttendancePageClientProps {
+  teacherId: string;
   teacherClasses: TeacherClass[];
   teacherSubjects: TeacherSubject[];
   academicYears: AcademicYear[];
@@ -32,6 +33,7 @@ interface TeacherAttendancePageClientProps {
 }
 
 const TeacherAttendancePageClient: React.FC<TeacherAttendancePageClientProps> = ({
+  teacherId,
   teacherClasses,
   teacherSubjects,
   academicYears,
@@ -60,6 +62,7 @@ const TeacherAttendancePageClient: React.FC<TeacherAttendancePageClientProps> = 
       className="space-y-4"
     >
       <TeacherAttendanceGrid 
+        teacherId={teacherId}
         teacherClasses={teacherClasses}
         teacherSubjects={teacherSubjects}
         academicYears={academicYears}

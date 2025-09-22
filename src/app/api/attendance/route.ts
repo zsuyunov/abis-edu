@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < validAttendance.length; i++) {
       const record = validAttendance[i];
       console.log(`💾 Processing record ${i + 1}/${validAttendance.length}:`, record);
+      console.log(`💾 Record notes: "${record.notes}"`);
       
       try {
         // First, try to find existing record

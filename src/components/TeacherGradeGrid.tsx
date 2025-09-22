@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Users, BookOpen, GraduationCap, X, Clock, MessageSquare, Edit3 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronLeft, ChevronRight, Users, BookOpen, GraduationCap, X, Clock, MessageSquare, Edit3, BarChart3 } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -58,6 +59,7 @@ interface TeacherGradeGridProps {
   academicYears: AcademicYear[];
   branches: Branch[];
   refreshTrigger?: number;
+  teacherId: string;
 }
 
 const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
@@ -65,7 +67,8 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
   teacherSubjects,
   academicYears,
   branches,
-  refreshTrigger
+  refreshTrigger,
+  teacherId
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedClass, setSelectedClass] = useState<number | ''>('');
@@ -80,6 +83,23 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
   const [editValue, setEditValue] = useState<number>(0);
   const [editDescription, setEditDescription] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showPutGradesModal, setShowPutGradesModal] = useState(false);
+  
+  // Grades functionality state
+  const [showLessonSelectionModal, setShowLessonSelectionModal] = useState(false);
+  const [showGradesFormModal, setShowGradesFormModal] = useState(false);
+  const [selectedLessonBranch, setSelectedLessonBranch] = useState<string>('');
+  const [selectedLessonClass, setSelectedLessonClass] = useState<string>('');
+  const [selectedLessonSubject, setSelectedLessonSubject] = useState<string>('');
+  const [availableLessons, setAvailableLessons] = useState<any[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<any>(null);
+  const [lessonStudents, setLessonStudents] = useState<Student[]>([]);
+  const [lessonGradeData, setLessonGradeData] = useState<Record<string, number>>({});
+  const [lessonGradeComments, setLessonGradeComments] = useState<Record<string, string>>({});
+  const [isLoadingLessons, setIsLoadingLessons] = useState(false);
+  const [isLoadingLessonStudents, setIsLoadingLessonStudents] = useState(false);
+  const [isSavingGrades, setIsSavingGrades] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -96,6 +116,153 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
       }
     } catch (error) {
       console.error('Error fetching students:', error);
+    }
+  };
+
+  // Grades functionality functions
+  const fetchAvailableLessons = async () => {
+    if (!selectedLessonBranch || !selectedLessonClass || !selectedLessonSubject) return;
+
+    setIsLoadingLessons(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/teacher-timetables?date=${today}&classId=${selectedLessonClass}&subjectId=${selectedLessonSubject}&branchId=${selectedLessonBranch}`, {
+        headers: {
+          'x-user-id': teacherId,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const lessons = data.timetables || [];
+        console.log('Fetched lessons for grades:', lessons);
+        setAvailableLessons(lessons);
+
+        // If there's only one lesson, auto-select it
+        if (lessons.length === 1) {
+          setSelectedLesson(lessons[0]);
+          fetchLessonStudents(lessons[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching available lessons for grades:', error);
+    } finally {
+      setIsLoadingLessons(false);
+    }
+  };
+
+  const fetchLessonStudents = async (lesson?: any) => {
+    const targetLesson = lesson || selectedLesson;
+    if (!targetLesson) return;
+
+    setIsLoadingLessonStudents(true);
+    try {
+      const subjectId = targetLesson.subjects?.[0]?.id || targetLesson.subject?.id || selectedLessonSubject;
+      const classId = targetLesson.class?.id || selectedLessonClass;
+
+      const response = await fetch(`/api/students?classId=${classId}&subjectId=${subjectId}`, {
+        headers: {
+          'x-user-id': teacherId,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const studentList = data.students || [];
+        setLessonStudents(studentList);
+
+        // Initialize grade data for all students
+        const initialGrades: Record<string, number> = {};
+        const initialComments: Record<string, string> = {};
+
+        studentList.forEach((student: Student) => {
+          initialGrades[student.id] = 0;
+          initialComments[student.id] = '';
+        });
+
+        setLessonGradeData(initialGrades);
+        setLessonGradeComments(initialComments);
+      }
+    } catch (error) {
+      console.error('Error fetching lesson students for grades:', error);
+    } finally {
+      setIsLoadingLessonStudents(false);
+    }
+  };
+
+  const handleLessonGradeChange = (studentId: string, points: number) => {
+    setLessonGradeData(prev => ({
+      ...prev,
+      [studentId]: points
+    }));
+  };
+
+  const handleLessonCommentChange = (studentId: string, comment: string) => {
+    setLessonGradeComments(prev => ({
+      ...prev,
+      [studentId]: comment
+    }));
+  };
+
+  const handleSaveLessonGrades = async () => {
+    if (!selectedLesson || lessonStudents.length === 0) return;
+
+    setIsSavingGrades(true);
+    try {
+      const subjectId = selectedLesson.subjects?.[0]?.id || selectedLesson.subject?.id || selectedLessonSubject;
+      const classId = selectedLesson.class?.id || selectedLessonClass;
+      const branchId = selectedLesson.branch?.id || selectedLesson.class?.branch?.id || selectedLessonBranch;
+      
+      const gradeRecords = lessonStudents.map(student => ({
+        studentId: student.id,
+        points: lessonGradeData[student.id] || 0,
+        comments: lessonGradeComments[student.id] || '',
+      }));
+
+      const response = await fetch('/api/grades', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId,
+        },
+        body: JSON.stringify({
+          timetableId: selectedLesson.id,
+          classId: classId,
+          subjectId: subjectId,
+          date: new Date().toISOString().split('T')[0],
+          grades: gradeRecords,
+        }),
+      });
+
+      if (response.ok) {
+        // Show success message
+        alert('✅ Grades saved successfully!');
+        
+        // Close modal and reset state
+        setShowGradesFormModal(false);
+        setShowLessonSelectionModal(false);
+        setSelectedLessonBranch('');
+        setSelectedLessonClass('');
+        setSelectedLessonSubject('');
+        setAvailableLessons([]);
+        setSelectedLesson(null);
+        setLessonStudents([]);
+        setLessonGradeData({});
+        setLessonGradeComments({});
+        setSearchTerm('');
+
+        // Refresh main grade data
+        fetchGradeData();
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to save grades:', errorData);
+        alert(`❌ Failed to save grades: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error saving grades:', error);
+      alert('❌ Network error occurred while saving grades. Please try again.');
+    } finally {
+      setIsSavingGrades(false);
     }
   };
 
@@ -134,12 +301,17 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
     fetchGradeData();
   }, [selectedClass, selectedSubject, selectedAcademicYear, selectedBranch, currentDate, refreshTrigger]);
 
-  const getGradeForStudentAndDate = (studentId: string, date: Date) => {
-    if (!Array.isArray(gradeData)) return undefined;
-    return gradeData.find(record => 
+  const getGradesForStudentAndDate = (studentId: string, date: Date) => {
+    if (!Array.isArray(gradeData)) return [];
+    return gradeData.filter(record => 
       record.studentId === studentId && 
       format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
     );
+  };
+
+  const getGradeForStudentAndDate = (studentId: string, date: Date) => {
+    const grades = getGradesForStudentAndDate(studentId, date);
+    return grades.length > 0 ? grades[0] : undefined;
   };
 
   const getGradeColor = (value: number | undefined) => {
@@ -219,31 +391,33 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
       // Handle DateTime @db.Time format from Prisma
       if (!timeString) return 'No time';
       
-      // If it's already a time string like "08:30:00"
+      let date: Date;
+      
       if (typeof timeString === 'string' && timeString.includes(':')) {
+        // If it's already a time string like "08:30:00"
         const [hours, minutes] = timeString.split(':').map(Number);
         if (!isNaN(hours) && !isNaN(minutes)) {
-          const date = new Date();
-          date.setHours(hours, minutes, 0, 0);
-          return date.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit',
-            hour12: true 
-          });
+          // Create a date with UTC time to avoid timezone issues
+          date = new Date(`1970-01-01T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00Z`);
+        } else {
+          date = new Date(timeString);
         }
+      } else {
+        // If it's a Date object or ISO string
+        date = new Date(timeString);
       }
       
-      // If it's a Date object or ISO string
-      const date = new Date(timeString);
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit',
-          hour12: true 
-        });
+      if (isNaN(date.getTime())) {
+        return timeString; // Return original if all else fails
       }
       
-      return timeString; // Return original if all else fails
+      // Use UTC methods to avoid timezone conversion issues
+      const hours = date.getUTCHours();
+      const minutes = date.getUTCMinutes();
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      
+      return `${displayHour}:${minutes.toString().padStart(2, '0')} ${period}`;
     } catch (error) {
       console.error('Error formatting time:', error, 'Input:', timeString);
       return timeString;
@@ -334,6 +508,24 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
           </div>
         </div>
 
+        {/* Put Grades Button */}
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 mb-4 border border-purple-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+              <p className="text-sm text-gray-600">Input grades for a specific lesson</p>
+            </div>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowLessonSelectionModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors shadow-sm"
+                >
+                  <BarChart3 size={16} />
+                  Put Grades
+                </motion.button>
+          </div>
+        </div>
+
         {/* Month Navigation */}
         <div className="flex items-center justify-between mb-4">
           <button
@@ -421,15 +613,28 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
                         {studentAvg > 0 ? `${studentAvg}%` : '-'}
                       </td>
                       {monthDays.map(day => {
-                        const grade = getGradeForStudentAndDate(student.id, day);
+                        const grades = getGradesForStudentAndDate(student.id, day);
                         return (
                           <td 
                             key={day.toISOString()} 
-                            className={`px-1 sm:px-3 py-2 sm:py-3 text-center text-xs sm:text-sm font-medium border-r border-gray-200 min-w-[40px] sm:min-w-[60px] ${getGradeColor(grade?.value)} ${grade ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
-                            onClick={() => grade && handleGradeClick(grade)}
-                            title={grade ? `Click to edit grade` : ''}
+                            className="px-1 sm:px-3 py-2 sm:py-3 text-center text-xs sm:text-sm font-medium border-r border-gray-200 min-w-[40px] sm:min-w-[60px]"
                           >
-                            {grade ? `${grade.value}%` : '-'}
+                            {grades.length > 0 ? (
+                              <div className="space-y-1">
+                                {grades.map((grade, index) => (
+                                  <div 
+                                    key={index}
+                                    className={`px-1 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${getGradeColor(grade.value)}`}
+                                    onClick={() => handleGradeClick(grade)}
+                                    title={`Click to edit grade${grade.timetable ? ` (${grade.timetable.startTime} - ${grade.timetable.endTime})` : ''}`}
+                                  >
+                                    {grade.value}%
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-gray-400">-</div>
+                            )}
                           </td>
                         );
                       })}
@@ -572,6 +777,315 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
           </div>
         </div>
       )}
+
+      {/* Lesson Selection Modal */}
+      <AnimatePresence>
+        {showLessonSelectionModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">Select Lesson for Grades</h3>
+                <button
+                  onClick={() => setShowLessonSelectionModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Lesson Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Users className="w-4 h-4 inline mr-1" />
+                      Branch
+                    </label>
+                    <select
+                      value={selectedLessonBranch}
+                      onChange={(e) => {
+                        setSelectedLessonBranch(e.target.value);
+                        setAvailableLessons([]);
+                        setSelectedLesson(null);
+                        setLessonStudents([]);
+                      }}
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Select Branch</option>
+                      {branches.map(branch => (
+                        <option key={branch.id} value={branch.id}>{branch.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Users className="w-4 h-4 inline mr-1" />
+                      Class
+                    </label>
+                    <select
+                      value={selectedLessonClass}
+                      onChange={(e) => {
+                        setSelectedLessonClass(e.target.value);
+                        setAvailableLessons([]);
+                        setSelectedLesson(null);
+                        setLessonStudents([]);
+                      }}
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Select Class</option>
+                      {teacherClasses.map(cls => (
+                        <option key={cls.id} value={cls.id}>{cls.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <BookOpen className="w-4 h-4 inline mr-1" />
+                      Subject
+                    </label>
+                    <select
+                      value={selectedLessonSubject}
+                      onChange={(e) => {
+                        setSelectedLessonSubject(e.target.value);
+                        setAvailableLessons([]);
+                        setSelectedLesson(null);
+                        setLessonStudents([]);
+                      }}
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      <option value="">Select Subject</option>
+                      {teacherSubjects.map(subject => (
+                        <option key={subject.id} value={subject.id}>{subject.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Load Lessons Button */}
+                {selectedLessonBranch && selectedLessonClass && selectedLessonSubject && (
+                  <div className="text-center">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={fetchAvailableLessons}
+                      disabled={isLoadingLessons}
+                      className="px-6 py-3 bg-purple-500 text-white rounded-xl hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isLoadingLessons ? 'Loading Lessons...' : 'Load Today\'s Lessons'}
+                    </motion.button>
+                  </div>
+                )}
+
+                {/* Available Lessons */}
+                {availableLessons.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-semibold text-gray-900">Available Lessons for Today</h4>
+                    <div className="space-y-2">
+                      {availableLessons.map((lesson, index) => (
+                        <div
+                          key={index}
+                          onClick={() => {
+                            setSelectedLesson(lesson);
+                            setShowLessonSelectionModal(false);
+                            setShowGradesFormModal(true);
+                            fetchLessonStudents(lesson);
+                          }}
+                          className="p-4 border rounded-xl cursor-pointer transition-colors hover:border-purple-300 hover:bg-purple-50"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-gray-900">
+                                {lesson.class?.name || 'Unknown Class'} • {lesson.subjects?.[0]?.name || lesson.subject?.name || 'Unknown Subject'}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {lesson.branch?.shortName || lesson.class?.branch?.shortName || 'Unknown Branch'}{lesson.roomNumber || lesson.buildingName ? ` • ${lesson.roomNumber || lesson.buildingName}` : ''}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium text-gray-900">
+                                {lesson.startTime} - {lesson.endTime}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                Lesson {lesson.lessonNumber || 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowLessonSelectionModal(false)}
+                    className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Grades Form Modal */}
+      <AnimatePresence>
+        {showGradesFormModal && selectedLesson && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-lg shadow-xl max-h-[70vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Put Grades</h3>
+                <button
+                  onClick={() => {
+                    setShowGradesFormModal(false);
+                    setSelectedLesson(null);
+                    setLessonStudents([]);
+                    setLessonGradeData({});
+                    setLessonGradeComments({});
+                    setSearchTerm('');
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-purple-900 mb-2">
+                    {selectedLesson.class?.name || 'Unknown Class'} • {selectedLesson.subjects?.[0]?.name || selectedLesson.subject?.name || 'Unknown Subject'}
+                  </h4>
+                  <p className="text-sm text-purple-700">
+                    {selectedLesson.branch?.shortName || selectedLesson.class?.branch?.shortName || 'Unknown Branch'}{selectedLesson.roomNumber || selectedLesson.buildingName ? ` • ${selectedLesson.roomNumber || selectedLesson.buildingName}` : ''} • {selectedLesson.startTime} - {selectedLesson.endTime}
+                  </p>
+                </div>
+
+                {/* Search Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Search Students</label>
+                  <input
+                    type="text"
+                    placeholder="Search by name or student ID..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900">Student Grades</h4>
+                  {isLoadingLessonStudents ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500 mx-auto"></div>
+                      <p className="text-sm text-gray-500 mt-2">Loading students...</p>
+                    </div>
+                  ) : lessonStudents.length > 0 ? (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {lessonStudents
+                        .filter(student => {
+                          if (!searchTerm) return true;
+                          const searchLower = searchTerm.toLowerCase();
+                          return (
+                            student.firstName.toLowerCase().includes(searchLower) ||
+                            student.lastName.toLowerCase().includes(searchLower) ||
+                            student.studentId.toLowerCase().includes(searchLower)
+                          );
+                        })
+                        .map((student) => (
+                        <div key={student.id} className="p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-sm font-medium text-purple-700">
+                                  {student.firstName[0]}{student.lastName[0]}
+                                </span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {student.firstName} {student.lastName}
+                                </p>
+                                <p className="text-xs text-gray-500">ID: {student.studentId}</p>
+                              </div>
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="Grade"
+                              value={lessonGradeData[student.id] || ''}
+                              onChange={(e) => handleLessonGradeChange(student.id, parseInt(e.target.value) || 0)}
+                              className="w-20 px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-gray-600">Comment (optional)</label>
+                            <textarea
+                              placeholder="Add a comment about this student's grade..."
+                              value={lessonGradeComments[student.id] || ''}
+                              onChange={(e) => handleLessonCommentChange(student.id, e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                              rows={2}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-500">No students found for this class</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowGradesFormModal(false);
+                      setSelectedLesson(null);
+                      setLessonStudents([]);
+                      setLessonGradeData({});
+                      setLessonGradeComments({});
+                      setSearchTerm('');
+                    }}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveLessonGrades}
+                    disabled={isSavingGrades || lessonStudents.length === 0}
+                    className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSavingGrades ? 'Saving...' : 'Save Grades'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       </div>
     </div>
   );

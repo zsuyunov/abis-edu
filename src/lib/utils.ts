@@ -85,10 +85,10 @@ export function formatDatabaseTime(timeInput: string | Date): string {
       return 'Invalid';
     }
     
-    // Use local time methods since times are stored as local time in the database
-    // The times are stored as 1970-01-01T08:20:00 (local) and we want to display 08:20 (local)
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
+    // Use UTC methods to avoid timezone conversion issues
+    // The times are stored as UTC in the database and we want to display them as-is
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
     const period = hours >= 12 ? 'PM' : 'AM';
     const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
     

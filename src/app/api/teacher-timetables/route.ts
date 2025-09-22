@@ -209,6 +209,16 @@ export async function GET(request: NextRequest) {
     
     console.log(`Found ${timetables.length} timetables matching the criteria`);
     
+    // Debug: Log first timetable to see room data
+    if (timetables.length > 0) {
+      console.log('First timetable room data:', {
+        roomNumber: timetables[0].roomNumber,
+        buildingName: timetables[0].buildingName,
+        classId: timetables[0].classId,
+        branchId: timetables[0].branchId
+      });
+    }
+    
     // Get all unique teacher IDs from all timetables
     const allTeacherIds = Array.from(new Set(
       timetables.flatMap(t => t.teacherIds || [])
@@ -245,6 +255,21 @@ export async function GET(request: NextRequest) {
       const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
       
       if (!groupedTimetables.has(timeKey)) {
+        // Calculate lesson number based on start time
+        const getLessonNumber = (startTime: Date) => {
+          const hours = startTime.getUTCHours();
+          if (hours >= 8 && hours < 9) return 1;
+          if (hours >= 9 && hours < 10) return 2;
+          if (hours >= 10 && hours < 11) return 3;
+          if (hours >= 11 && hours < 12) return 4;
+          if (hours >= 12 && hours < 13) return 5;
+          if (hours >= 13 && hours < 14) return 6;
+          if (hours >= 14 && hours < 15) return 7;
+          if (hours >= 15 && hours < 16) return 8;
+          if (hours >= 16 && hours < 17) return 9;
+          return 0;
+        };
+
         groupedTimetables.set(timeKey, {
           id: timetable.id, // Use first timetable ID as primary
           branchId: timetable.branchId,
@@ -255,6 +280,7 @@ export async function GET(request: NextRequest) {
           endTime: formatTime(timetable.endTime),
           roomNumber: timetable.roomNumber,
           buildingName: timetable.buildingName,
+          lessonNumber: getLessonNumber(timetable.startTime),
           isActive: timetable.isActive,
           createdAt: timetable.createdAt,
           updatedAt: timetable.updatedAt,

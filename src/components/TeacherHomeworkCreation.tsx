@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import VoiceRecorder from "./VoiceRecorder";
 
 interface TeacherHomeworkCreationProps {
   teacherId: string;
@@ -10,6 +11,7 @@ interface TeacherHomeworkCreationProps {
   onCancel?: () => void;
   isMobile?: boolean;
   editHomeworkId?: number | null;
+  selectedLesson?: any; // Add selected lesson prop
 }
 
 const TeacherHomeworkCreation = ({
@@ -19,27 +21,44 @@ const TeacherHomeworkCreation = ({
   onCancel,
   isMobile,
   editHomeworkId,
+  selectedLesson,
 }: TeacherHomeworkCreationProps) => {
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(!!editHomeworkId);
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    instructions: "",
-    assignedDate: new Date().toISOString().split('T')[0],
-    assignedTime: "09:00",
-    dueDate: "",
-    dueTime: "23:59",
-    branchId: teacherData?.teacher?.branch?.id || "",
-    academicYearId: "",
-    classId: "",
-    subjectId: "",
-    totalPoints: "",
-    passingGrade: "",
-    allowLateSubmission: true,
-    latePenalty: "",
+  // Initialize form data with proper defaults
+  const getInitialFormData = () => {
+    const today = new Date();
+    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    return {
+      title: "",
+      description: "",
+      instructions: "",
+      assignedDate: today.toISOString().split('T')[0],
+      assignedTime: "09:00",
+      dueDate: nextWeek.toISOString().split('T')[0],
+      dueTime: "23:59",
+      branchId: teacherData?.teacher?.branch?.id || "",
+      classId: "",
+      subjectId: "",
+      totalPoints: "",
+      passingPoints: "",
+      allowLateSubmission: true,
+      latePenalty: "",
+      enableLatePenalty: false,
+    };
+  };
+
+  const [formData, setFormData] = useState(getInitialFormData());
+  const [attachments, setAttachments] = useState<{
+    images: File[];
+    files: File[];
+    voiceMessages: File[];
+  }>({
+    images: [],
+    files: [],
+    voiceMessages: [],
   });
-  const [attachments, setAttachments] = useState<File[]>([]);
 
   // Load homework data for editing
   useEffect(() => {
@@ -47,6 +66,27 @@ const TeacherHomeworkCreation = ({
       fetchHomeworkForEdit();
     }
   }, [editHomeworkId, isEditMode]);
+
+  // Debug teacher data
+  useEffect(() => {
+    console.log('TeacherHomeworkCreation - teacherData:', teacherData);
+    console.log('TeacherHomeworkCreation - assignedClasses:', teacherData?.assignedClasses);
+    console.log('TeacherHomeworkCreation - assignedSubjects:', teacherData?.assignedSubjects);
+  }, [teacherData]);
+
+  // Pre-populate form when lesson is selected
+  useEffect(() => {
+    if (selectedLesson) {
+      console.log('Pre-populating form with selected lesson:', selectedLesson);
+      setFormData(prev => ({
+        ...prev,
+        branchId: selectedLesson.branch?.id || selectedLesson.class?.branch?.id || "",
+        classId: selectedLesson.class?.id || "",
+        subjectId: selectedLesson.subjects?.[0]?.id || selectedLesson.subject?.id || "",
+        // Don't pre-fill title, description, or instructions - let user fill them
+      }));
+    }
+  }, [selectedLesson]);
 
   const fetchHomeworkForEdit = async () => {
     try {
@@ -74,13 +114,13 @@ const TeacherHomeworkCreation = ({
             dueDate: dueDateTime.toISOString().split('T')[0],
             dueTime: dueDateTime.toTimeString().slice(0, 5),
             branchId: homework.branchId?.toString() || "",
-            academicYearId: homework.academicYearId?.toString() || "",
             classId: homework.classId?.toString() || "",
             subjectId: homework.subjectId?.toString() || "",
             totalPoints: homework.totalPoints?.toString() || "",
-            passingGrade: homework.passingGrade?.toString() || "",
+            passingPoints: homework.passingGrade?.toString() || "",
             allowLateSubmission: homework.allowLateSubmission ?? true,
             latePenalty: homework.latePenalty?.toString() || "",
+            enableLatePenalty: !!homework.latePenalty, // Enable if late penalty exists
           });
         }
       }
@@ -95,60 +135,65 @@ const TeacherHomeworkCreation = ({
     e.preventDefault();
     setLoading(true);
 
-    try {
-      // First upload attachments if any
-      let uploadedAttachments: any[] = [];
-      
-      if (attachments.length > 0) {
-        const formDataForUpload = new FormData();
-        attachments.forEach((file, index) => {
-          formDataForUpload.append(`attachments`, file);
-        });
-        formDataForUpload.append('teacherId', teacherId);
-        
-        const uploadResponse = await fetch('/api/upload-attachments', {
-          method: 'POST',
-          headers: {
-            'x-user-id': teacherId,
-          },
-          body: formDataForUpload,
-        });
-        
-        if (uploadResponse.ok) {
-          const uploadResult = await uploadResponse.json();
-          uploadedAttachments = uploadResult.attachments || [];
-          console.log('Attachments uploaded successfully:', uploadedAttachments);
-        } else {
-          const uploadError = await uploadResponse.json();
-          console.error('Failed to upload attachments:', uploadError);
-          alert(`Failed to upload attachments: ${uploadError.error || 'Unknown error'}`);
-          return; // Don't proceed if attachment upload fails
-        }
-      }
+    // Validate required fields
+    if (!formData.title.trim()) {
+      alert('Please enter a homework title');
+      setLoading(false);
+      return;
+    }
 
-      const url = isEditMode ? `/api/teacher-homework?id=${editHomeworkId}` : "/api/teacher-homework";
-      const method = isEditMode ? "PUT" : "POST";
+    if (!formData.dueDate) {
+      alert('Please select a due date');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Create FormData for file uploads (like dashboard)
+      const formDataToSend = new FormData();
       
-      const response = await fetch(url, {
-        method,
+      // Add form fields
+      formDataToSend.append('teacherId', teacherId);
+      formDataToSend.append('classId', formData.classId);
+      formDataToSend.append('subjectId', formData.subjectId);
+      formDataToSend.append('branchId', formData.branchId);
+      formDataToSend.append('title', formData.title);
+      formDataToSend.append('description', formData.description);
+      formDataToSend.append('instructions', formData.instructions);
+      formDataToSend.append('totalPoints', formData.totalPoints);
+      formDataToSend.append('passingPoints', formData.passingPoints);
+      formDataToSend.append('assignedDate', formData.assignedDate);
+      
+      // Combine date and time for due date
+      const dueDateTime = formData.dueDate && formData.dueTime 
+        ? `${formData.dueDate}T${formData.dueTime}:00` 
+        : formData.dueDate;
+      formDataToSend.append('dueDate', dueDateTime);
+      formDataToSend.append('allowLateSubmission', formData.allowLateSubmission.toString());
+      formDataToSend.append('latePenaltyPerDay', formData.latePenalty || '0');
+
+      // Add files directly to FormData (like dashboard)
+      attachments.images.forEach((file) => {
+        formDataToSend.append('images', file);
+      });
+      attachments.files.forEach((file) => {
+        formDataToSend.append('files', file);
+      });
+      attachments.voiceMessages.forEach((file) => {
+        formDataToSend.append('voiceMessages', file);
+      });
+
+      console.log('Submitting homework with FormData (like dashboard)');
+      console.log('Images count:', attachments.images.length);
+      console.log('Files count:', attachments.files.length);
+      console.log('Voice messages count:', attachments.voiceMessages.length);
+
+      const response = await fetch("/api/teacher-homework/with-files", {
+        method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-user-id": teacherId,
+          'x-user-id': teacherId,
         },
-        body: JSON.stringify({
-          ...formData,
-          teacherId,
-          assignedDate: new Date(`${formData.assignedDate}T${formData.assignedTime}:00`).toISOString(),
-          dueDate: new Date(`${formData.dueDate}T${formData.dueTime}:00`).toISOString(),
-          branchId: parseInt(formData.branchId),
-          academicYearId: parseInt(formData.academicYearId),
-          classId: parseInt(formData.classId),
-          subjectId: parseInt(formData.subjectId),
-          totalPoints: formData.totalPoints ? parseFloat(formData.totalPoints) : null,
-          passingGrade: formData.passingGrade ? parseFloat(formData.passingGrade) : null,
-          latePenalty: formData.latePenalty ? parseFloat(formData.latePenalty) : null,
-          attachments: uploadedAttachments,
-        }),
+        body: formDataToSend,
       });
 
       if (response.ok) {
@@ -157,11 +202,12 @@ const TeacherHomeworkCreation = ({
         onHomeworkCreated();
       } else {
         const error = await response.json();
-        console.error(`Error ${isEditMode ? 'updating' : 'creating'} homework:`, error);
-        alert(`Failed to ${isEditMode ? 'update' : 'create'} homework: ${error.error || 'Unknown error'}`);
+        console.error(`Error creating homework:`, error);
+        alert(`Failed to create homework: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error(`Error ${isEditMode ? 'updating' : 'creating'} homework:`, error);
+      console.error(`Error creating homework:`, error);
+      alert('An error occurred while creating homework. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -175,13 +221,30 @@ const TeacherHomeworkCreation = ({
     }));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, fileType: string) => {
-    const files = Array.from(e.target.files || []);
-    setAttachments(prev => [...prev, ...files]);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'images' | 'files' | 'voiceMessages') => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    const fileArray = Array.from(files);
+    setAttachments(prev => ({
+      ...prev,
+      [type]: [...prev[type], ...fileArray]
+    }));
   };
 
-  const removeAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
+  const removeAttachment = (type: 'images' | 'files' | 'voiceMessages', index: number) => {
+    setAttachments(prev => ({
+      ...prev,
+      [type]: prev[type].filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleVoiceRecordingComplete = (audioBlob: Blob) => {
+    const file = new File([audioBlob], `voice-message-${Date.now()}.webm`, { type: 'audio/webm' });
+    setAttachments(prev => ({
+      ...prev,
+      voiceMessages: [...prev.voiceMessages, file]
+    }));
   };
 
   return (
@@ -210,6 +273,35 @@ const TeacherHomeworkCreation = ({
         </div>
       </div>
 
+      {/* Selected Lesson Info */}
+      {selectedLesson && (
+        <div className="px-6 py-4 bg-green-50 border-b border-green-200">
+          <h4 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+            <span className="text-lg">📚</span>
+            Selected Lesson
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium text-green-800">Class:</span> {selectedLesson.class?.name || 'Unknown Class'}
+            </div>
+            <div>
+              <span className="font-medium text-green-800">Subject:</span> {selectedLesson.subjects?.[0]?.name || selectedLesson.subject?.name || 'Unknown Subject'}
+            </div>
+            <div>
+              <span className="font-medium text-green-800">Branch:</span> {selectedLesson.branch?.shortName || selectedLesson.class?.branch?.shortName || 'Unknown Branch'}
+            </div>
+            <div>
+              <span className="font-medium text-green-800">Time:</span> {selectedLesson.startTime} - {selectedLesson.endTime}
+            </div>
+            {selectedLesson.roomNumber || selectedLesson.buildingName ? (
+              <div className="md:col-span-2">
+                <span className="font-medium text-green-800">Room:</span> {selectedLesson.roomNumber || selectedLesson.buildingName}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
         {/* Basic Information */}
         <div className="space-y-4">
@@ -218,7 +310,7 @@ const TeacherHomeworkCreation = ({
             Basic Information
           </h4>
           
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
                 Homework Title *
@@ -249,6 +341,23 @@ const TeacherHomeworkCreation = ({
                 step="0.5"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="e.g., 100"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="passingPoints" className="block text-sm font-medium text-gray-700 mb-2">
+                Passing Points
+              </label>
+              <input
+                type="number"
+                id="passingPoints"
+                name="passingPoints"
+                value={formData.passingPoints}
+                onChange={handleInputChange}
+                min="0"
+                step="0.5"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., 60"
               />
             </div>
           </div>
@@ -284,93 +393,64 @@ const TeacherHomeworkCreation = ({
           </div>
         </div>
 
-        {/* Assignment Details */}
+        {/* Settings */}
         <div className="space-y-4">
           <h4 className="font-medium text-gray-900 flex items-center gap-2">
-            <span>🎯</span>
-            Assignment Details
+            <span>⚙️</span>
+            Settings
           </h4>
           
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="academicYearId" className="block text-sm font-medium text-gray-700 mb-2">
-                Academic Year *
+          <div className="space-y-4">
+            {/* Enable Late Penalty Toggle */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div>
+                <label htmlFor="enableLatePenalty" className="text-sm font-medium text-gray-900">
+                  Enable Late Penalty
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  Apply a percentage penalty for late submissions
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="enableLatePenalty"
+                  name="enableLatePenalty"
+                  checked={formData.enableLatePenalty}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    enableLatePenalty: e.target.checked,
+                    latePenalty: e.target.checked ? prev.latePenalty : ""
+                  }))}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
-              <select
-                id="academicYearId"
-                name="academicYearId"
-                value={formData.academicYearId}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Select Academic Year</option>
-                {teacherData?.availableAcademicYears?.map((year: any) => (
-                  <option key={year.id} value={year.id}>
-                    {year.name}
-                  </option>
-                ))}
-              </select>
             </div>
 
-            <div>
-              <label htmlFor="classId" className="block text-sm font-medium text-gray-700 mb-2">
-                Class *
-              </label>
-              <select
-                id="classId"
-                name="classId"
-                value={formData.classId}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Select Class</option>
-                {teacherData?.assignedClasses?.map((cls: any) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.name} ({cls.students?.length || 0} students)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="subjectId" className="block text-sm font-medium text-gray-700 mb-2">
-                Subject *
-              </label>
-              <select
-                id="subjectId"
-                name="subjectId"
-                value={formData.subjectId}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Select Subject</option>
-                {teacherData?.assignedSubjects?.map((subject: any) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="passingGrade" className="block text-sm font-medium text-gray-700 mb-2">
-                Passing Grade
-              </label>
-              <input
-                type="number"
-                id="passingGrade"
-                name="passingGrade"
-                value={formData.passingGrade}
-                onChange={handleInputChange}
-                min="0"
-                step="0.5"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., 60"
-              />
-            </div>
+            {/* Late Penalty Input - Only show when enabled */}
+            {formData.enableLatePenalty && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <label htmlFor="latePenalty" className="block text-sm font-medium text-gray-700 mb-2">
+                  Late Penalty (%)
+                </label>
+                <input
+                  type="number"
+                  id="latePenalty"
+                  name="latePenalty"
+                  value={formData.latePenalty}
+                  onChange={handleInputChange}
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., 10"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter the percentage penalty to apply for late submissions (0-100%)
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -444,50 +524,6 @@ const TeacherHomeworkCreation = ({
           </div>
         </div>
 
-        {/* Submission Settings */}
-        <div className="space-y-4">
-          <h4 className="font-medium text-gray-900 flex items-center gap-2">
-            <span>⚙️</span>
-            Submission Settings
-          </h4>
-          
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="allowLateSubmission"
-                name="allowLateSubmission"
-                checked={formData.allowLateSubmission}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="allowLateSubmission" className="ml-2 block text-sm text-gray-900">
-                Allow Late Submissions
-              </label>
-            </div>
-
-            {formData.allowLateSubmission && (
-              <div>
-                <label htmlFor="latePenalty" className="block text-sm font-medium text-gray-700 mb-2">
-                  Late Penalty (%)
-                </label>
-                <input
-                  type="number"
-                  id="latePenalty"
-                  name="latePenalty"
-                  value={formData.latePenalty}
-                  onChange={handleInputChange}
-                  min="0"
-                  max="100"
-                  step="5"
-                  className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., 10"
-                />
-                <span className="ml-2 text-sm text-gray-600">% deducted per day late</span>
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Multimedia Attachments */}
         <div className="space-y-4">
@@ -506,7 +542,7 @@ const TeacherHomeworkCreation = ({
                 type="file"
                 multiple
                 accept="image/*"
-                onChange={(e) => handleFileUpload(e, 'image')}
+                onChange={(e) => handleFileChange(e, 'images')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -520,37 +556,48 @@ const TeacherHomeworkCreation = ({
                 type="file"
                 multiple
                 accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx"
-                onChange={(e) => handleFileUpload(e, 'document')}
+                onChange={(e) => handleFileChange(e, 'files')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
-            {/* Voice Message Attachments */}
+            {/* Voice Recording */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                🎤 Attach Voice Messages
+                🎤 Record Voice Messages
+              </label>
+              <VoiceRecorder
+                onRecordingComplete={handleVoiceRecordingComplete}
+                disabled={loading}
+              />
+            </div>
+
+            {/* Voice File Upload (Alternative) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                📁 Or Upload Voice Files
               </label>
               <input
                 type="file"
                 multiple
                 accept="audio/*"
-                onChange={(e) => handleFileUpload(e, 'audio')}
+                onChange={(e) => handleFileChange(e, 'voiceMessages')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Show Selected Files */}
-            {attachments.length > 0 && (
+            {(attachments.images.length > 0 || attachments.files.length > 0 || attachments.voiceMessages.length > 0) && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h5 className="font-medium text-blue-900 mb-3">Selected Files ({attachments.length})</h5>
+                <h5 className="font-medium text-blue-900 mb-3">
+                  Selected Files ({attachments.images.length + attachments.files.length + attachments.voiceMessages.length})
+                </h5>
                 <div className="space-y-2">
-                  {attachments.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
+                  {/* Images */}
+                  {attachments.images.map((file, index) => (
+                    <div key={`image-${index}`} className="flex items-center justify-between bg-white p-2 rounded border">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">
-                          {file.type.startsWith('image/') ? '🖼️' : 
-                           file.type.startsWith('audio/') ? '🎤' : '📄'}
-                        </span>
+                        <span className="text-lg">🖼️</span>
                         <div>
                           <div className="text-sm font-medium">{file.name}</div>
                           <div className="text-xs text-gray-500">
@@ -560,7 +607,51 @@ const TeacherHomeworkCreation = ({
                       </div>
                       <button
                         type="button"
-                        onClick={() => removeAttachment(index)}
+                        onClick={() => removeAttachment('images', index)}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Files */}
+                  {attachments.files.map((file, index) => (
+                    <div key={`file-${index}`} className="flex items-center justify-between bg-white p-2 rounded border">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">📄</span>
+                        <div>
+                          <div className="text-sm font-medium">{file.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment('files', index)}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Voice Messages */}
+                  {attachments.voiceMessages.map((file, index) => (
+                    <div key={`voice-${index}`} className="flex items-center justify-between bg-white p-2 rounded border">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🎤</span>
+                        <div>
+                          <div className="text-sm font-medium">{file.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment('voiceMessages', index)}
                         className="text-red-500 hover:text-red-700 text-sm"
                       >
                         Remove

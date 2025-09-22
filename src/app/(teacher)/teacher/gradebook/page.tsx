@@ -91,6 +91,7 @@ const TeacherGradebookPage = async () => {
             teacherSubjects={teacherSubjects}
             academicYears={academicYears}
             branches={branches}
+            teacherId={teacherId}
           />
         </Suspense>
       </div>

@@ -53,6 +53,7 @@ interface Branch {
 }
 
 interface TeacherAttendanceGridProps {
+  teacherId: string;
   teacherClasses: TeacherClass[];
   teacherSubjects: TeacherSubject[];
   academicYears: AcademicYear[];
@@ -61,6 +62,7 @@ interface TeacherAttendanceGridProps {
 }
 
 const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
+  teacherId,
   teacherClasses,
   teacherSubjects,
   academicYears,
@@ -79,6 +81,21 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [editStatus, setEditStatus] = useState<'present' | 'absent' | 'late' | 'excused'>('present');
   const [editNotes, setEditNotes] = useState('');
+  const [showTakeAttendanceModal, setShowTakeAttendanceModal] = useState(false);
+  const [showLessonSelectionModal, setShowLessonSelectionModal] = useState(false);
+  const [showAttendanceFormModal, setShowAttendanceFormModal] = useState(false);
+  const [selectedLessonBranch, setSelectedLessonBranch] = useState<string>('');
+  const [selectedLessonClass, setSelectedLessonClass] = useState<string>('');
+  const [selectedLessonSubject, setSelectedLessonSubject] = useState<string>('');
+  const [availableLessons, setAvailableLessons] = useState<any[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<any>(null);
+  const [lessonStudents, setLessonStudents] = useState<Student[]>([]);
+  const [lessonAttendanceData, setLessonAttendanceData] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused'>>({});
+  const [lessonAttendanceComments, setLessonAttendanceComments] = useState<Record<string, string>>({});
+  const [isLoadingLessons, setIsLoadingLessons] = useState(false);
+  const [isLoadingLessonStudents, setIsLoadingLessonStudents] = useState(false);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -213,6 +230,160 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
     }
   };
 
+  const fetchAvailableLessons = async () => {
+    if (!selectedLessonBranch || !selectedLessonClass || !selectedLessonSubject) return;
+
+    setIsLoadingLessons(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/teacher-timetables?date=${today}&classId=${selectedLessonClass}&subjectId=${selectedLessonSubject}&branchId=${selectedLessonBranch}`, {
+        headers: {
+          'x-user-id': teacherId,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const lessons = data.timetables || [];
+        console.log('Fetched lessons:', lessons);
+        if (lessons.length > 0) {
+          console.log('First lesson structure:', lessons[0]);
+          console.log('Room data in first lesson:', {
+            roomNumber: lessons[0].roomNumber,
+            buildingName: lessons[0].buildingName,
+            lessonNumber: lessons[0].lessonNumber
+          });
+        }
+        setAvailableLessons(lessons);
+        
+        // If there's only one lesson, auto-select it
+        if (lessons.length === 1) {
+          setSelectedLesson(lessons[0]);
+          fetchLessonStudents(lessons[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching available lessons:', error);
+    } finally {
+      setIsLoadingLessons(false);
+    }
+  };
+
+  const fetchLessonStudents = async (lesson?: any) => {
+    const targetLesson = lesson || selectedLesson;
+    if (!targetLesson) return;
+
+    setIsLoadingLessonStudents(true);
+    try {
+      const subjectId = targetLesson.subjects?.[0]?.id || targetLesson.subject?.id || selectedLessonSubject;
+      const classId = targetLesson.class?.id || selectedLessonClass;
+      
+      const response = await fetch(`/api/students?classId=${classId}&subjectId=${subjectId}`, {
+        headers: {
+          'x-user-id': teacherId,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const studentList = data.students || [];
+        setLessonStudents(studentList);
+
+    // Initialize attendance data for all students
+    const initialAttendance: Record<string, 'present' | 'absent' | 'late' | 'excused'> = {};
+        const initialComments: Record<string, string> = {};
+        
+        studentList.forEach((student: Student) => {
+      initialAttendance[student.id] = 'present';
+          initialComments[student.id] = '';
+        });
+
+        setLessonAttendanceData(initialAttendance);
+        setLessonAttendanceComments(initialComments);
+      }
+    } catch (error) {
+      console.error('Error fetching lesson students:', error);
+    } finally {
+      setIsLoadingLessonStudents(false);
+    }
+  };
+
+  const handleSaveLessonAttendance = async () => {
+    if (!selectedLesson || lessonStudents.length === 0) return;
+
+    setIsSavingAttendance(true);
+    try {
+      const subjectId = selectedLesson.subjects?.[0]?.id || selectedLesson.subject?.id || selectedLessonSubject;
+      const classId = selectedLesson.class?.id || selectedLessonClass;
+      const branchId = selectedLesson.branch?.id || selectedLesson.class?.branch?.id || selectedLessonBranch;
+      
+      const attendanceRecords = lessonStudents.map(student => ({
+        studentId: student.id,
+        status: lessonAttendanceData[student.id] || 'present',
+        notes: lessonAttendanceComments[student.id] || '',
+      }));
+
+      const response = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId,
+        },
+        body: JSON.stringify({
+          timetableId: selectedLesson.id,
+          classId: classId,
+          subjectId: subjectId,
+          date: new Date().toISOString().split('T')[0],
+          attendance: attendanceRecords,
+        }),
+      });
+
+      if (response.ok) {
+        // Show success message
+        alert('✅ Attendance saved successfully!');
+        
+        // Close modal and reset state
+        setShowAttendanceFormModal(false);
+        setShowLessonSelectionModal(false);
+        setSelectedLessonBranch('');
+        setSelectedLessonClass('');
+        setSelectedLessonSubject('');
+        setAvailableLessons([]);
+        setSelectedLesson(null);
+        setLessonStudents([]);
+        setLessonAttendanceData({});
+        setLessonAttendanceComments({});
+        setSearchTerm('');
+
+        // Refresh main attendance data
+        fetchAttendanceData();
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to save attendance:', errorData);
+        alert(`❌ Failed to save attendance: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+      alert('❌ Network error occurred while saving attendance. Please try again.');
+    } finally {
+      setIsSavingAttendance(false);
+    }
+  };
+
+  const handleLessonAttendanceChange = (studentId: string, status: 'present' | 'absent' | 'late' | 'excused') => {
+    setLessonAttendanceData(prev => ({
+      ...prev,
+      [studentId]: status
+    }));
+  };
+
+  const handleLessonCommentChange = (studentId: string, comment: string) => {
+    setLessonAttendanceComments(prev => ({
+      ...prev,
+      [studentId]: comment
+    }));
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -329,6 +500,28 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
             <ChevronRight className="w-4 h-4" />
           </motion.button>
         </div>
+      </motion.div>
+
+        {/* Take Attendance Button */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-gray-200/50"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+            <p className="text-sm text-gray-600">Take attendance for a specific lesson</p>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowLessonSelectionModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors shadow-sm"
+          >
+            <Users size={16} />
+            Take Attendance
+          </motion.button>
+          </div>
       </motion.div>
 
       {/* Content */}
@@ -554,6 +747,316 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                     className="flex-1 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"
                   >
                     Update
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Lesson Selection Modal */}
+      <AnimatePresence>
+        {showLessonSelectionModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">Select Lesson for Attendance</h3>
+                <button
+                  onClick={() => setShowLessonSelectionModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="space-y-6">
+                {/* Lesson Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Filter className="w-4 h-4 inline mr-1" />
+                      Branch
+                    </label>
+                    <select
+                      value={selectedLessonBranch}
+                      onChange={(e) => {
+                        setSelectedLessonBranch(e.target.value);
+                        setAvailableLessons([]);
+                        setSelectedLesson(null);
+                        setLessonStudents([]);
+                      }}
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value="">Select Branch</option>
+                      {branches.map(branch => (
+                        <option key={branch.id} value={branch.id}>{branch.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Users className="w-4 h-4 inline mr-1" />
+                      Class
+                    </label>
+                    <select
+                      value={selectedLessonClass}
+                      onChange={(e) => {
+                        setSelectedLessonClass(e.target.value);
+                        setAvailableLessons([]);
+                        setSelectedLesson(null);
+                        setLessonStudents([]);
+                      }}
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value="">Select Class</option>
+                      {teacherClasses.map(cls => (
+                        <option key={cls.id} value={cls.id}>{cls.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <BookOpen className="w-4 h-4 inline mr-1" />
+                      Subject
+                    </label>
+                    <select
+                      value={selectedLessonSubject}
+                      onChange={(e) => {
+                        setSelectedLessonSubject(e.target.value);
+                        setAvailableLessons([]);
+                        setSelectedLesson(null);
+                        setLessonStudents([]);
+                      }}
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value="">Select Subject</option>
+                      {teacherSubjects.map(subject => (
+                        <option key={subject.id} value={subject.id}>{subject.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Load Lessons Button */}
+                {selectedLessonBranch && selectedLessonClass && selectedLessonSubject && (
+                  <div className="text-center">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={fetchAvailableLessons}
+                      disabled={isLoadingLessons}
+                      className="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isLoadingLessons ? 'Loading Lessons...' : 'Load Today\'s Lessons'}
+                    </motion.button>
+                  </div>
+                )}
+
+                {/* Available Lessons */}
+                {availableLessons.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-lg font-semibold text-gray-900">Available Lessons for Today</h4>
+                    <div className="space-y-2">
+                      {availableLessons.map((lesson, index) => (
+                        <div
+                          key={index}
+                          onClick={() => {
+                            setSelectedLesson(lesson);
+                            setShowLessonSelectionModal(false);
+                            setShowAttendanceFormModal(true);
+                            fetchLessonStudents(lesson);
+                          }}
+                          className="p-4 border rounded-xl cursor-pointer transition-colors hover:border-green-300 hover:bg-green-50"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-gray-900">
+                                {lesson.class?.name || 'Unknown Class'} • {lesson.subjects?.[0]?.name || lesson.subject?.name || 'Unknown Subject'}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {lesson.branch?.shortName || lesson.class?.branch?.shortName || 'Unknown Branch'}{lesson.roomNumber || lesson.buildingName ? ` • ${lesson.roomNumber || lesson.buildingName}` : ''}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium text-gray-900">
+                                {lesson.startTime} - {lesson.endTime}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                Lesson {lesson.lessonNumber || 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowLessonSelectionModal(false)}
+                    className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Attendance Form Modal */}
+      <AnimatePresence>
+        {showAttendanceFormModal && selectedLesson && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-lg shadow-xl max-h-[70vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Take Attendance</h3>
+                <button
+                  onClick={() => {
+                    setShowAttendanceFormModal(false);
+                    setSelectedLesson(null);
+                    setLessonStudents([]);
+                    setLessonAttendanceData({});
+                    setLessonAttendanceComments({});
+                    setSearchTerm('');
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-green-900 mb-2">
+                    {selectedLesson.class?.name || 'Unknown Class'} • {selectedLesson.subjects?.[0]?.name || selectedLesson.subject?.name || 'Unknown Subject'}
+                  </h4>
+                  <p className="text-sm text-green-700">
+                    {selectedLesson.branch?.shortName || selectedLesson.class?.branch?.shortName || 'Unknown Branch'}{selectedLesson.roomNumber || selectedLesson.buildingName ? ` • ${selectedLesson.roomNumber || selectedLesson.buildingName}` : ''} • {selectedLesson.startTime} - {selectedLesson.endTime}
+                  </p>
+                </div>
+                
+                {/* Search Field */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Search Students</label>
+                  <input
+                    type="text"
+                    placeholder="Search by name or student ID..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-900">Student Attendance</h4>
+                  {isLoadingLessonStudents ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500 mx-auto"></div>
+                      <p className="text-sm text-gray-500 mt-2">Loading students...</p>
+                    </div>
+                  ) : lessonStudents.length > 0 ? (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {lessonStudents
+                        .filter(student => {
+                          if (!searchTerm) return true;
+                          const searchLower = searchTerm.toLowerCase();
+                          return (
+                            student.firstName.toLowerCase().includes(searchLower) ||
+                            student.lastName.toLowerCase().includes(searchLower) ||
+                            student.studentId.toLowerCase().includes(searchLower)
+                          );
+                        })
+                        .map((student) => (
+                        <div key={student.id} className="p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-sm font-medium text-green-700">
+                                  {student.firstName[0]}{student.lastName[0]}
+                                </span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {student.firstName} {student.lastName}
+                                </p>
+                                <p className="text-xs text-gray-500">ID: {student.studentId}</p>
+                              </div>
+                            </div>
+                            <select
+                              value={lessonAttendanceData[student.id] || 'present'}
+                              onChange={(e) => handleLessonAttendanceChange(student.id, e.target.value as any)}
+                              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent flex-shrink-0"
+                            >
+                              <option value="present">Present</option>
+                              <option value="absent">Absent</option>
+                              <option value="late">Late</option>
+                              <option value="excused">Excused</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-gray-600">Comment (optional)</label>
+                            <textarea
+                              placeholder="Add a comment about this student's attendance..."
+                              value={lessonAttendanceComments[student.id] || ''}
+                              onChange={(e) => handleLessonCommentChange(student.id, e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                              rows={2}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-500">No students found for this class</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowAttendanceFormModal(false);
+                      setSelectedLesson(null);
+                      setLessonStudents([]);
+                      setLessonAttendanceData({});
+                      setLessonAttendanceComments({});
+                      setSearchTerm('');
+                    }}
+                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveLessonAttendance}
+                    disabled={isSavingAttendance || lessonStudents.length === 0}
+                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSavingAttendance ? 'Saving...' : 'Save Attendance'}
                   </button>
                 </div>
               </div>

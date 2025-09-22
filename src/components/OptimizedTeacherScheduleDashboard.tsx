@@ -348,18 +348,23 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         const initialAttendance: Record<string, 'present' | 'absent' | 'late' | 'excused'> = {};
         const initialComments: Record<string, string> = {};
         const initialGrades: Record<string, number> = {};
+        const initialGradeComments: Record<string, string> = {};
         studentData.forEach((student: any) => {
           initialAttendance[student.id] = 'present';
-          // Preserve existing comments if any
-          initialComments[student.id] = commentsRef.current[student.id] || '';
+          // Initialize comments as empty strings for all students
+          initialComments[student.id] = '';
+          initialGradeComments[student.id] = '';
           initialGrades[student.id] = 0;
         });
         setAttendanceData(initialAttendance);
         setAttendanceComments(initialComments);
         setGradeData(initialGrades);
-        // Update the ref with the initial comments
+        setGradeComments(initialGradeComments);
+        // Initialize the ref with empty comments
         commentsRef.current = initialComments;
         console.log('OptimizedTeacherScheduleDashboard - Attendance data initialized:', initialAttendance);
+        console.log('OptimizedTeacherScheduleDashboard - Comments initialized:', initialComments);
+        console.log('OptimizedTeacherScheduleDashboard - Grade comments initialized:', initialGradeComments);
       } else {
         console.error('OptimizedTeacherScheduleDashboard - Failed to fetch students:', response.status);
       }
@@ -467,21 +472,37 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     console.log('OptimizedTeacherScheduleDashboard - selectedTimetable:', selectedTimetable);
     console.log('OptimizedTeacherScheduleDashboard - students:', students);
     console.log('OptimizedTeacherScheduleDashboard - attendanceData:', attendanceData);
-
+    console.log('OptimizedTeacherScheduleDashboard - attendanceComments BEFORE processing:', attendanceComments);
+    
     if (!selectedTimetable || students.length === 0) {
       console.log('OptimizedTeacherScheduleDashboard - Missing timetable or students');
       return;
     }
 
+    // Force refresh of comment state by getting current values
+    const currentComments = { ...attendanceComments };
+    console.log('OptimizedTeacherScheduleDashboard - Current comments after refresh:', currentComments);
+
+    // Debug: Check each student's comment
+    students.forEach(student => {
+      console.log(`Student ${student.id} (${student.firstName} ${student.lastName}): comment = "${currentComments[student.id]}"`);
+    });
+
     const attendanceArray = Object.entries(attendanceData)
       .filter(([studentId, status]) => studentId && status)
-      .map(([studentId, status]) => ({
-        studentId: studentId, // Keep as string
-        status: status.toUpperCase(),
-        notes: attendanceComments[studentId] || ''
-      }));
+      .map(([studentId, status]) => {
+        const comment = currentComments[studentId] || '';
+        console.log(`Processing student ${studentId}: status=${status}, comment="${comment}"`);
+        return {
+          studentId: studentId, // Keep as string
+          status: status.toUpperCase(),
+          notes: comment
+        };
+      });
 
     console.log('OptimizedTeacherScheduleDashboard - Processed attendance array:', attendanceArray);
+    console.log('OptimizedTeacherScheduleDashboard - Attendance comments state:', attendanceComments);
+    console.log('OptimizedTeacherScheduleDashboard - Students:', students.map(s => ({ id: s.id, name: `${s.firstName} ${s.lastName}` })));
 
     try {
       const response = await fetch('/api/attendance', {
@@ -515,11 +536,23 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
       console.error('OptimizedTeacherScheduleDashboard - Error saving attendance:', error);
       alert(`💥 Error saving attendance: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }, [selectedTimetable, students, attendanceData, teacherId]);
+  }, [selectedTimetable, students, attendanceData, attendanceComments, teacherId]);
 
   // Save grades handler
   const handleSaveGrades = useCallback(async () => {
     if (!selectedTimetable || students.length === 0) return;
+    
+    console.log('OptimizedTeacherScheduleDashboard - handleSaveGrades called');
+    console.log('OptimizedTeacherScheduleDashboard - gradeComments BEFORE processing:', gradeComments);
+    
+    // Force refresh of comment state by getting current values
+    const currentGradeComments = { ...gradeComments };
+    console.log('OptimizedTeacherScheduleDashboard - Current grade comments after refresh:', currentGradeComments);
+    
+    // Debug: Check each student's comment
+    students.forEach(student => {
+      console.log(`Student ${student.id} (${student.firstName} ${student.lastName}): grade comment = "${currentGradeComments[student.id]}"`);
+    });
     
     const requestData = {
       timetableId: selectedTimetable.id,
@@ -532,16 +565,21 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           console.log(`Filtering student ${studentId}: points=${points}, type=${typeof points}, isValid=${isValid}`);
           return isValid;
         })
-        .map(([studentId, points]) => ({
-          studentId: studentId,
-          points: points,
-          comments: gradeComments[studentId] || ''
-        }))
+        .map(([studentId, points]) => {
+          const comment = currentGradeComments[studentId] || '';
+          console.log(`Processing grade for student ${studentId}: points=${points}, comment="${comment}"`);
+          return {
+            studentId: studentId,
+            points: points,
+            comments: comment
+          };
+        })
     };
     
     console.log("Sending grades data:", requestData);
     console.log("Grade data state:", gradeData);
     console.log("Grade data entries:", Object.entries(gradeData));
+    console.log("Grade comments state:", gradeComments);
     console.log("Students data:", students);
     console.log("Student IDs from students:", students.map(s => s.id));
     console.log("Student IDs from gradeData keys:", Object.keys(gradeData));
@@ -582,7 +620,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     } catch (error) {
       console.error('Error saving grades:', error);
     }
-  }, [selectedTimetable, students, gradeData, teacherId]);
+  }, [selectedTimetable, students, gradeData, gradeComments, teacherId]);
 
   const currentAssignments = useMemoizedSelector(
     teacherData.TeacherAssignment,
@@ -1138,10 +1176,13 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                             <textarea
                               value={gradeComments[student.id] || ''}
                               onChange={(e) => {
+                                const newValue = e.target.value;
+                                console.log(`OptimizedTeacherScheduleDashboard - Updating grade comment for student ${student.id}: "${newValue}"`);
                                 const newComments = {
                                   ...gradeComments,
-                                  [student.id]: e.target.value
+                                  [student.id]: newValue
                                 };
+                                console.log('OptimizedTeacherScheduleDashboard - Updated grade comments state:', newComments);
                                 setGradeComments(newComments);
                               }}
                               placeholder="Add comments about this student's performance..."
@@ -1285,10 +1326,15 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                               value={attendanceComments[student.id] || ''}
                               onChange={(e) => {
                                 const newValue = e.target.value;
-                                setAttendanceComments(prev => ({
-                                  ...prev,
-                                  [student.id]: newValue
-                                }));
+                                console.log(`OptimizedTeacherScheduleDashboard - Updating attendance comment for student ${student.id}: "${newValue}"`);
+                                setAttendanceComments(prev => {
+                                  const updated = {
+                                    ...prev,
+                                    [student.id]: newValue
+                                  };
+                                  console.log('OptimizedTeacherScheduleDashboard - Updated attendance comments state:', updated);
+                                  return updated;
+                                });
                                 // Also update the ref to preserve comments
                                 commentsRef.current[student.id] = newValue;
                               }}

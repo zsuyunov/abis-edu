@@ -67,6 +67,8 @@ export async function POST(request: NextRequest) {
     // Save grade records
     const gradeRecords = await Promise.all(
       validGrades.map(async (record: { studentId: string; points: number; comments?: string }) => {
+        console.log(`💾 Processing grade record for student ${record.studentId}:`, record);
+        console.log(`💾 Grade comments: "${record.comments}"`);
         try {
           // First, try to find existing record
           const existing = await prisma.grade.findFirst({
@@ -74,7 +76,8 @@ export async function POST(request: NextRequest) {
               studentId: record.studentId,
               classId: parseInt(classId),
               subjectId: parseInt(subjectId),
-              date: new Date(date)
+              date: new Date(date),
+              timetableId: parseInt(timetableId)
             }
           });
 
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest) {
               data: {
                 value: record.points,
                 description: record.comments || null,
+                timetableId: parseInt(timetableId),
                 updatedAt: new Date()
               }
             });

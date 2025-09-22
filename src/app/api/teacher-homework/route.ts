@@ -409,7 +409,7 @@ export async function POST(request: NextRequest) {
         timetableId: formData.get('timetableId') as string,
         classId: parseInt(formData.get('classId') as string),
         subjectId: parseInt(formData.get('subjectId') as string),
-        academicYearId: parseInt(formData.get('academicYearId') as string),
+        academicYearId: formData.get('academicYearId') ? parseInt(formData.get('academicYearId') as string) : undefined,
         branchId: parseInt(formData.get('branchId') as string),
       };
 
@@ -427,6 +427,29 @@ export async function POST(request: NextRequest) {
     } else {
       // Handle JSON request (backward compatibility)
       body = await request.json();
+      
+      // Process attachments from JSON request
+      if (body.attachments && Array.isArray(body.attachments)) {
+        console.log('Processing attachments from JSON request:', body.attachments.length);
+        
+        // Convert attachment URLs to File objects for processing
+        for (const attachment of body.attachments) {
+          if (attachment.url && attachment.fileName) {
+            try {
+              // Fetch the file from the URL
+              const response = await fetch(attachment.url);
+              if (response.ok) {
+                const blob = await response.blob();
+                const file = new File([blob], attachment.fileName, { type: attachment.mimeType || 'application/octet-stream' });
+                attachmentFiles.push(file);
+                console.log('Converted attachment URL to File:', attachment.fileName);
+              }
+            } catch (error) {
+              console.error('Error fetching attachment:', error);
+            }
+          }
+        }
+      }
     }
     
     // Verify teacher exists
@@ -438,25 +461,162 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
     }
 
-    // Create start and due dates from separate date and time fields
-    const startDateTime = new Date(`${body.startDate}T${body.startTime}`);
-    const dueDateTime = new Date(`${body.submissionDate}T${body.submissionTime}`);
+    // Debug the received date values
+    console.log('Received date values:', {
+      startDate: body.startDate || body.assignedDate,
+      startTime: body.startTime || body.assignedTime,
+      submissionDate: body.submissionDate || body.dueDate,
+      submissionTime: body.submissionTime || body.dueTime
+    });
+
+    // Create start and due dates from separate date and time fields with validation
+    const today = new Date();
+    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    // Support both old and new field names
+    const startDate = body.startDate || body.assignedDate;
+    const startTime = body.startTime || body.assignedTime;
+    const submissionDate = body.submissionDate || body.dueDate;
+    const submissionTime = body.submissionTime || body.dueTime;
+    
+    // Helper function to extract date part from ISO string or use as-is
+    const extractDatePart = (dateStr: string) => {
+      if (!dateStr || dateStr === "") return null;
+      // If it's already a date string (YYYY-MM-DD), return as-is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+      }
+      // If it's an ISO string, extract the date part
+      if (dateStr.includes('T')) {
+        return dateStr.split('T')[0];
+      }
+      return dateStr;
+    };
+    
+    // Helper function to extract time part from ISO string or use as-is
+    const extractTimePart = (timeStr: string) => {
+      if (!timeStr || timeStr === "") return null;
+      // If it's already a time string (HH:MM), return as-is
+      if (/^\d{2}:\d{2}$/.test(timeStr)) {
+        return timeStr;
+      }
+      // If it's an ISO string, extract the time part
+      if (timeStr.includes('T')) {
+        const timePart = timeStr.split('T')[1];
+        return timePart ? timePart.substring(0, 5) : null; // Extract HH:MM
+      }
+      return timeStr;
+    };
+    
+    // Extract date and time parts properly
+    const startDateValue = extractDatePart(startDate) || today.toISOString().split('T')[0];
+    const submissionDateValue = extractDatePart(submissionDate) || nextWeek.toISOString().split('T')[0];
+    const startTimeValue = extractTimePart(startTime) || "09:00";
+    const submissionTimeValue = extractTimePart(submissionTime) || "23:59";
+    
+    console.log('Extracted date/time parts:', {
+      startDate: startDate,
+      startTime: startTime,
+      submissionDate: submissionDate,
+      submissionTime: submissionTime,
+      startDateValue,
+      startTimeValue,
+      submissionDateValue,
+      submissionTimeValue
+    });
+    
+    // Create date strings with proper format
+    const startDateTimeStr = `${startDateValue}T${startTimeValue}:00`;
+    const dueDateTimeStr = `${submissionDateValue}T${submissionTimeValue}:00`;
+    
+    console.log('Constructed date strings:', {
+      startDateTimeStr,
+      dueDateTimeStr
+    });
+    
+    const startDateTime = new Date(startDateTimeStr);
+    const dueDateTime = new Date(dueDateTimeStr);
+    
+    // Validate the created dates
+    if (isNaN(startDateTime.getTime())) {
+      console.error('Invalid start date created:', startDateTimeStr);
+      return NextResponse.json({ error: "Invalid start date provided" }, { status: 400 });
+    }
+    
+    if (isNaN(dueDateTime.getTime())) {
+      console.error('Invalid due date created:', dueDateTimeStr);
+      return NextResponse.json({ error: "Invalid due date provided" }, { status: 400 });
+    }
+    
+    console.log('Valid dates created:', {
+      startDateTime: startDateTime.toISOString(),
+      dueDateTime: dueDateTime.toISOString()
+    });
+
+    // Get the academic year from the class that the homework is being assigned to
+    const targetClass = await prisma.class.findUnique({
+      where: { id: body.classId },
+      select: { academicYearId: true }
+    });
+
+    let academicYearId = 1; // Default fallback
+
+    if (targetClass) {
+      // Use the academic year from the target class
+      academicYearId = targetClass.academicYearId;
+      console.log('Using academic year from target class:', academicYearId);
+    } else {
+      // Fallback: Get the current academic year
+      const currentAcademicYear = await prisma.academicYear.findFirst({
+        where: {
+          isCurrent: true,
+          status: 'ACTIVE'
+        },
+        orderBy: {
+          startDate: 'desc'
+        }
+      });
+
+      if (currentAcademicYear) {
+        academicYearId = currentAcademicYear.id;
+        console.log('Using current academic year:', academicYearId);
+      } else {
+        // Last resort: Get the latest active academic year
+        const latestActiveYear = await prisma.academicYear.findFirst({
+          where: {
+            status: 'ACTIVE'
+          },
+          orderBy: {
+            startDate: 'desc'
+          }
+        });
+
+        if (latestActiveYear) {
+          academicYearId = latestActiveYear.id;
+          console.log('Using latest active academic year:', academicYearId);
+        } else {
+          console.error('No academic year found, using default fallback:', academicYearId);
+        }
+      }
+    }
+
+    console.log('Final academic year ID to use:', academicYearId);
 
     // Create homework with new structure
     const homework = await prisma.homework.create({
       data: {
         title: body.title,
         description: body.description,
-        instructions: body.description, // Use description as instructions for now
+        instructions: body.instructions || body.description, // Use instructions if available, fallback to description
         assignedDate: startDateTime,
         dueDate: dueDateTime,
         status: 'ACTIVE',
-        totalPoints: body.fullMark,
-        passingGrade: body.passingMark,
+        totalPoints: body.totalPoints || body.fullMark, // Support both field names
+        passingGrade: body.passingPoints || body.passingMark, // Support both field names
         allowLateSubmission: body.allowLateSubmission,
         latePenalty: body.latePenalty,
         branchId: body.branchId,
-        academicYearId: body.academicYearId,
+        academicYearId: academicYearId,
         classId: body.classId,
         subjectId: body.subjectId,
         teacherId: authenticatedUserId || "",
@@ -470,11 +630,16 @@ export async function POST(request: NextRequest) {
     });
 
     // Handle file attachments if provided
+    console.log('Processing attachments:', {
+      attachmentCount: attachmentFiles.length,
+      attachmentFiles: attachmentFiles.map(f => ({ name: f.name, size: f.size, type: f.type }))
+    });
+    
     if (attachmentFiles.length > 0) {
       // Create a simple file storage directory (in production, use cloud storage)
       const fs = require('fs');
       const path = require('path');
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'homework');
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'homework', homework.id.toString());
       
       // Ensure upload directory exists
       if (!fs.existsSync(uploadDir)) {
@@ -495,7 +660,7 @@ export async function POST(request: NextRequest) {
         // Determine file type
         let fileType = 'DOCUMENT';
         if (file.type.startsWith('image/')) fileType = 'IMAGE';
-        else if (file.type.startsWith('audio/')) fileType = 'VOICE';
+        else if (file.type.startsWith('audio/')) fileType = 'AUDIO';
         
         // Create attachment record
         await prisma.homeworkAttachment.create({
@@ -504,13 +669,17 @@ export async function POST(request: NextRequest) {
             fileName: fileName,
             originalName: file.name,
             fileType: fileType as any,
-            filePath: `/uploads/homework/${fileName}`,
-            fileUrl: `/uploads/homework/${fileName}`,
+            filePath: `/uploads/homework/${homework.id}/${fileName}`,
+            fileUrl: `/uploads/homework/${homework.id}/${fileName}`,
             fileSize: file.size,
             mimeType: file.type,
           },
         });
       }
+      
+      console.log('Attachments processed successfully:', attachmentFiles.length);
+    } else {
+      console.log('No attachments to process');
     }
 
     // Create submission records for all students in the class

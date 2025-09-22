@@ -42,8 +42,32 @@ export async function POST(request: NextRequest) {
     const subjectId = parseInt(formData.get('subjectId') as string);
     const branchId = parseInt(formData.get('branchId') as string);
 
+    // Debug the received date values
+    console.log('Received date values:', {
+      assignedDate,
+      dueDate
+    });
+
+    // Validate and fix date values
+    const today = new Date();
+    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    // Validate assignedDate
+    let validAssignedDate = assignedDate;
+    if (!assignedDate || assignedDate === "" || assignedDate === "Invalid Date") {
+      validAssignedDate = today.toISOString().split('T')[0];
+      console.log('Assigned date was invalid, using fallback:', validAssignedDate);
+    }
+    
+    // Validate dueDate
+    let validDueDate = dueDate;
+    if (!dueDate || dueDate === "" || dueDate === "Invalid Date") {
+      validDueDate = nextWeek.toISOString().split('T')[0];
+      console.log('Due date was invalid, using fallback:', validDueDate);
+    }
+
     // Validate required fields
-    if (!title || !dueDate || !classId || !subjectId || !branchId) {
+    if (!title || !validDueDate || !classId || !subjectId || !branchId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -61,8 +85,8 @@ export async function POST(request: NextRequest) {
       title,
       description,
       instructions,
-      assignedDate: new Date(assignedDate),
-      dueDate: new Date(dueDate),
+      assignedDate: new Date(validAssignedDate),
+      dueDate: new Date(validDueDate),
       branchId,
       classId,
       subjectId,
@@ -123,13 +147,27 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating homework with academicYearId:', academicYearId, 'branchId:', branchId);
 
+    // Validate the created dates before creating homework
+    const assignedDateTime = new Date(validAssignedDate);
+    const dueDateTime = new Date(validDueDate);
+    
+    if (isNaN(assignedDateTime.getTime())) {
+      console.error('Invalid assigned date created:', validAssignedDate);
+      return NextResponse.json({ error: "Invalid assigned date provided" }, { status: 400 });
+    }
+    
+    if (isNaN(dueDateTime.getTime())) {
+      console.error('Invalid due date created:', validDueDate);
+      return NextResponse.json({ error: "Invalid due date provided" }, { status: 400 });
+    }
+
     const homework = await prisma.homework.create({
       data: {
         title,
         description: description || null,
         instructions: instructions || null,
-        assignedDate: new Date(assignedDate),
-        dueDate: new Date(dueDate),
+        assignedDate: assignedDateTime,
+        dueDate: dueDateTime,
         status: 'ACTIVE',
         totalPoints: totalPoints || null,
         passingGrade: passingPoints || null,

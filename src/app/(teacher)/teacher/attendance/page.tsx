@@ -79,6 +79,7 @@ const TeacherAttendancePage = async () => {
         </div>
       }>
         <TeacherAttendancePageClient 
+          teacherId={teacherId}
           teacherClasses={teacherClasses}
           teacherSubjects={teacherSubjects}
           academicYears={academicYears}

@@ -28,13 +28,15 @@ interface TeacherGradePageClientProps {
   teacherSubjects: TeacherSubject[];
   academicYears: AcademicYear[];
   branches: Branch[];
+  teacherId: string;
 }
 
 const TeacherGradePageClient: React.FC<TeacherGradePageClientProps> = ({
   teacherClasses,
   teacherSubjects,
   academicYears,
-  branches
+  branches,
+  teacherId
 }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -72,6 +74,7 @@ const TeacherGradePageClient: React.FC<TeacherGradePageClientProps> = ({
           academicYears={academicYears}
           branches={branches}
           refreshTrigger={refreshTrigger}
+          teacherId={teacherId}
         />
       </div>
     </div>
