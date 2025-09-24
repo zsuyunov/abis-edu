@@ -21,8 +21,8 @@ const SubjectTeachersModal = ({
       </button>
       {open && (
         <div className="w-screen h-screen absolute left-0 top-0 bg-black bg-opacity-60 z-50 flex items-center justify-center">
-          <div className="bg-white p-4 rounded-md relative w-[90%] md:w-[70%] lg:w-[60%] xl:w-[50%] 2xl:w-[40%]">
-            <div className="p-4 flex flex-col gap-4 max-w-md">
+          <div className="bg-white p-4 rounded-md relative w-[95%] md:w-[80%] lg:w-[70%] xl:w-[60%] 2xl:w-[50%]">
+            <div className="p-4 flex flex-col gap-4 max-w-4xl">
               <span className="text-xl font-medium">
                 Teachers for {subject.name}
               </span>
@@ -37,9 +37,11 @@ const SubjectTeachersModal = ({
                   <div className="max-h-60 overflow-y-auto">
                     {subject.TeacherAssignment.map((assignment: any) => {
                       const teacher = assignment.Teacher;
+                      const branch = assignment.Branch;
+                      const classInfo = assignment.Class;
                       return (
                       <div 
-                        key={teacher.id} 
+                        key={`${teacher.id}-${assignment.Branch?.id}-${assignment.Class?.id}`} 
                         className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50"
                       >
                         <Image
@@ -49,13 +51,34 @@ const SubjectTeachersModal = ({
                           height={32}
                           className="w-8 h-8 rounded-full object-cover"
                         />
-                        <div className="flex flex-col">
+                        <div className="flex flex-col flex-1">
                           <span className="font-medium text-sm">
                             {teacher.firstName} {teacher.lastName}
                           </span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-500 mb-1">
                             {teacher.teacherId}
                           </span>
+                          {branch && (
+                            <div className="flex items-center gap-1 mb-1">
+                              <span className="text-xs text-gray-600 font-medium">Branch:</span>
+                              <span className="text-xs text-gray-700">
+                                {branch.shortName} - {branch.district}
+                              </span>
+                            </div>
+                          )}
+                          {classInfo && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-gray-600 font-medium">Class:</span>
+                              <span className="text-xs text-gray-700">
+                                {classInfo.name}
+                                {classInfo.academicYear && (
+                                  <span className="text-xs text-gray-500 ml-1">
+                                    ({classInfo.academicYear.name}{classInfo.academicYear.isCurrent && " - Current"})
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="ml-auto">
                           <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">

@@ -513,14 +513,14 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
             <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
             <p className="text-sm text-gray-600">Take attendance for a specific lesson</p>
           </div>
-          <motion.button
-            whileTap={{ scale: 0.95 }}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
             onClick={() => setShowLessonSelectionModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors shadow-sm"
-          >
+            >
             <Users size={16} />
-            Take Attendance
-          </motion.button>
+              Take Attendance
+            </motion.button>
           </div>
       </motion.div>
 
@@ -779,7 +779,7 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                   ✕
                 </button>
               </div>
-              
+
               <div className="space-y-6">
                 {/* Lesson Selection */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -906,12 +906,12 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
 
                 {/* Action Buttons */}
                 <div className="flex gap-3 pt-4 border-t border-gray-200">
-                  <button
+                <button
                     onClick={() => setShowLessonSelectionModal(false)}
                     className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-                  >
+                >
                     Cancel
-                  </button>
+                </button>
                 </div>
               </div>
             </motion.div>
@@ -958,8 +958,8 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                   <p className="text-sm text-green-700">
                     {selectedLesson.branch?.shortName || selectedLesson.class?.branch?.shortName || 'Unknown Branch'}{selectedLesson.roomNumber || selectedLesson.buildingName ? ` • ${selectedLesson.roomNumber || selectedLesson.buildingName}` : ''} • {selectedLesson.startTime} - {selectedLesson.endTime}
                   </p>
-                </div>
-                
+              </div>
+
                 {/* Search Field */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">Search Students</label>
@@ -980,7 +980,7 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                       <p className="text-sm text-gray-500 mt-2">Loading students...</p>
                     </div>
                   ) : lessonStudents.length > 0 ? (
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
                       {lessonStudents
                         .filter(student => {
                           if (!searchTerm) return true;
@@ -1002,22 +1002,22 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium text-gray-900 truncate">
-                                  {student.firstName} {student.lastName}
+                        {student.firstName} {student.lastName}
                                 </p>
                                 <p className="text-xs text-gray-500">ID: {student.studentId}</p>
-                              </div>
+                    </div>
                             </div>
-                            <select
+                      <select
                               value={lessonAttendanceData[student.id] || 'present'}
                               onChange={(e) => handleLessonAttendanceChange(student.id, e.target.value as any)}
                               className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent flex-shrink-0"
-                            >
-                              <option value="present">Present</option>
-                              <option value="absent">Absent</option>
-                              <option value="late">Late</option>
-                              <option value="excused">Excused</option>
-                            </select>
-                          </div>
+                      >
+                        <option value="present">Present</option>
+                        <option value="absent">Absent</option>
+                        <option value="late">Late</option>
+                        <option value="excused">Excused</option>
+                      </select>
+                    </div>
                           <div className="space-y-1">
                             <label className="text-xs font-medium text-gray-600">Comment (optional)</label>
                             <textarea
@@ -1026,11 +1026,11 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                               onChange={(e) => handleLessonCommentChange(student.id, e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                               rows={2}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                      />
                     </div>
+                  </div>
+                ))}
+              </div>
                   ) : (
                     <div className="text-center py-4">
                       <p className="text-sm text-gray-500">No students found for this class</p>
@@ -1038,7 +1038,7 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                   )}
                 </div>
                 <div className="flex gap-3 pt-4">
-                  <button
+                <button
                     onClick={() => {
                       setShowAttendanceFormModal(false);
                       setSelectedLesson(null);
@@ -1047,17 +1047,17 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                       setLessonAttendanceComments({});
                       setSearchTerm('');
                     }}
-                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
                     onClick={handleSaveLessonAttendance}
                     disabled={isSavingAttendance || lessonStudents.length === 0}
                     className="flex-1 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
+                >
                     {isSavingAttendance ? 'Saving...' : 'Save Attendance'}
-                  </button>
+                </button>
                 </div>
               </div>
             </motion.div>

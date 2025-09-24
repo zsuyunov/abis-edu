@@ -18,7 +18,22 @@ type SubjectList = Subject & {
       firstName: string;
       lastName: string;
       teacherId: string;
-    }
+    };
+    Branch: {
+      id: number;
+      shortName: string;
+      district: string;
+    };
+    Class: {
+      id: number;
+      name: string;
+      academicYear: {
+        id: number;
+        name: string;
+        isCurrent: boolean;
+      };
+    };
+    role: string;
   }>
 };
 
@@ -144,7 +159,7 @@ const SubjectListPage = async ({
   const [data, count] = await prisma.$transaction([
     prisma.subject.findMany({
       where: query,
-            include: {
+      include: {
         TeacherAssignment: {
           include: {
             Teacher: {
@@ -153,6 +168,26 @@ const SubjectListPage = async ({
                 firstName: true,
                 lastName: true,
                 teacherId: true
+              }
+            },
+            Branch: {
+              select: {
+                id: true,
+                shortName: true,
+                district: true
+              }
+            },
+            Class: {
+              select: {
+                id: true,
+                name: true,
+                academicYear: {
+                  select: {
+                    id: true,
+                    name: true,
+                    isCurrent: true
+                  }
+                }
               }
             }
           }

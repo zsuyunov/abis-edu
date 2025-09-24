@@ -15,47 +15,11 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    // Build where clause
-    const where: any = {};
-
-    if (search) {
-      where.OR = [
-        {
-          student: {
-            firstName: { contains: search, mode: "insensitive" }
-          }
-        },
-        {
-          student: {
-            lastName: { contains: search, mode: "insensitive" }
-          }
-        },
-        {
-          student: {
-            studentId: { contains: search, mode: "insensitive" }
-          }
-        }
-      ];
-    }
-
-    if (branchId) {
-      where.branchId = parseInt(branchId);
-    }
-
-    if (academicYearId) {
-      where.academicYearId = parseInt(academicYearId);
-    }
-
-    if (classId) {
-      where.classId = parseInt(classId);
-    }
-
-    if (status) {
-      where.status = status;
-    }
-
     // Build student where clause
     const studentWhere: any = {};
+    
+    // Only get students that are assigned (have classId)
+    studentWhere.classId = { not: null };
     
     if (search) {
       studentWhere.OR = [
@@ -77,13 +41,31 @@ export async function GET(request: NextRequest) {
       studentWhere.status = status;
     }
 
-    // Only get students that are assigned (have classId)
-    studentWhere.classId = { not: null };
+    // Build class where clause for academic year filtering
+    const classWhere: any = {};
+    if (academicYearId) {
+      classWhere.academicYearId = parseInt(academicYearId);
+    }
+
+    console.log("🔍 Student Assignments API Filters:", {
+      branchId,
+      academicYearId,
+      classId,
+      status,
+      studentWhere,
+      classWhere
+    });
 
     // Fetch assigned students with relations
     const [assignments, totalCount] = await Promise.all([
       prisma.student.findMany({
-        where: studentWhere,
+        where: {
+          ...studentWhere,
+          // Add class filtering for academic year
+          ...(Object.keys(classWhere).length > 0 && {
+            class: classWhere
+          })
+        },
         include: {
           class: {
             select: {
@@ -110,7 +92,15 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
       }),
-      prisma.student.count({ where: studentWhere })
+      prisma.student.count({ 
+        where: {
+          ...studentWhere,
+          // Add class filtering for academic year
+          ...(Object.keys(classWhere).length > 0 && {
+            class: classWhere
+          })
+        }
+      })
     ]);
 
     return NextResponse.json({
