@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const [adminCount, teacherCount, studentCount, parentCount] = await Promise.all([
       prisma.admin.count(),
       prisma.teacher.count(),
-      prisma.student.count(),
+      prisma.student.count({ where: { status: 'ACTIVE' } }), // Only count active students
       prisma.parent.count(),
     ]);
 
@@ -50,12 +50,9 @@ export async function GET(request: NextRequest) {
       data: stats,
     });
 
-            // ULTRA AGGRESSIVE CACHING FOR INSTANT RESPONSES
-        response.headers.set('Cache-Control', 'public, s-maxage=86400, max-age=86400, immutable');
-        response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400');
-        response.headers.set('Vercel-CDN-Cache-Control', 'public, s-maxage=86400');
-        response.headers.set('Pragma', 'cache');
-        response.headers.set('Expires', new Date(Date.now() + 86400000).toUTCString());
+            // Light caching for better performance (5 minutes)
+        response.headers.set('Cache-Control', 'public, s-maxage=300, max-age=300');
+        response.headers.set('CDN-Cache-Control', 'public, s-maxage=300');
     
     return response;
   } catch (error) {

@@ -33,20 +33,22 @@ export async function GET(request: NextRequest) {
       return 0;
     });
     
-    const totalStudents = await prisma.student.count().catch(e => {
+    const totalStudents = await prisma.student.count({ 
+      where: { status: 'ACTIVE' } 
+    }).catch(e => {
       console.error("Student count error:", e);
       return 0;
     });
     
     const maleStudents = await prisma.student.count({ 
-      where: { gender: 'MALE' } 
+      where: { gender: 'MALE', status: 'ACTIVE' } 
     }).catch(e => {
       console.error("Male student count error:", e);
       return 0;
     });
     
     const femaleStudents = await prisma.student.count({ 
-      where: { gender: 'FEMALE' } 
+      where: { gender: 'FEMALE', status: 'ACTIVE' } 
     }).catch(e => {
       console.error("Female student count error:", e);
       return 0;
