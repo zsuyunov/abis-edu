@@ -3608,8 +3608,26 @@ export const createTeacher = async (
     // Hash the password
     const hashedPassword = await AuthService.hashPassword(data.password);
 
-    // Generate a unique teacher ID in format T + 5 digits
-    const teacherId = await generateUniqueTeacherId();
+    // Use the provided teacher ID from the form, or generate one if not provided
+    let teacherId = data.teacherId;
+    if (!teacherId) {
+      teacherId = await generateUniqueTeacherId();
+    }
+
+    // Check if the provided teacher ID is already taken
+    if (data.teacherId) {
+      const existingTeacherById = await prisma.teacher.findFirst({
+        where: { teacherId: data.teacherId }
+      });
+      
+      if (existingTeacherById) {
+        return {
+          success: false,
+          error: true,
+          message: "This Teacher ID is already taken. Please use a different ID."
+        };
+      }
+    }
 
     // Prepare teacher data
     const teacherData = {
@@ -3619,7 +3637,7 @@ export const createTeacher = async (
       gender: data.gender,
       dateOfBirth: data.dateOfBirth || new Date('1990-01-01'), // Provide default date if none provided
       phone: data.phone,
-      teacherId: teacherId, // Use the generated teacherId
+      teacherId: teacherId, // Use the provided or generated teacherId
       password: hashedPassword,
       email: data.email || null,
       address: data.address || "",

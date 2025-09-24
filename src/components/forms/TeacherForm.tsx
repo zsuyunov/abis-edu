@@ -37,6 +37,7 @@ const TeacherForm = ({
     handleSubmit,
     formState: { errors, isValid, isDirty },
     watch,
+    setValue,
   } = useForm<TeacherSchema | TeacherUpdateSchema>({
     resolver: zodResolver(type === "update" ? teacherUpdateSchema : teacherSchema),
     mode: "onSubmit", // Only validate on submit
@@ -87,6 +88,7 @@ const TeacherForm = ({
   const [isCheckingId, setIsCheckingId] = useState(false);
   const [isGeneratingId, setIsGeneratingId] = useState(false);
   const [generatedTeacherId, setGeneratedTeacherId] = useState<string>("");
+  const [currentTeacherId, setCurrentTeacherId] = useState<string>(data?.teacherId || "");
 
   // Teacher ID validation function
   const validateTeacherId = async (teacherId: string) => {
@@ -148,13 +150,11 @@ const TeacherForm = ({
       
       if (data.success) {
         setGeneratedTeacherId(data.teacherId);
-        // Update the form field value
-        const teacherIdInput = document.querySelector('input[name="teacherId"]') as HTMLInputElement;
-        if (teacherIdInput) {
-          teacherIdInput.value = data.teacherId;
-          // Trigger validation
-          validateTeacherId(data.teacherId);
-        }
+        setCurrentTeacherId(data.teacherId);
+        // Update the form field value using setValue from react-hook-form
+        setValue("teacherId", data.teacherId);
+        // Trigger validation
+        validateTeacherId(data.teacherId);
         toast.success(`Generated Teacher ID: ${data.teacherId}`);
       } else {
         setTeacherIdError(data.error || "Failed to generate Teacher ID");
@@ -182,6 +182,13 @@ const TeacherForm = ({
 
     return () => clearTimeout(timer);
   }, [watch("teacherId")]);
+
+  // Clear error when teacher ID changes
+  useEffect(() => {
+    if (currentTeacherId && teacherIdError) {
+      setTeacherIdError("");
+    }
+  }, [currentTeacherId]);
 
 
 
@@ -295,7 +302,11 @@ const TeacherForm = ({
               {...register("teacherId")}
               className="ring-[1.5px] ring-gray-300 p-2 pr-10 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
               placeholder="T12345"
-              defaultValue={data?.teacherId || generatedTeacherId || ""}
+              value={currentTeacherId}
+              onChange={(e) => {
+                setCurrentTeacherId(e.target.value);
+                setValue("teacherId", e.target.value);
+              }}
             />
             {type === "create" && (
               <button

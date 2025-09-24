@@ -6,10 +6,28 @@ export async function GET(request: NextRequest) {
     // Generate a unique teacher ID in format T + 5 digits
     let teacherId: string;
     let counter = 1;
+    const usedIds = new Set<string>();
     
     while (true) {
-      const randomDigits = Math.floor(Math.random() * 90000) + 10000; // 5 digits
+      // Use timestamp and random to ensure different IDs each time
+      const timestamp = Date.now().toString().slice(-3); // Last 3 digits of timestamp
+      const random = Math.floor(Math.random() * 100); // 2 random digits
+      const randomDigits = parseInt(timestamp + random.toString().padStart(2, '0')).toString().padStart(5, '0').slice(-5);
       teacherId = `T${randomDigits}`;
+      
+      // Check if we've already tried this ID in this session
+      if (usedIds.has(teacherId)) {
+        counter++;
+        if (counter > 999) {
+          return NextResponse.json({
+            success: false,
+            error: "Could not generate unique teacher ID after 999 attempts"
+          }, { status: 500 });
+        }
+        continue;
+      }
+      
+      usedIds.add(teacherId);
       
       const existingTeacher = await prisma.teacher.findFirst({
         where: { teacherId: teacherId }
