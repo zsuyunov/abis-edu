@@ -85,6 +85,8 @@ const TeacherForm = ({
 
   const [teacherIdError, setTeacherIdError] = useState<string>("");
   const [isCheckingId, setIsCheckingId] = useState(false);
+  const [isGeneratingId, setIsGeneratingId] = useState(false);
+  const [generatedTeacherId, setGeneratedTeacherId] = useState<string>("");
 
   // Teacher ID validation function
   const validateTeacherId = async (teacherId: string) => {
@@ -127,6 +129,43 @@ const TeacherForm = ({
       setTeacherIdError("Error checking Teacher ID availability. Please try again.");
     } finally {
       setIsCheckingId(false);
+    }
+  };
+
+  // Auto-generate teacher ID function
+  const generateTeacherId = async () => {
+    if (type === "update") {
+      toast.error("Cannot auto-generate ID for existing teachers");
+      return;
+    }
+
+    setIsGeneratingId(true);
+    setTeacherIdError("");
+    
+    try {
+      const response = await fetch('/api/teachers/generate-id');
+      const data = await response.json();
+      
+      if (data.success) {
+        setGeneratedTeacherId(data.teacherId);
+        // Update the form field value
+        const teacherIdInput = document.querySelector('input[name="teacherId"]') as HTMLInputElement;
+        if (teacherIdInput) {
+          teacherIdInput.value = data.teacherId;
+          // Trigger validation
+          validateTeacherId(data.teacherId);
+        }
+        toast.success(`Generated Teacher ID: ${data.teacherId}`);
+      } else {
+        setTeacherIdError(data.error || "Failed to generate Teacher ID");
+        toast.error("Failed to generate Teacher ID");
+      }
+    } catch (error) {
+      console.error("Error generating teacher ID:", error);
+      setTeacherIdError("Error generating Teacher ID. Please try again.");
+      toast.error("Error generating Teacher ID");
+    } finally {
+      setIsGeneratingId(false);
     }
   };
 
@@ -250,24 +289,41 @@ const TeacherForm = ({
           <label className="text-xs text-gray-500">
             Teacher ID <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            {...register("teacherId")}
-            className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
-            placeholder="T12345"
-            defaultValue={data?.teacherId || ""}
-          />
+          <div className="relative">
+            <input
+              type="text"
+              {...register("teacherId")}
+              className="ring-[1.5px] ring-gray-300 p-2 pr-10 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
+              placeholder="T12345"
+              defaultValue={data?.teacherId || generatedTeacherId || ""}
+            />
+            {type === "create" && (
+              <button
+                type="button"
+                onClick={generateTeacherId}
+                disabled={isGeneratingId}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 w-6 h-6 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                title="Auto-generate unique Teacher ID"
+              >
+                {isGeneratingId ? "..." : "A"}
+              </button>
+            )}
+          </div>
           {errors?.teacherId?.message && (
             <p className="text-xs text-red-400">{errors.teacherId.message.toString()}</p>
           )}
           <p className="text-xs text-gray-400">
             Format: T##### (e.g., T12345)
+            {type === "create" && " • Click 'A' to generate"}
           </p>
           {teacherIdError && (
             <p className="text-xs text-red-400">{teacherIdError}</p>
           )}
           {isCheckingId && (
             <p className="text-xs text-gray-400">Checking ID...</p>
+          )}
+          {isGeneratingId && (
+            <p className="text-xs text-gray-400">Generating ID...</p>
           )}
         </div>
 
