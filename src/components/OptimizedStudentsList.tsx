@@ -149,7 +149,7 @@ const OptimizedStudentsList: React.FC<OptimizedStudentsListProps> = ({
           <h3 className="font-semibold">{item.firstName} {item.lastName}</h3>
           <p className="text-xs text-gray-500">{item.phone}</p>
           <p className="text-xs text-gray-500">
-            Born: {new Date(item.dateOfBirth).toLocaleDateString()}
+            {item.branch?.shortName ? `Branch: ${item.branch.shortName}` : 'Not assigned to branch'}
           </p>
         </div>
       </td>

@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     });
 
     console.log(`Found ${teacherAssignments.length} active teacher assignments`);
-    
+
     if (teacherAssignments.length === 0) {
       console.error(`No active teaching assignments found for teacher: ${userId}`);
       return NextResponse.json({ 
@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
     if (classId) {
       whereClause.classId = parseInt(classId);
     }
-    
+
     // Add subject filter if provided
     if (subjectId) {
       whereClause.subjectId = parseInt(subjectId);
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
 
     // Log the final where clause for debugging
     console.log('Fetching timetables with where clause:', JSON.stringify(whereClause, null, 2));
-    
+
     // Fetch timetables with related data
     const timetables = await prisma.timetable.findMany({
       where: whereClause,
@@ -190,8 +190,8 @@ export async function GET(request: NextRequest) {
         subject: true,
         class: {
           include: {
-            branch: true,
-            academicYear: true,
+        branch: true,
+        academicYear: true,
           },
         },
         topics: {
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
         startTime: 'asc',
       },
     });
-    
+
     console.log(`Found ${timetables.length} timetables matching the criteria`);
     
     // Debug: Log first timetable to see room data

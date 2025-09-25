@@ -86,7 +86,14 @@ export async function PUT(
         }
       });
 
-      // Delete all existing timetables in this time slot
+      // First, delete all related attendance records for these timetables
+      await prisma.attendance.deleteMany({
+        where: {
+          timetableId: { in: timeSlotTimetables.map(t => t.id) }
+        }
+      });
+
+      // Then delete all existing timetables in this time slot
       await prisma.timetable.deleteMany({
         where: {
           id: { in: timeSlotTimetables.map(t => t.id) }
@@ -191,8 +198,18 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const timetableId = parseInt(params.id);
+
+    // First, delete all related attendance records
+    await prisma.attendance.deleteMany({
+      where: {
+        timetableId: timetableId
+      }
+    });
+
+    // Then delete the timetable
     await prisma.timetable.delete({
-      where: { id: parseInt(params.id) }
+      where: { id: timetableId }
     });
 
     return NextResponse.json({ 

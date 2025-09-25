@@ -757,11 +757,7 @@ export const deleteTimetable = async (
       },
     });
 
-    const attendancesCount = await prisma.attendance.count({
-      where: { timetableId: parseInt(timetableId) },
-    });
-
-    if (examsCount > 0 || homeworkCount > 0 || attendancesCount > 0) {
+    if (examsCount > 0 || homeworkCount > 0) {
       return { success: false, error: true };
     }
 
@@ -774,6 +770,15 @@ export const deleteTimetable = async (
           createdBy: currentUserId,
         },
       });
+
+      // First, delete all related attendance records
+      await tx.attendance.deleteMany({
+        where: {
+          timetableId: parseInt(timetableId)
+        }
+      });
+
+      // Then delete the timetable
       await tx.timetable.delete({
         where: { id: parseInt(timetableId) },
       });

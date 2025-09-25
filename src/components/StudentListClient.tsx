@@ -112,7 +112,9 @@ export default function StudentListClient({
         <div className="flex flex-col">
           <h3 className="font-semibold">{item.firstName} {item.lastName}</h3>
           <p className="text-xs text-gray-500">{item.phone}</p>
-          <p className="text-xs text-gray-500">Born: {item.dateOfBirth ? new Date(item.dateOfBirth).toLocaleDateString() : 'Not provided'}</p>
+          <p className="text-xs text-gray-500">
+            {item.branch?.shortName ? `Branch: ${item.branch.shortName}` : 'Not assigned to branch'}
+          </p>
         </div>
       </td>
       <td className="hidden md:table-cell">

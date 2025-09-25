@@ -191,7 +191,7 @@ const SuperFastStudentDashboard: React.FC<SuperFastStudentDashboardProps> = ({
           <h3 className="font-semibold">{student.firstName} {student.lastName}</h3>
           <p className="text-xs text-gray-500">{student.phone}</p>
           <p className="text-xs text-gray-500">
-            Born: {new Date(student.dateOfBirth).toLocaleDateString()}
+            {student.branch?.shortName ? `Branch: ${student.branch.shortName}` : 'Not assigned to branch'}
           </p>
         </div>
       </td>

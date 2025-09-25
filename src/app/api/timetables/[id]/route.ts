@@ -156,13 +156,21 @@ export async function DELETE(
     }
 
     const { _count } = relatedRecords;
-    if (_count.Exam > 0 || _count.Attendance > 0) {
+    if (_count.Exam > 0) {
       return NextResponse.json(
-        { error: "Cannot delete timetable with associated exams or attendances" },
+        { error: "Cannot delete timetable with associated exams" },
         { status: 400 }
       );
     }
 
+    // First, delete all related attendance records
+    await prisma.attendance.deleteMany({
+      where: {
+        timetableId: parseInt(params.id)
+      }
+    });
+
+    // Then delete the timetable
     await prisma.timetable.delete({
       where: { id: parseInt(params.id) },
     });

@@ -487,6 +487,14 @@ export async function DELETE(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // First, delete all related attendance records
+    await prisma.attendance.deleteMany({
+      where: {
+        timetableId: parseInt(id)
+      }
+    });
+
+    // Then delete the timetable
     await prisma.timetable.delete({
       where: { id: parseInt(id) }
     });

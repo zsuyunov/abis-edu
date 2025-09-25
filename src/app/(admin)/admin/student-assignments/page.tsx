@@ -11,6 +11,7 @@ import { Student, Prisma } from "@prisma/client";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
+import { Download } from "lucide-react";
 
 type StudentAssignmentList = Student & {
   class: {
@@ -173,6 +174,7 @@ const StudentAssignmentsListPage = ({
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
   const [selectedClass, setSelectedClass] = useState<string>("");
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const { page, ...queryParams } = searchParams;
   const p = page ? parseInt(page) : 1;
@@ -306,6 +308,55 @@ const StudentAssignmentsListPage = ({
     setSelectedClass("");
   };
 
+  const handleDownload = async () => {
+    // Validate that all required filters are selected
+    if (!selectedBranch || !selectedAcademicYear || !selectedClass) {
+      toast.error("Please select Branch, Academic Year, and Class before downloading");
+      return;
+    }
+
+    try {
+      setIsDownloading(true);
+      
+      const params = new URLSearchParams({
+        branchId: selectedBranch,
+        academicYearId: selectedAcademicYear,
+        classId: selectedClass,
+      });
+
+      const response = await fetch(`/api/student-assignments/export?${params}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to download file');
+      }
+
+      // Get the filename from the response headers
+      const contentDisposition = response.headers.get('content-disposition');
+      const filename = contentDisposition
+        ? contentDisposition.split('filename=')[1]?.replace(/"/g, '')
+        : `students_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Student data downloaded successfully!");
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to download student data');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   useEffect(() => {
     fetchFilterData();
   }, []);
@@ -391,15 +442,25 @@ const StudentAssignmentsListPage = ({
             </select>
           </div>
 
-          {/* Clear Filters Button */}
+          {/* Action Buttons */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-700">&nbsp;</label>
-            <button
-              onClick={clearFilters}
-              className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
-            >
-              Clear Filters
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={clearFilters}
+                className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+              >
+                Clear Filters
+              </button>
+              <button
+                onClick={handleDownload}
+                disabled={isDownloading || !selectedBranch || !selectedAcademicYear || !selectedClass}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                {isDownloading ? "Downloading..." : "Download Excel"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
