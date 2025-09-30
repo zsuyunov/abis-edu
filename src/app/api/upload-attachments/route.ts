@@ -41,17 +41,34 @@ export async function POST(request: NextRequest) {
       // Write file to disk
       await writeFile(filePath, new Uint8Array(bytes));
       
+      // Map file type to attachment type
+      let attachmentType = 'DOCUMENT';
+      if (file.type.startsWith('image/')) {
+        attachmentType = 'IMAGE';
+      } else if (file.type.startsWith('audio/')) {
+        attachmentType = 'AUDIO';
+      } else if (file.type.startsWith('video/')) {
+        attachmentType = 'VIDEO';
+      }
+
       // Create attachment object
       const attachment = {
         fileName: uniqueFilename,
         originalName: file.name,
-        fileType: file.type,
+        fileType: attachmentType,
         mimeType: file.type,
         fileUrl: publicPath,
         filePath: publicPath,
         fileSize: file.size,
         duration: file.type.startsWith('audio/') ? null : null, // Could be enhanced to detect audio duration
       };
+      
+      console.log('📁 Upload attachment created:', {
+        fileName: attachment.fileName,
+        fileSize: attachment.fileSize,
+        fileType: attachment.fileType,
+        originalName: attachment.originalName
+      });
       
       uploadedAttachments.push(attachment);
     }

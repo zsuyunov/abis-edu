@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import TeacherGradeGrid from './TeacherGradeGrid';
+import TeacherGradebookGrid from './TeacherGradebookGrid';
 
 interface TeacherClass {
   id: number;
@@ -55,29 +55,12 @@ const TeacherGradePageClient: React.FC<TeacherGradePageClientProps> = ({
   }, []);
 
   return (
-    <div className="flex-1 p-4 flex flex-col gap-4">
-      {/* PAGE HEADER */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Grade Tracker</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            View and track grades for your classes and subjects
-          </p>
-        </div>
-      </div>
-
-      {/* MAIN CONTENT */}
-      <div className="flex flex-col gap-4">
-        <TeacherGradeGrid 
-          teacherClasses={teacherClasses}
-          teacherSubjects={teacherSubjects}
-          academicYears={academicYears}
-          branches={branches}
-          refreshTrigger={refreshTrigger}
-          teacherId={teacherId}
-        />
-      </div>
-    </div>
+    <TeacherGradebookGrid 
+      teacherClasses={teacherClasses}
+      teacherSubjects={teacherSubjects}
+      teacherId={teacherId}
+      refreshTrigger={refreshTrigger}
+    />
   );
 };
 

@@ -3,6 +3,69 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+export async function DELETE(request: NextRequest) {
+  try {
+    const teacherId = request.headers.get('x-user-id');
+    if (!teacherId) {
+      console.log('❌ Unauthorized: No teacher ID provided');
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.log('🗑️ Processing attendance deletion request for teacher:', teacherId);
+    
+    const body = await request.json();
+    console.log('📋 Delete request body:', JSON.stringify(body, null, 2));
+    
+    const { studentId, classId, subjectId, date } = body;
+
+    if (!studentId || !classId || !subjectId || !date) {
+      console.log('❌ Missing required fields: studentId, classId, subjectId, and date are required');
+      return NextResponse.json({ 
+        error: "Missing required fields: studentId, classId, subjectId, and date are required" 
+      }, { status: 400 });
+    }
+
+    // Find and delete the attendance record
+    const targetDate = new Date(date);
+    const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+    const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
+    
+    console.log('🗑️ Deleting attendance for:', {
+      studentId: studentId.toString(),
+      classId: parseInt(classId),
+      subjectId: parseInt(subjectId),
+      dateRange: { startOfDay, endOfDay },
+      teacherId: teacherId
+    });
+
+    const deletedAttendance = await prisma.attendance.deleteMany({
+      where: {
+        studentId: studentId.toString(),
+        classId: parseInt(classId),
+        subjectId: parseInt(subjectId),
+        date: {
+          gte: startOfDay,
+          lt: endOfDay
+        },
+        teacherId: teacherId
+      }
+    });
+
+    console.log('✅ Attendance record deleted successfully:', deletedAttendance.count);
+    return NextResponse.json({
+      success: true,
+      message: "Attendance record deleted successfully",
+      deletedCount: deletedAttendance.count
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting attendance:', error);
+    return NextResponse.json({ 
+      error: "Failed to delete attendance record" 
+    }, { status: 500 });
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
@@ -83,9 +146,111 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('📋 Request body:', JSON.stringify(body, null, 2));
     
-    const { timetableId, classId, subjectId, date, attendance } = body;
+    const { studentId, classId, subjectId, date, status, notes, timetableId, attendance } = body;
 
-    // Validate required fields with detailed logging
+    // Check if this is a single attendance record or bulk attendance
+    if (studentId && classId && subjectId && date && status) {
+      // Single attendance record
+      console.log('📝 Processing single attendance record');
+      
+      // Validate status
+      const validStatuses = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'];
+      if (!validStatuses.includes(status.toUpperCase())) {
+        console.log('❌ Invalid status:', status);
+        return NextResponse.json({ 
+          error: "Invalid status. Must be one of: PRESENT, ABSENT, LATE, EXCUSED" 
+        }, { status: 400 });
+      }
+
+      // Check if attendance record already exists
+      const existing = await prisma.attendance.findFirst({
+        where: {
+          studentId: studentId.toString(),
+          classId: parseInt(classId),
+          subjectId: parseInt(subjectId),
+          date: new Date(date)
+        }
+      });
+
+      let attendanceRecord;
+      if (existing) {
+        console.log(`📝 Updating existing attendance record (ID: ${existing.id})`);
+        attendanceRecord = await prisma.attendance.update({
+          where: { id: existing.id },
+          data: {
+            status: status.toUpperCase(),
+            notes: notes || null,
+            teacherId: teacherId,
+            updatedAt: new Date()
+          },
+          include: {
+            student: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+      } else {
+        console.log(`➕ Creating new attendance record for student ${studentId}`);
+        
+        // Try to find a valid timetable for this class and subject, but don't require it
+        // Find a valid timetable ID to use
+        const validTimetable = await prisma.timetable.findFirst({
+          where: {
+            isActive: true,
+            classId: parseInt(classId),
+            subjectId: parseInt(subjectId)
+          },
+          select: { id: true }
+        });
+
+        if (!validTimetable) {
+          console.log('❌ No valid timetable found for class and subject');
+          return NextResponse.json({ 
+            error: "No valid timetable found for the specified class and subject" 
+          }, { status: 400 });
+        }
+
+        console.log('✅ Using timetable ID:', validTimetable.id);
+
+        // Create attendance record with valid timetable ID
+        attendanceRecord = await prisma.attendance.create({
+          data: {
+            studentId: studentId.toString(),
+            classId: parseInt(classId),
+            subjectId: parseInt(subjectId),
+            date: new Date(date),
+            status: status.toUpperCase(),
+            notes: notes || null,
+            teacherId: teacherId,
+            timetableId: validTimetable.id, // Use actual timetable ID
+            academicYearId: 1, // Default academic year
+            branchId: 1 // Default branch
+          },
+          include: {
+            student: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+      }
+
+      console.log('✅ Attendance saved successfully:', attendanceRecord.id);
+      return NextResponse.json({ 
+        success: true, 
+        message: "Attendance saved successfully",
+        data: attendanceRecord
+      });
+    }
+
+    // Bulk attendance (legacy support)
     if (!timetableId) {
       console.log('❌ Missing timetableId');
       return NextResponse.json({ error: "Missing required field: timetableId" }, { status: 400 });

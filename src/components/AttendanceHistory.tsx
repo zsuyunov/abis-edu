@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar, Users, BookOpen, GraduationCap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Users, BookOpen } from 'lucide-react';
 
 interface TeacherClass {
   id: string;
@@ -14,15 +14,6 @@ interface TeacherSubject {
   name: string;
 }
 
-interface AcademicYear {
-  id: string;
-  name: string;
-}
-
-interface Branch {
-  id: string;
-  name: string;
-}
 
 interface AttendanceRecord {
   id: string;
@@ -46,21 +37,15 @@ interface AttendanceRecord {
 interface AttendanceHistoryProps {
   teacherClasses: TeacherClass[];
   teacherSubjects: TeacherSubject[];
-  academicYears: AcademicYear[];
-  branches: Branch[];
 }
 
 const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({
   teacherClasses,
-  teacherSubjects,
-  academicYears,
-  branches
+  teacherSubjects
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>('');
-  const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -76,9 +61,7 @@ const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({
       const params = new URLSearchParams({
         classId: selectedClass,
         subjectId: selectedSubject,
-        month: format(currentDate, 'yyyy-MM'),
-        ...(selectedAcademicYear && { academicYearId: selectedAcademicYear }),
-        ...(selectedBranch && { branchId: selectedBranch })
+        month: format(currentDate, 'yyyy-MM')
       });
 
       const response = await fetch(`/api/attendance/history?${params}`);
@@ -95,7 +78,7 @@ const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({
 
   useEffect(() => {
     fetchAttendanceData();
-  }, [selectedClass, selectedSubject, selectedAcademicYear, selectedBranch, currentDate]);
+  }, [selectedClass, selectedSubject, currentDate]);
 
   const getAttendanceForDay = (day: Date) => {
     return attendanceData.filter(record => 
@@ -163,38 +146,6 @@ const AttendanceHistory: React.FC<AttendanceHistoryProps> = ({
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <GraduationCap className="w-4 h-4 inline mr-1" />
-              Academic Year
-            </label>
-            <select
-              value={selectedAcademicYear}
-              onChange={(e) => setSelectedAcademicYear(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">All Years</option>
-              {academicYears.map(year => (
-                <option key={year.id} value={year.id}>{year.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Branch
-            </label>
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">All Branches</option>
-              {branches.map(branch => (
-                <option key={branch.id} value={branch.id}>{branch.name}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
         {/* Month Navigation */}

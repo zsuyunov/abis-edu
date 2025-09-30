@@ -5,20 +5,151 @@ export async function POST(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
+      console.log('❌ Unauthorized: No teacher ID provided');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    console.log("Grades API received data:", body);
-    
-    const { timetableId, classId, subjectId, date, grades } = body;
+    console.log('📝 Processing grade request for teacher:', teacherId);
 
-    // Validate required fields
-    if (!timetableId || !classId || !subjectId || !date || !grades || !Array.isArray(grades)) {
-      console.log("Validation failed:", { timetableId, classId, subjectId, date, grades: Array.isArray(grades) });
+    const body = await request.json();
+    console.log('📋 Request body:', JSON.stringify(body, null, 2));
+    
+    const { studentId, classId, subjectId, date, value, description, timetableId: incomingTimetableId, grades } = body;
+
+    // Check if this is a single grade record or bulk grades
+    if (studentId && classId && subjectId && date && value !== undefined) {
+      // Single grade record
+      console.log('📝 Processing single grade record');
+
+      // Validate grade value
+      if (value < 0 || value > 100) {
+        console.log('❌ Invalid grade value:', value);
+        return NextResponse.json({
+          error: "Invalid grade value. Must be between 0 and 100"
+        }, { status: 400 });
+      }
+
+      // Verify teacher has access to this class and subject
+      const teacherAssignment = await prisma.teacherAssignment.findFirst({
+        where: {
+          teacherId: teacherId,
+          classId: parseInt(classId),
+          subjectId: parseInt(subjectId),
+          role: 'TEACHER'
+        }
+      });
+
+      if (!teacherAssignment) {
+        console.log('❌ Unauthorized access to this class/subject');
+        return NextResponse.json({ error: "Unauthorized access to this class/subject" }, { status: 403 });
+      }
+
+      // Check if grade record already exists
+      const existing = await prisma.grade.findFirst({
+        where: {
+          studentId: studentId.toString(),
+          classId: parseInt(classId),
+          subjectId: parseInt(subjectId),
+          date: new Date(date)
+        }
+      });
+
+      let gradeRecord;
+      if (existing) {
+        console.log(`📝 Updating existing grade record (ID: ${existing.id})`);
+        gradeRecord = await prisma.grade.update({
+          where: { id: existing.id },
+          data: {
+            value: value,
+            description: description || null,
+            teacherId: teacherId,
+            updatedAt: new Date()
+          },
+          include: {
+            student: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+      } else {
+        console.log(`➕ Creating new grade record for student ${studentId}`);
+        
+        // Grades no longer depend on timetables - can be created independently
+
+        // Get current year and month for grade record
+        const currentDate = new Date(date);
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
+
+        // Find a valid timetable ID to use
+        const validTimetable = await prisma.timetable.findFirst({
+          where: {
+            isActive: true,
+            classId: parseInt(classId),
+            subjectId: parseInt(subjectId)
+          },
+          select: { id: true }
+        });
+
+        if (!validTimetable) {
+          console.log('❌ No valid timetable found for class and subject');
+          return NextResponse.json({ 
+            error: "No valid timetable found for the specified class and subject" 
+          }, { status: 400 });
+        }
+
+        console.log('✅ Using timetable ID for grade:', validTimetable.id);
+
+        // Create grade record with valid timetable ID
+        gradeRecord = await prisma.grade.create({
+          data: {
+            studentId: studentId.toString(),
+            classId: parseInt(classId),
+            subjectId: parseInt(subjectId),
+            date: new Date(date),
+            value: value,
+            description: description || null,
+            teacherId: teacherId,
+            timetableId: validTimetable.id, // Use actual timetable ID
+            academicYearId: 1, // Default academic year
+            branchId: 1, // Default branch
+            year: year,
+            month: month,
+            type: 'DAILY' // Default grade type
+          },
+          include: {
+            student: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+      }
+
+      console.log('✅ Grade saved successfully:', gradeRecord.id);
+      return NextResponse.json({ 
+        success: true, 
+        message: "Grade saved successfully",
+        data: gradeRecord
+      });
+    }
+
+    // Bulk grades (legacy support)
+    const { timetableId, classId: bulkClassId, subjectId: bulkSubjectId, date: bulkDate, grades: bulkGrades } = body;
+
+    // Validate required fields for bulk
+    if (!timetableId || !bulkClassId || !bulkSubjectId || !bulkDate || !bulkGrades || !Array.isArray(bulkGrades)) {
+      console.log("Validation failed:", { timetableId, bulkClassId, bulkSubjectId, bulkDate, grades: Array.isArray(bulkGrades) });
       return NextResponse.json({ 
         error: "Missing required fields", 
-        details: { timetableId, classId, subjectId, date, grades: Array.isArray(grades) }
+        details: { timetableId, bulkClassId, bulkSubjectId, bulkDate, grades: Array.isArray(bulkGrades) }
       }, { status: 400 });
     }
 
@@ -26,8 +157,8 @@ export async function POST(request: NextRequest) {
     const teacherAssignment = await prisma.teacherAssignment.findFirst({
       where: {
         teacherId: teacherId,
-        classId: parseInt(classId),
-        subjectId: parseInt(subjectId),
+        classId: parseInt(bulkClassId),
+        subjectId: parseInt(bulkSubjectId),
         role: 'TEACHER'
       }
     });
@@ -47,12 +178,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current year and month for grade record
-    const currentDate = new Date(date);
+    const currentDate = new Date(bulkDate);
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
 
     // Validate and filter grade records
-    const validGrades = grades.filter(record => 
+    const validGrades = bulkGrades.filter(record => 
       record && 
       record.studentId && 
       typeof record.points === 'number' && 
@@ -74,9 +205,9 @@ export async function POST(request: NextRequest) {
           const existing = await prisma.grade.findFirst({
             where: {
               studentId: record.studentId,
-              classId: parseInt(classId),
-              subjectId: parseInt(subjectId),
-              date: new Date(date),
+              classId: parseInt(bulkClassId),
+              subjectId: parseInt(bulkSubjectId),
+              date: new Date(bulkDate),
               timetableId: parseInt(timetableId)
             }
           });
@@ -97,9 +228,9 @@ export async function POST(request: NextRequest) {
             return prisma.grade.create({
               data: {
                 studentId: record.studentId,
-                classId: parseInt(classId),
-                subjectId: parseInt(subjectId),
-                date: new Date(date),
+                classId: parseInt(bulkClassId),
+                subjectId: parseInt(bulkSubjectId),
+                date: new Date(bulkDate),
                 value: record.points,
                 description: record.comments || null,
                 teacherId: teacherId,
@@ -124,7 +255,7 @@ export async function POST(request: NextRequest) {
       message: "Grades saved successfully",
       data: {
         count: gradeRecords.length,
-        date: date
+        date: bulkDate
       }
     });
 
@@ -301,5 +432,68 @@ export async function PUT(request: NextRequest) {
       { error: "Failed to update grade" },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const teacherId = request.headers.get('x-user-id');
+    if (!teacherId) {
+      console.log('❌ Unauthorized: No teacher ID provided');
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.log('🗑️ Processing grade deletion request for teacher:', teacherId);
+    
+    const body = await request.json();
+    console.log('📋 Delete request body:', JSON.stringify(body, null, 2));
+    
+    const { studentId, classId, subjectId, date } = body;
+
+    if (!studentId || !classId || !subjectId || !date) {
+      console.log('❌ Missing required fields: studentId, classId, subjectId, and date are required');
+      return NextResponse.json({ 
+        error: "Missing required fields: studentId, classId, subjectId, and date are required" 
+      }, { status: 400 });
+    }
+
+    // Find and delete the grade record
+    const targetDate = new Date(date);
+    const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+    const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
+    
+    console.log('🗑️ Deleting grade for:', {
+      studentId: studentId.toString(),
+      classId: parseInt(classId),
+      subjectId: parseInt(subjectId),
+      dateRange: { startOfDay, endOfDay },
+      teacherId: teacherId
+    });
+
+    const deletedGrade = await prisma.grade.deleteMany({
+      where: {
+        studentId: studentId.toString(),
+        classId: parseInt(classId),
+        subjectId: parseInt(subjectId),
+        date: {
+          gte: startOfDay,
+          lt: endOfDay
+        },
+        teacherId: teacherId
+      }
+    });
+
+    console.log('✅ Grade record deleted successfully:', deletedGrade.count);
+    return NextResponse.json({
+      success: true,
+      message: "Grade record deleted successfully",
+      deletedCount: deletedGrade.count
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting grade:', error);
+    return NextResponse.json({ 
+      error: "Failed to delete grade record" 
+    }, { status: 500 });
   }
 }

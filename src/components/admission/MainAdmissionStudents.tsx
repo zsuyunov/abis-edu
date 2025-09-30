@@ -1,4 +1,3 @@
-/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -210,19 +209,19 @@ const MainAdmissionStudents = () => {
 
   return (
     <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
-      {/* Header }
+      {/* Header */}
       <div className="bg-gradient-to-r from-emerald-100 to-green-100 p-4 rounded-lg mb-6">
         <h1 className="text-xl font-bold text-emerald-800 mb-2">Student Management - All Branches</h1>
         <p className="text-emerald-600 text-sm">Manage students across all branches with full CRUD permissions</p>
       </div>
 
-      {/* TOP }
+      {/* TOP */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="hidden md:block text-lg font-semibold">All Students ({count})</h2>
         <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
           <TableSearch />
           <div className="flex items-center gap-4 self-end">
-            {/* Branch Filter }
+            {/* Branch Filter */}
             <select
               value={searchParams.branchId}
               onChange={(e) => handleFilterChange("branchId", e.target.value)}
@@ -236,7 +235,7 @@ const MainAdmissionStudents = () => {
               ))}
             </select>
 
-            {/* Status Filter }
+            {/* Status Filter */}
             <select
               value={searchParams.status}
               onChange={(e) => handleFilterChange("status", e.target.value)}
@@ -258,16 +257,13 @@ const MainAdmissionStudents = () => {
         </div>
       </div>
 
-      {/* LIST }
+      {/* LIST */}
       <Table columns={columns} renderRow={renderRow} data={students} />
       
-      {/* PAGINATION }
+      {/* PAGINATION */}
       <Pagination page={page} count={count} />
     </div>
   );
 };
 
 export default MainAdmissionStudents;
-
-
-*/

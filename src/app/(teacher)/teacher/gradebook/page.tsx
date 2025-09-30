@@ -13,7 +13,7 @@ const TeacherGradebookPage = async () => {
     return <div>Unauthorized</div>;
   }
 
-  // Fetch teacher's classes, subjects, academic years, and branches
+  // Fetch teacher's classes and subjects
   const teacherData = await prisma.teacher.findUnique({
     where: { id: teacherId },
     include: {
@@ -72,30 +72,15 @@ const TeacherGradebookPage = async () => {
   );
 
   return (
-    <div className="flex-1 p-4 flex flex-col gap-4">
-      {/* PAGE HEADER */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Grade Tracker</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            View and track grades for your classes and subjects
-          </p>
-        </div>
-      </div>
-
-      {/* MAIN CONTENT */}
-      <div className="flex flex-col gap-4">
-        <Suspense fallback={<div className="animate-pulse bg-gray-200 h-96 rounded-md"></div>}>
-          <TeacherGradePageClient 
-            teacherClasses={teacherClasses}
-            teacherSubjects={teacherSubjects}
-            academicYears={academicYears}
-            branches={branches}
-            teacherId={teacherId}
-          />
-        </Suspense>
-      </div>
-    </div>
+    <Suspense fallback={<div className="animate-pulse bg-gray-200 h-96 rounded-md"></div>}>
+      <TeacherGradePageClient 
+        teacherClasses={teacherClasses}
+        teacherSubjects={teacherSubjects}
+        academicYears={academicYears}
+        branches={branches}
+        teacherId={teacherId}
+      />
+    </Suspense>
   );
 };
 

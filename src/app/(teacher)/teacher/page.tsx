@@ -1,4 +1,4 @@
-import OptimizedTeacherScheduleDashboard from "@/components/OptimizedTeacherScheduleDashboard";
+import ModernTeacherDashboard from "@/components/ModernTeacherDashboard";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 
@@ -23,67 +23,52 @@ const TeacherPage = async () => {
     },
   });
 
-  // Get all assignments (both TEACHER and SUPERVISOR roles)
-  const allAssignments = teacher?.TeacherAssignment || [];
-  const regularAssignments = allAssignments.filter((a) => a.role === "TEACHER");
-  const supervisorAssignments = allAssignments.filter((a) => a.role === "SUPERVISOR");
-  
-  // Get unique branches from all assignments
-  const branches = Array.from(new Set(allAssignments.map((a) => a.Branch.id)))
-    .map((branchId) => allAssignments.find((a) => a.Branch.id === branchId)?.Branch)
-    .filter(Boolean) as any[];
-  
-  // Get unique classes and subjects from all assignments (both teacher and supervisor)
-  const uniqueClassIds = Array.from(new Set(allAssignments.map((a) => a.Class.id)));
-  const uniqueSubjectIds = Array.from(new Set(allAssignments.map((a) => a.Subject?.id).filter(Boolean)));
-  
-  const classes = uniqueClassIds.map(classId => 
-    allAssignments.find(a => a.Class.id === classId)?.Class
-  ).filter(Boolean);
-  const subjects = uniqueSubjectIds.map(subjectId => 
-    allAssignments.find(a => a.Subject?.id === subjectId)?.Subject
-  ).filter(Boolean);
-  
-  const supervisedClasses = supervisorAssignments.map((a) => a.Class) || [];
+  if (!teacher) {
+    return (
+      <div className="w-full flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Teacher not found</h2>
+          <p className="text-gray-600">Please contact your administrator.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Transform assignments for the modern dashboard
+  const transformedAssignments = teacher.TeacherAssignment.map(assignment => ({
+    id: assignment.id,
+    role: assignment.role,
+    Class: {
+      id: assignment.Class.id,
+      name: assignment.Class.name,
+      branch: assignment.Class.branch ? {
+        shortName: assignment.Class.branch.shortName
+      } : undefined
+    },
+    Subject: assignment.Subject ? {
+      id: assignment.Subject.id,
+      name: assignment.Subject.name
+    } : undefined,
+    Branch: {
+      id: assignment.Branch.id,
+      shortName: assignment.Branch.shortName
+    },
+    AcademicYear: {
+      id: assignment.AcademicYear.id,
+      name: assignment.AcademicYear.name
+    }
+  }));
+
   return (
     <div className="w-full">
-      <OptimizedTeacherScheduleDashboard 
-        teacherId={userId!} 
-        teacherData={{
-          id: teacher?.id?.toString() || "",
-          firstName: teacher?.firstName || "",
-          lastName: teacher?.lastName || "",
-          phone: teacher?.phone || "",
-          TeacherAssignment: (teacher?.TeacherAssignment || []).map(assignment => ({
-            ...assignment,
-            id: assignment.id.toString(),
-            Branch: {
-              id: assignment.Branch.id.toString(),
-              name: assignment.Branch.legalName || assignment.Branch.shortName,
-              shortName: assignment.Branch.shortName
-            },
-            Class: {
-              ...assignment.Class,
-              id: assignment.Class.id.toString(),
-              branch: {
-                id: assignment.Class.branch.id.toString(),
-                name: assignment.Class.branch.legalName || assignment.Class.branch.shortName
-              },
-              academicYear: {
-                ...assignment.Class.academicYear,
-                id: assignment.Class.academicYear.id.toString()
-              }
-            },
-            Subject: assignment.Subject ? {
-              id: assignment.Subject.id.toString(),
-              name: assignment.Subject.name
-            } : null,
-            AcademicYear: {
-              ...assignment.AcademicYear,
-              id: assignment.AcademicYear.id.toString()
-            }
-          }))
+      <ModernTeacherDashboard 
+        teacher={{
+          id: teacher.id,
+          firstName: teacher.firstName,
+          lastName: teacher.lastName,
+          role: 'Subject Teacher'
         }}
+        assignments={transformedAssignments}
       />
     </div>
   );

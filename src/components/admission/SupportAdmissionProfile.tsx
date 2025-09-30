@@ -1,4 +1,3 @@
-/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -134,16 +133,16 @@ const SupportAdmissionProfile = () => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header }
+      {/* Header */}
       <div className="bg-gradient-to-r from-purple-100 to-indigo-100 p-6 rounded-lg">
         <h1 className="text-2xl font-bold text-purple-800 mb-2">Support Admission Profile</h1>
         <p className="text-purple-600">Manage your personal information and account settings</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Information }
+        {/* Profile Information */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Personal Information }
+          {/* Personal Information */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800">Personal Information</h3>
@@ -234,7 +233,7 @@ const SupportAdmissionProfile = () => {
             )}
           </div>
 
-          {/* Change Password }
+          {/* Change Password */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Change Password</h3>
             <div className="space-y-4">
@@ -281,7 +280,7 @@ const SupportAdmissionProfile = () => {
           </div>
         </div>
 
-        {/* Account Information }
+        {/* Account Information */}
         <div className="space-y-6">
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Account Information</h3>
@@ -316,7 +315,7 @@ const SupportAdmissionProfile = () => {
             </div>
           </div>
 
-          {/* Quick Actions }
+          {/* Quick Actions */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
             <div className="space-y-3">
@@ -338,6 +337,3 @@ const SupportAdmissionProfile = () => {
 };
 
 export default SupportAdmissionProfile;
-
-
-*/

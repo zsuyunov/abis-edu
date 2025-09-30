@@ -240,10 +240,6 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
     return index + 1;
   };
 
-  const handleHomework = (timetable: TimetableEntry) => {
-    setSelectedTimetable(timetable);
-    setHomeworkCreationOpen(true);
-  };
 
   const getLessonStatus = (timetable: TimetableEntry) => {
     const now = new Date();
@@ -266,35 +262,6 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
     }
   };
 
-  const handleAttendance = (timetable: TimetableEntry) => {
-    const status = getLessonStatus(timetable);
-
-    if (status !== 'in-progress') {
-      return;
-    }
-
-    const lessonData = {
-      id: timetable.id.toString(),
-      classId: timetable.class.id.toString(),
-      subjectId: timetable.subject.id.toString(),
-      academicYearId: timetable.academicYear?.id?.toString() || "1",
-      branchId: timetable.branch.id.toString(),
-      className: timetable.class.name,
-      subjectName: timetable.subject.name,
-      date: timetable.fullDate,
-      startTime: timetable.startTime,
-      endTime: timetable.endTime
-    };
-
-    console.log('TeacherScheduleDashboard - Attendance lesson data:', lessonData);
-    setLessonData(lessonData);
-    setAttendanceModalOpen(true);
-  };
-
-  const handleGradebook = (timetable: TimetableEntry) => {
-    setSelectedTimetable(timetable);
-    setGradeInputFormOpen(true);
-  };
 
   const handleSaveHomework = async (homeworkData: any) => {
     try {
@@ -713,51 +680,6 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
                     </div>
                   </div>
 
-                  {/* Right side - Action buttons */}
-                  {!isSupervisorMode && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleHomework(timetable)}
-                        disabled={isSupervisorMode}
-                        className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                        title={t('teacher.schedule.assignHomework')}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleAttendance(timetable)}
-                        disabled={isSupervisorMode || lessonStatus !== 'in-progress'}
-                        className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
-                          lessonStatus === 'in-progress' && !isSupervisorMode
-                            ? 'bg-green-500 text-white hover:bg-green-600'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        }`}
-                        title={
-                          lessonStatus === 'upcoming'
-                            ? t('teacher.schedule.attendanceUpcoming')
-                            : lessonStatus === 'completed'
-                            ? t('teacher.schedule.attendanceCompleted')
-                            : t('teacher.schedule.attendanceAvailable')
-                        }
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleGradebook(timetable)}
-                        disabled={isSupervisorMode}
-                        className="p-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                        title={t('teacher.schedule.inputGrades')}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

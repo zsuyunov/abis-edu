@@ -1,4 +1,3 @@
-/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -151,14 +150,14 @@ const MainAdmissionMessages = () => {
   };
 
   const columns = [
-    { key: "subject", label: "Subject" },
-    { key: "sender", label: "Sender" },
-    { key: "recipients", label: "Recipients" },
-    { key: "branch", label: "Branch" },
-    { key: "priority", label: "Priority" },
-    { key: "status", label: "Status" },
-    { key: "createdAt", label: "Date" },
-    { key: "actions", label: "Actions" },
+    { header: "Subject", accessor: "subject" },
+    { header: "Sender", accessor: "sender" },
+    { header: "Recipients", accessor: "recipients" },
+    { header: "Branch", accessor: "branch" },
+    { header: "Priority", accessor: "priority" },
+    { header: "Status", accessor: "status" },
+    { header: "Date", accessor: "createdAt" },
+    { header: "Actions", accessor: "actions" },
   ];
 
   const renderRow = (message: Message) => (
@@ -294,4 +293,3 @@ const MainAdmissionMessages = () => {
 };
 
 export default MainAdmissionMessages;
-*/

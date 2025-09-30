@@ -7,7 +7,7 @@ import ImageKitProvider from "@/components/ImageKitProvider";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { LoadingProvider } from "@/components/providers/LoadingProvider";
 import GlobalLoadingBar from "@/components/ui/GlobalLoadingBar";
-import NavigationLoader from "@/components/ui/NavigationLoader";
+import { TimetableCacheProvider } from "@/contexts/TimetableCacheContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -38,14 +38,15 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <QueryProvider>
-          <LoadingProvider>
-            <ImageKitProvider>
+          <TimetableCacheProvider>
+            <LoadingProvider>
+              <ImageKitProvider>
               <GlobalLoadingBar />
-              <NavigationLoader />
               {children} 
               <ToastContainer position="bottom-right" theme="dark" />
-            </ImageKitProvider>
-          </LoadingProvider>
+              </ImageKitProvider>
+            </LoadingProvider>
+          </TimetableCacheProvider>
         </QueryProvider>
       </body>
     </html>

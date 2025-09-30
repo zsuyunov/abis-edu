@@ -15,7 +15,7 @@ import ProfileUpdateModal from "./ProfileUpdateModal";
 import SkeletonLoader from "@/components/ui/SkeletonLoader";
 import FastLoader from "@/components/ui/FastLoader";
 import TeacherSpeedLoader from "@/components/ui/TeacherSpeedLoader";
-import { useQuery } from "@tanstack/react-query";
+import { useTimetableCache } from '@/contexts/TimetableCacheContext';
 
 interface TeacherAssignment {
   id: string;
@@ -61,7 +61,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [selectedTimetable, setSelectedTimetable] = useState<TimetableEntry | null>(null);
   const [newTopic, setNewTopic] = useState("");
-  const [newTopicDescription, setNewTopicDescription] = useState("");
   const [showHomeworkModal, setShowHomeworkModal] = useState(false);
   const [showGradeModal, setShowGradeModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
@@ -75,7 +74,9 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const [gradeComments, setGradeComments] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { prefetchQuery } = usePrefetch();
+  const { getCachedData, setCachedData, isDataCached, preloadWeek, invalidateCache } = useTimetableCache();
   const commentsRef = useRef<Record<string, string>>({});
 
 
@@ -94,12 +95,20 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     teacherData.TeacherAssignment.some(a => a.role === "SUPERVISOR")
   , [teacherData.TeacherAssignment]);
 
-  // Set default branch
+  // Set default branch and instant preload
   useEffect(() => {
     if (branches.length > 0 && !selectedBranchId) {
       setSelectedBranchId(branches[0].id);
     }
   }, [branches, selectedBranchId]);
+
+  // INSTANT preload entire week when branch is selected
+  useEffect(() => {
+    if (selectedBranchId && teacherId) {
+      console.log('⚡ INSTANT preloading week for:', teacherId, selectedBranchId, selectedRole);
+      preloadWeek(teacherId, selectedBranchId, selectedRole);
+    }
+  }, [selectedBranchId, teacherId, selectedRole, preloadWeek]);
 
   // Memoized date formatting
   const formattedDate = useMemo(() => {
@@ -116,9 +125,17 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     error,
     refetch
   } = useOptimizedQuery(
-    ['teacher-timetables', teacherId, formattedDate, selectedBranchId, selectedRole],
+    ['teacher-timetables', teacherId, formattedDate, selectedBranchId, selectedRole, refreshTrigger.toString()],
     async () => {
       if (!selectedBranchId) return [];
+      
+      // Check cache first
+      const cacheKey = `${teacherId}-${formattedDate}-${selectedBranchId}-${selectedRole}`;
+      const cachedData = getCachedData(cacheKey);
+      if (cachedData && cachedData.length > 0) {
+        console.log('🚀 Using cached timetable data for:', cacheKey);
+        return cachedData;
+      }
       
       try {
         // Calculate weekly date range for recurring timetables
@@ -196,88 +213,166 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
             homework: timetable.homework || []
           };
         });
+        
+        // Process timetables for caching
+        const processedTimetables = uniqueTimetables.map((timetable: any) => {
+          // Handle both single subject and subjects array formats
+          const subject = timetable.subject || (timetable.subjects && timetable.subjects.length > 0 ? timetable.subjects[0] : null);
+          
+          return {
+            id: timetable.id,
+            fullDate: formattedDate,
+            startTime: timetable.startTime || "00:00",
+            endTime: timetable.endTime || "00:00",
+            lessonNumber: timetable.lessonNumber || 1,
+            classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
+            class: {
+              id: timetable.class?.id || 'unknown',
+              name: timetable.class?.name || 'Unknown Class',
+              academicYear: timetable.class?.academicYear || timetable.academicYear || { id: 1, name: "Default" }
+            },
+            subject: {
+              id: subject?.id || 'unknown',
+              name: subject?.name || 'Unknown Subject'
+            },
+            branch: {
+              id: timetable.branch?.id || 'unknown',
+              shortName: timetable.branch?.shortName || 'Unknown Branch'
+            },
+            topics: timetable.topics || [],
+            homework: timetable.homework || []
+          };
+        });
+
+        // ALWAYS cache the result, even if empty array - this prevents stuck loading
+        setCachedData(cacheKey, processedTimetables);
+        console.log('💾 Cached timetable data for:', cacheKey, 'Count:', processedTimetables.length);
+        
+        return processedTimetables;
       } catch (error) {
         console.error('Error fetching timetables:', error);
+        // Cache empty result to prevent repeated failed requests
+        setCachedData(cacheKey, []);
         return []; // Return empty array on error
       }
     },
     {
       enabled: !!selectedBranchId,
-      staleTime: 30 * 1000, // 30 seconds for ultra-fast updates
-      gcTime: 5 * 60 * 1000, // 5 minutes cache
-      refetchOnWindowFocus: false,
+      staleTime: 10 * 60 * 1000, // 10 minutes - balanced stale time
+      gcTime: 60 * 60 * 1000, // 1 hour cache - keep data much longer
+      refetchOnWindowFocus: false, // Don't refetch on window focus (we handle this manually)
     }
   );
 
-  // Prefetch adjacent days for instant navigation
-  useEffect(() => {
-    if (selectedBranchId) {
-      const currentDateObj = new Date(selectedDate);
-      
-      // Prefetch next day
-      const nextDay = new Date(currentDateObj);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const nextDateStr = nextDay.toISOString().split('T')[0];
-      
-      // Prefetch previous day
-      const prevDay = new Date(currentDateObj);
-      prevDay.setDate(prevDay.getDate() - 1);
-      const prevDateStr = prevDay.toISOString().split('T')[0];
-
-      // Prefetch both days with a small delay to avoid blocking
-      setTimeout(() => {
-        [nextDateStr, prevDateStr].forEach(date => {
-          prefetchQuery(
-            ['teacher-timetables', teacherId, date, selectedBranchId, selectedRole],
-            async () => {
-              // Calculate weekly date range for recurring timetables
-              const today = new Date(date);
-              const startOfWeek = new Date(today);
-              startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
-              const endOfWeek = new Date(startOfWeek);
-              endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
-              
-              const startDate = startOfWeek.toISOString().split('T')[0];
-              const endDate = endOfWeek.toISOString().split('T')[0];
-              
-              const response = await fetch(
-                `/api/teacher-timetables?teacherId=${teacherId}&startDate=${startDate}&endDate=${endDate}&branchId=${selectedBranchId}&mode=${selectedRole.toLowerCase()}`,
-                { headers: { 'x-user-id': teacherId } }
-              );
-              if (!response.ok) throw new Error(`Failed to prefetch: ${response.status}`);
-              return response.json();
-            },
-            2 * 60 * 1000 // 2 minutes cache for prefetched data
-          );
-        });
-      }, 500);
+  // INSTANT loading state - show cached data immediately
+  const instantTimetables = useMemo(() => {
+    if (!selectedBranchId) return [];
+    
+    const cacheKey = `${teacherId}-${formattedDate}-${selectedBranchId}-${selectedRole}`;
+    const cachedData = getCachedData(cacheKey);
+    
+    console.log('🔍 Cache check for:', cacheKey);
+    console.log('📊 Cached data:', cachedData);
+    console.log('📋 Query data:', timetables);
+    
+    // If we have cached data (even if empty array), use it immediately
+    if (cachedData !== null) {
+      console.log('⚡ INSTANT timetable data from cache:', cacheKey, 'Count:', cachedData.length);
+      return cachedData;
     }
-  }, [teacherId, selectedDate, selectedBranchId, selectedRole, prefetchQuery]);
+    
+    // Fallback to query data if no cache
+    console.log('🔄 Using query data as fallback');
+    return timetables;
+  }, [teacherId, formattedDate, selectedBranchId, selectedRole, getCachedData, timetables]);
+
+  // INSTANT loading state - no loading if we have cached data (even empty)
+  const instantLoading = useMemo(() => {
+    if (!selectedBranchId) return false;
+    
+    const cacheKey = `${teacherId}-${formattedDate}-${selectedBranchId}-${selectedRole}`;
+    const cachedData = getCachedData(cacheKey);
+    
+    // If we have cached data (even if empty), never show loading
+    if (cachedData !== null) {
+      return false;
+    }
+    
+    // Only show loading if no cached data and query is loading
+    return isLoading;
+  }, [teacherId, formattedDate, selectedBranchId, selectedRole, getCachedData, isLoading]);
+
+  // Refresh cache when returning to dashboard (focus effect)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (selectedBranchId && teacherId) {
+        console.log('🔄 Dashboard focused - refreshing cache...');
+        // Only refresh if cache is stale (older than 5 minutes)
+        const cacheKey = `${teacherId}-${formattedDate}-${selectedBranchId}-${selectedRole}`;
+        const cachedData = getCachedData(cacheKey);
+        
+        if (!cachedData) {
+          console.log('📊 No cached data found, refreshing...');
+          // Force refresh the current day's data
+          setRefreshTrigger(prev => prev + 1);
+          // Also refresh the entire week
+          preloadWeek(teacherId, selectedBranchId, selectedRole);
+        } else {
+          console.log('✅ Using cached data, no refresh needed');
+        }
+      }
+    };
+
+    // Listen for window focus (when user returns to tab)
+    window.addEventListener('focus', handleFocus);
+    
+    // Also trigger on component mount (when navigating back to dashboard)
+    handleFocus();
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [selectedBranchId, teacherId, selectedRole, preloadWeek, formattedDate, getCachedData]);
+
+  // Background sync for seamless updates (runs every 5 minutes)
+  useEffect(() => {
+    if (selectedBranchId && teacherId) {
+      const syncInterval = setInterval(() => {
+        console.log('🔄 Background sync for seamless updates...');
+        preloadWeek(teacherId, selectedBranchId, selectedRole);
+      }, 5 * 60 * 1000); // Every 5 minutes
+
+      return () => clearInterval(syncInterval);
+    }
+  }, [selectedBranchId, teacherId, selectedRole, preloadWeek]);
 
   // Topic mutation
   const topicMutation = useOptimizedMutation(
-    async (topicData: { timetableId: string; title: string; description: string; }) => {
+    async (topicData: { timetableId: string; title: string; }) => {
       const response = await fetch('/api/timetable-topics', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'x-user-id': teacherId,
         },
         body: JSON.stringify({
           timetableId: topicData.timetableId,
           title: topicData.title,
-          description: topicData.description,
-          teacherId: teacherId,
         }),
       });
       if (!response.ok) throw new Error('Failed to save topic');
       return response.json();
     },
     {
-      onSuccess: () => {
+      onSuccess: async () => {
         setShowTopicModal(false);
         setNewTopic("");
-        setNewTopicDescription("");
+        // Force immediate refresh by updating trigger
+        console.log('🔄 Triggering immediate refresh after topic save...');
+        setRefreshTrigger(prev => prev + 1);
+        // Also refetch for extra safety
+        await refetch();
+        console.log('✅ Timetable data refreshed');
       },
       invalidateQueries: [['teacher-timetables', teacherId, formattedDate, selectedBranchId, selectedRole]]
     }
@@ -413,58 +508,20 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     
     setSelectedTimetable(timetable);
     setNewTopic(timetable.topics.length > 0 ? timetable.topics[0].title : "");
-    setNewTopicDescription(timetable.topics.length > 0 ? timetable.topics[0].description : "");
     setShowTopicModal(true);
     
     setIsActionLoading(false);
     setLoadingAction("");
   }, []);
 
-  const handleOpenHomework = useCallback(async (timetable: TimetableEntry) => {
-    setIsActionLoading(true);
-    setLoadingAction("Opening homework manager...");
-    
-    await new Promise(resolve => setTimeout(resolve, 150));
-    
-    setSelectedTimetable(timetable);
-    setShowHomeworkModal(true);
-    
-    setIsActionLoading(false);
-    setLoadingAction("");
-  }, []);
-
-  const handleOpenGrades = useCallback(async (timetable: TimetableEntry) => {
-    setIsActionLoading(true);
-    setLoadingAction("Opening grade book...");
-    
-    await new Promise(resolve => setTimeout(resolve, 150));
-    
-    handleOpenGradeModal(timetable);
-    
-    setIsActionLoading(false);
-    setLoadingAction("");
-  }, [handleOpenGradeModal]);
-
-  const handleOpenAttendance = useCallback(async (timetable: TimetableEntry) => {
-    setIsActionLoading(true);
-    setLoadingAction("Opening attendance...");
-    
-    await new Promise(resolve => setTimeout(resolve, 150));
-    
-    handleOpenAttendanceModal(timetable);
-    
-    setIsActionLoading(false);
-    setLoadingAction("");
-  }, [handleOpenAttendanceModal]);
 
   const handleSaveTopic = useCallback(() => {
     if (!selectedTimetable || !newTopic.trim()) return;
     topicMutation.mutate({
       timetableId: selectedTimetable.id,
       title: newTopic.trim(),
-      description: newTopicDescription.trim(),
     });
-  }, [selectedTimetable, newTopic, newTopicDescription, topicMutation]);
+  }, [selectedTimetable, newTopic, topicMutation]);
 
   // Save attendance handler
   const handleSaveAttendance = useCallback(async () => {
@@ -659,23 +716,9 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4"
     >
-      {/* Header */}
+      {/* Header - Controls Only */}
       <motion.div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200/50">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold flex items-center justify-center text-lg shadow-lg">
-              {teacherData.firstName[0]}{teacherData.lastName[0]}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                {teacherData.firstName} {teacherData.lastName}
-              </h1>
-              <p className="text-sm text-gray-600">
-                {selectedRole === "TEACHER" ? "Subject Teacher" : "Supervisor"}
-              </p>
-            </div>
-          </div>
-
           {/* Controls */}
           <div className="flex flex-col sm:flex-row gap-2">
             {(hasTeacherRole && hasSupervisorRole) && (
@@ -713,55 +756,37 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
               </select>
             )}
 
-            {/* Profile Update Button - Next to branch selector */}
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center justify-center w-8 h-8 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors text-xs font-medium border border-blue-200"
-              title="Update Profile"
-            >
-              <Settings className="w-3 h-3" />
-            </motion.button>
           </div>
         </div>
 
-        {/* Assignments */}
-        <div className="flex flex-wrap gap-2 mt-4">
-          {currentAssignments?.map((assignment, index) => (
-            <div key={index} className="flex flex-wrap gap-1">
-              <span className="px-2 py-1 rounded-lg text-xs bg-blue-50 text-blue-700 font-medium border border-blue-200">
-                {assignment.Class.name}
-              </span>
-              {assignment.Subject && (
-                <span className="px-2 py-1 rounded-lg text-xs bg-purple-50 text-purple-700 font-medium border border-purple-200">
-                  {assignment.Subject.name}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
       </motion.div>
 
       {/* Calendar Navigation */}
-      <motion.div className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-sm border border-gray-200/50">
-        <div className="flex items-center justify-between mb-4">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50"
+      >
+        <div className="flex items-center justify-between mb-6">
           <motion.button
+            whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => navigateWeek("prev")}
-            className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+            className="p-3 rounded-xl bg-gray-100 hover:bg-gray-200 transition-all duration-200 shadow-sm hover:shadow-md"
           >
             <ChevronLeft size={20} className="text-gray-600" />
           </motion.button>
           
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-bold text-gray-900">
               {weekDays ? format(weekDays[0], "MMMM yyyy") : ""}
             </h2>
             {!isSameDay(selectedDate, new Date()) && (
               <motion.button
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={goToToday}
-                className="px-3 py-1 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200"
+                className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 Today
               </motion.button>
@@ -769,16 +794,17 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           </div>
           
           <motion.button
+            whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => navigateWeek("next")}
-            className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+            className="p-3 rounded-xl bg-gray-100 hover:bg-gray-200 transition-all duration-200 shadow-sm hover:shadow-md"
           >
             <ChevronRight size={20} className="text-gray-600" />
           </motion.button>
         </div>
         
         {/* Week Days */}
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-3">
           {weekDays?.map((day) => {
             const isSelected = isSameDay(day, selectedDate);
             const isTodayDate = isToday(day);
@@ -786,20 +812,21 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
             return (
               <motion.button
                 key={day.toISOString()}
+                whileHover={{ scale: 1.05, y: -2 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => selectDate(day)}
-                className={`p-3 rounded-xl text-center transition-all duration-200 ${
+                className={`p-4 rounded-2xl text-center transition-all duration-300 ${
                   isSelected
-                    ? "bg-blue-500 text-white shadow-lg"
+                    ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-xl"
                     : isTodayDate
-                      ? "bg-orange-50 text-orange-700 border-2 border-orange-200"
-                      : "hover:bg-gray-50 text-gray-700"
+                      ? "bg-gradient-to-br from-orange-100 to-orange-200 text-orange-700 border-2 border-orange-300 shadow-lg"
+                      : "hover:bg-gray-50 text-gray-700 hover:shadow-md"
                 }`}
               >
-                <div className="text-xs font-medium mb-1">
+                <div className="text-xs font-semibold mb-2 uppercase tracking-wide">
                   {format(day, "EEE")}
                 </div>
-                <div className="text-lg font-bold">
+                <div className="text-xl font-bold">
                   {format(day, "d")}
                 </div>
               </motion.button>
@@ -827,24 +854,43 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
 
       {/* Schedule Content */}
       <AnimatePresence mode="wait">
-        {isLoading ? (
+        {instantLoading ? (
           <TeacherSpeedLoader 
             isLoading={true} 
             message="Loading your schedule..."
           />
-        ) : !Array.isArray(timetables) || timetables.length === 0 ? (
+        ) : !Array.isArray(instantTimetables) || instantTimetables.length === 0 ? (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 text-center shadow-sm border border-gray-200/50"
+            className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-12 text-center shadow-lg border border-blue-200/50"
           >
-            <div className="text-6xl mb-4">🎉</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No classes today</h3>
-            <p className="text-gray-600">Enjoy your free time!</p>
+            <motion.div 
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              className="text-8xl mb-6"
+            >
+              🎉
+            </motion.div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">No lessons today</h3>
+            <p className="text-lg text-gray-600 mb-6">Enjoy your free time!</p>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="flex justify-center"
+            >
+              <div className="flex space-x-2">
+                <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce"></div>
+                <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </motion.div>
           </motion.div>
         ) : (
           <motion.div className="space-y-3">
-            {(Array.isArray(timetables) ? timetables : []).map((timetable: any, index: number) => {
+            {(Array.isArray(instantTimetables) ? instantTimetables : []).map((timetable: any, index: number) => {
               const lessonStatus = getLessonStatus(timetable);
               
               let cardStyles = "";
@@ -875,87 +921,84 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className={`${cardStyles} rounded-2xl p-4 border backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-200`}
+                  whileHover={{ 
+                    scale: 1.02,
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                  }}
+                  className={`${cardStyles} rounded-2xl p-6 border backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300 group`}
                 >
-                  {/* Header */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-lg">
+                  {/* Header with Lesson Number and Status */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <motion.div
+                        whileHover={{ scale: 1.1 }}
+                        className="flex items-center justify-center w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg"
+                      >
                         #{getLessonNumber(index)}
-                      </span>
-                        <div className="flex items-center gap-1 text-xs text-gray-600">
-                        <MapPin size={12} />
-                        {timetable.branch?.shortName || 'Unknown Branch'} • {timetable.classroom || 'Unknown Room'}
+                      </motion.div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <MapPin size={14} className="text-gray-400" />
+                        <span className="font-medium">{timetable.branch?.shortName || 'Unknown Branch'}</span>
+                        <span className="text-gray-300">•</span>
+                        <span className="text-gray-500">{timetable.classroom || 'Classroom'}</span>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border ${statusColor}`}>
+                    <motion.div 
+                      whileHover={{ scale: 1.05 }}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border shadow-sm ${statusColor}`}
+                    >
                       {statusIcon}
-                      {lessonStatus === 'upcoming' ? 'Upcoming' : lessonStatus === 'in-progress' ? 'Live' : 'Done'}
-                    </div>
+                      <span>
+                        {lessonStatus === 'upcoming' ? 'Upcoming' : lessonStatus === 'in-progress' ? 'Live' : 'Completed'}
+                      </span>
+                    </motion.div>
                   </div>
 
-                  {/* Content */}
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">
-                        {timetable.class?.name || 'Unknown Class'} • {timetable.subject?.name || 'Unknown Subject'}
+                  {/* Main Content */}
+                  <div className="space-y-4">
+                    {/* Class and Subject */}
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-bold text-gray-900 leading-tight">
+                        {timetable.class?.name || 'Unknown Class'}
                       </h3>
-                      
-                      <div className="flex items-center gap-1 text-sm text-gray-600 mb-2">
-                        <Clock size={14} />
-                        {formatTime(timetable.startTime)} – {formatTime(timetable.endTime)}
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm font-semibold rounded-full shadow-sm">
+                          {timetable.subject?.name || 'Unknown Subject'}
+                        </span>
                       </div>
-
-                      <div className="text-sm text-gray-600 mb-3">
-                        {timetable.topics.length > 0 
-                          ? timetable.topics[0].title 
-                          : "No lesson topic set"
-                        }
-                      </div>
-
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleEditTopic(timetable)}
-                        disabled={selectedRole === "SUPERVISOR"}
-                        className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Edit3 size={12} />
-                        Topics
-                      </motion.button>
                     </div>
 
-                    {/* Action buttons */}
-                    {selectedRole !== "SUPERVISOR" && (
+                    {/* Time and Topic */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Clock size={16} className="text-gray-400" />
+                        <span className="font-medium text-gray-700">
+                          {formatTime(timetable.startTime)} – {formatTime(timetable.endTime)}
+                        </span>
+                      </div>
+
                       <div className="flex items-center gap-2">
+                        <div className="flex-1 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                          <p className="text-sm text-gray-600">
+                            {timetable.topics.length > 0 
+                              ? `📚 ${timetable.topics[0].title}` 
+                              : "📝 No lesson topic set"
+                            }
+                          </p>
+                        </div>
                         <motion.button
+                          whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          onClick={() => handleOpenHomework(timetable)}
-                          disabled={isActionLoading}
-                          className="p-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors flex items-center justify-center shadow-sm disabled:opacity-50"
-                          title="Assign Homework"
+                          onClick={() => handleEditTopic(timetable)}
+                          disabled={selectedRole === "SUPERVISOR"}
+                          className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md flex items-center gap-2"
                         >
-                          <BookOpen size={16} />
-                        </motion.button>
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleOpenAttendance(timetable)}
-                          disabled={isActionLoading}
-                          className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center shadow-sm disabled:opacity-50"
-                          title="Take Attendance"
-                        >
-                          <Users size={16} />
-                        </motion.button>
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => handleOpenGrades(timetable)}
-                          disabled={isActionLoading}
-                          className="p-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors flex items-center justify-center shadow-sm disabled:opacity-50"
-                          title="Input Grades"
-                        >
-                          <BarChart3 size={16} />
+                          <Edit3 size={14} />
+                          <span className="text-sm font-medium">Topics</span>
                         </motion.button>
                       </div>
-                    )}
+                    </div>
+
                   </div>
                 </motion.div>
               );
@@ -991,18 +1034,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     onChange={(e) => setNewTopic(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter lesson topic"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={newTopicDescription}
-                    onChange={(e) => setNewTopicDescription(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    rows={3}
-                    placeholder="Enter topic description"
                   />
                 </div>
               </div>

@@ -1,4 +1,3 @@
-/*
 "use client";
 
 import { useState, useEffect } from "react";
@@ -129,14 +128,14 @@ const MainAdmissionEvents = () => {
   };
 
   const columns = [
-    { key: "title", label: "Event Title" },
-    { key: "description", label: "Description" },
-    { key: "startDate", label: "Start Date" },
-    { key: "endDate", label: "End Date" },
-    { key: "location", label: "Location" },
-    { key: "branch", label: "Branch" },
-    { key: "status", label: "Status" },
-    { key: "actions", label: "Actions" },
+    { header: "Event Title", accessor: "title" },
+    { header: "Description", accessor: "description" },
+    { header: "Start Date", accessor: "startDate" },
+    { header: "End Date", accessor: "endDate" },
+    { header: "Location", accessor: "location" },
+    { header: "Branch", accessor: "branch" },
+    { header: "Status", accessor: "status" },
+    { header: "Actions", accessor: "actions" },
   ];
 
   const renderRow = (event: Event) => (
@@ -255,4 +254,3 @@ const MainAdmissionEvents = () => {
 };
 
 export default MainAdmissionEvents;
-*/

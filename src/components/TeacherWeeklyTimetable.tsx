@@ -193,59 +193,6 @@ const TeacherWeeklyTimetable = ({
     setShowTopicModal(true);
   };
 
-  const handleAttendanceClick = (timetable: TimetableEntry) => {
-    const lessonData = {
-      id: timetable.id.toString(),
-      classId: timetable.class.id.toString(),
-      subjectId: timetable.subject.id.toString(),
-      academicYearId: timetable.academicYear?.id.toString() || "1",
-      branchId: timetable.branch.id.toString(),
-      className: timetable.class.name,
-      subjectName: timetable.subject.name,
-      date: timetable.fullDate,
-      startTime: timetable.startTime,
-      endTime: timetable.endTime
-    };
-    console.log('Attendance lesson data:', lessonData);
-    setSelectedAttendanceSlot(lessonData);
-    setShowAttendanceModal(true);
-  };
-
-  const handleGradeClick = (timetable: TimetableEntry) => {
-    const lessonData = {
-      id: timetable.id.toString(),
-      classId: timetable.class.id.toString(),
-      subjectId: timetable.subject.id.toString(),
-      academicYearId: timetable.academicYear?.id.toString() || "1",
-      branchId: timetable.branch.id.toString(),
-      className: timetable.class.name,
-      subjectName: timetable.subject.name,
-      date: timetable.fullDate,
-      startTime: timetable.startTime,
-      endTime: timetable.endTime
-    };
-    console.log('Grade lesson data:', lessonData);
-    setSelectedGradeSlot(lessonData);
-    setShowGradeModal(true);
-  };
-
-  const handleHomeworkClick = (timetable: TimetableEntry) => {
-    const lessonData = {
-      id: timetable.id.toString(),
-      classId: timetable.class.id.toString(),
-      subjectId: timetable.subject.id.toString(),
-      academicYearId: timetable.academicYear?.id.toString() || "1",
-      branchId: timetable.branch.id.toString(),
-      className: timetable.class.name,
-      subjectName: timetable.subject.name,
-      date: timetable.fullDate,
-      startTime: timetable.startTime,
-      endTime: timetable.endTime
-    };
-    console.log('Homework lesson data:', lessonData);
-    setSelectedHomeworkSlot(lessonData);
-    setShowHomeworkModal(true);
-  };
 
   const getTopicStatusColor = (status: string) => {
     switch (status) {
@@ -462,51 +409,6 @@ const TeacherWeeklyTimetable = ({
                               {timetable.status}
                             </span>
                             
-                            {/* Action buttons for own classes or if supervisor can edit */}
-                            {(viewMode === "own" || (viewMode === "supervised" && timetable.teacher.id === teacherId)) && (
-                              <div className="flex gap-1 flex-wrap">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAttendanceClick(timetable);
-                                  }}
-                                  className="flex items-center gap-1 px-2 py-1 bg-green-500 text-white rounded-md text-xs font-medium hover:bg-green-600 transition-colors"
-                                >
-                                  <UserCheck className="w-3 h-3" />
-                                  Attendance
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleGradeClick(timetable);
-                                  }}
-                                  className="flex items-center gap-1 px-2 py-1 bg-purple-500 text-white rounded-md text-xs font-medium hover:bg-purple-600 transition-colors"
-                                >
-                                  <GradeIcon className="w-3 h-3" />
-                                  Grades
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleHomeworkClick(timetable);
-                                  }}
-                                  className="flex items-center gap-1 px-2 py-1 bg-orange-500 text-white rounded-md text-xs font-medium hover:bg-orange-600 transition-colors"
-                                >
-                                  <BookMarked className="w-3 h-3" />
-                                  Homework
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleTopicClick(timetable);
-                                  }}
-                                  className="flex items-center gap-1 px-2 py-1 bg-blue-500 text-white rounded-md text-xs font-medium hover:bg-blue-600 transition-colors"
-                                >
-                                  <FileText className="w-3 h-3" />
-                                  Topics
-                                </button>
-                              </div>
-                            )}
                         </div>
                       </div>
                     )}

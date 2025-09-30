@@ -61,12 +61,10 @@ const TeacherAttendancePageClient: React.FC<TeacherAttendancePageClientProps> = 
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4"
     >
-      <TeacherAttendanceGrid 
+      <TeacherAttendanceGrid
         teacherId={teacherId}
         teacherClasses={teacherClasses}
         teacherSubjects={teacherSubjects}
-        academicYears={academicYears}
-        branches={branches}
         refreshTrigger={refreshTrigger}
       />
     </motion.div>

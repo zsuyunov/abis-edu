@@ -1,4 +1,4 @@
-/*
+
 "use client";
 
 import Image from "next/image";
@@ -93,5 +93,3 @@ const MainAdmissionMenu = () => {
 };
 
 export default MainAdmissionMenu;
-
-*/

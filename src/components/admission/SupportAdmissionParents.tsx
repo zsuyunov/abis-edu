@@ -1,4 +1,4 @@
-/*"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
@@ -185,7 +185,7 @@ const SupportAdmissionParents = () => {
 
   return (
     <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
-      {/* Header }
+      {/* Header */}
       <div className="bg-gradient-to-r from-purple-100 to-indigo-100 p-4 rounded-lg mb-6">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-white rounded-full">
@@ -202,13 +202,13 @@ const SupportAdmissionParents = () => {
         </div>
       </div>
 
-      {/* TOP }
+      {/* TOP */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="hidden md:block text-lg font-semibold">Branch Parents ({count})</h2>
         <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
           <TableSearch />
           <div className="flex items-center gap-4 self-end">
-            {/* Status Filter }
+            {/* Status Filter */}
             <select
               value={searchParams.status}
               onChange={(e) => handleFilterChange("status", e.target.value)}
@@ -230,7 +230,7 @@ const SupportAdmissionParents = () => {
         </div>
       </div>
 
-      {/* Branch Restriction Notice }
+      {/* Branch Restriction Notice */}
       <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-purple-100 rounded-full">
@@ -245,15 +245,13 @@ const SupportAdmissionParents = () => {
         </div>
       </div>
 
-      {/* LIST }
+      {/* LIST */}
       <Table columns={columns} renderRow={renderRow} data={parents} />
       
-      {/* PAGINATION }
+      {/* PAGINATION */}
       <Pagination page={page} count={count} />
     </div>
   );
 };
 
 export default SupportAdmissionParents;
-
-*/
