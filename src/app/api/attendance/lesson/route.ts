@@ -14,10 +14,8 @@ export async function GET(request: NextRequest) {
     const timetableId = searchParams.get('timetableId');
     const date = searchParams.get('date');
 
-    console.log('🔍 Fetching lesson attendance with params:', { teacherId, timetableId, date });
 
     if (!timetableId || !date) {
-      console.log('❌ Missing required parameters');
       return NextResponse.json({ 
         error: 'Timetable ID and date are required' 
       }, { status: 400 });
@@ -25,7 +23,6 @@ export async function GET(request: NextRequest) {
 
     // Parse the date to ensure it's in the correct format
     const parsedDate = new Date(date);
-    console.log('🔍 Parsed date:', parsedDate, 'ISO:', parsedDate.toISOString());
 
     // Use a date range to handle timezone issues
     const startOfDay = new Date(parsedDate);
@@ -33,7 +30,6 @@ export async function GET(request: NextRequest) {
     const endOfDay = new Date(parsedDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    console.log('🔍 Date range:', { startOfDay, endOfDay });
 
     // Fetch existing attendance records for this specific lesson
     const attendanceRecords = await prisma.attendance.findMany({
@@ -61,7 +57,6 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    console.log(`📊 Found ${attendanceRecords.length} existing attendance records for lesson ${timetableId} on ${date}`);
 
     return NextResponse.json({
       success: true,

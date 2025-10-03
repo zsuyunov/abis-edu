@@ -116,7 +116,6 @@ const TeacherWeeklyTimetable = ({
         ...(selectedSupervisedClass && { classId: selectedSupervisedClass })
       });
 
-      console.log('Fetching timetables with params:', queryParams.toString());
       
       const response = await fetch(`/api/teacher-timetables?${queryParams}`, {
         headers: { 
@@ -127,7 +126,6 @@ const TeacherWeeklyTimetable = ({
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Received timetables data:', data);
         
         // Transform the data to match the expected format
         const formattedTimetables = (data.timetables || []).map((timetable: any) => ({

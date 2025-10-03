@@ -18,7 +18,6 @@ export async function GET(request: NextRequest) {
     }
 
     const subjectIdArray = subjectIds.split(',').map(id => parseInt(id.trim()));
-    console.log('📝 Parsed subject IDs:', subjectIdArray);
 
     // First, let's check if there are any teacher assignments at all
     const allAssignments = await prisma.teacherAssignment.findMany({
@@ -29,7 +28,6 @@ export async function GET(request: NextRequest) {
       },
       take: 5
     });
-    console.log('🔍 All assignments for class/academic year:', allAssignments.length);
 
     // Find teachers assigned to the specified subjects for the given class and academic year
     const teacherAssignments = await prisma.teacherAssignment.findMany({
@@ -60,7 +58,6 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    console.log('👥 Found teacher assignments:', teacherAssignments.length);
 
     // Group teachers by their ID to avoid duplicates
     const teacherMap = new Map();

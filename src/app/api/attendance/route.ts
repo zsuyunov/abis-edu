@@ -11,10 +11,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log('🗑️ Processing attendance deletion request for teacher:', teacherId);
-    
     const body = await request.json();
-    console.log('📋 Delete request body:', JSON.stringify(body, null, 2));
     
     const { studentId, classId, subjectId, date } = body;
 
@@ -74,10 +71,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log('📝 Processing attendance update request for teacher:', teacherId);
-    
     const body = await request.json();
-    console.log('📋 Update request body:', JSON.stringify(body, null, 2));
     
     const { id, status, notes } = body;
 
@@ -141,10 +135,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log('📝 Processing attendance request for teacher:', teacherId);
-    
     const body = await request.json();
-    console.log('📋 Request body:', JSON.stringify(body, null, 2));
     
     const { studentId, classId, subjectId, date, status, notes, timetableId, attendance } = body;
 

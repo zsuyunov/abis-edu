@@ -9,10 +9,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log('📝 Processing grade request for teacher:', teacherId);
-
     const body = await request.json();
-    console.log('📋 Request body:', JSON.stringify(body, null, 2));
     
     const { studentId, classId, subjectId, date, value, description, timetableId: incomingTimetableId, grades } = body;
 

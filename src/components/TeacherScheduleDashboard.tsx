@@ -153,9 +153,6 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
         }
       );
       
-      console.log('Selected Date:', selectedDate);
-      console.log('Formatted Date for API:', startDate);
-      console.log('API URL:', `/api/teacher-timetables?teacherId=${teacherId}&startDate=${startDate}&endDate=${endDate}&branchId=${selectedBranchId}&mode=${selectedRole.toLowerCase()}`);
       
       if (!response.ok) {
         console.error('API Error:', response.status, response.statusText);
@@ -165,22 +162,18 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
       }
       
       const data = await response.json();
-      console.log('API Response Data:', data);
       
       // Filter timetables to only show those matching the selected date
       const filteredTimetables = (data.timetables || []).filter((timetable: any) => {
         const timetableDate = typeof timetable.fullDate === 'string' 
           ? timetable.fullDate.split('T')[0] 
           : new Date(timetable.fullDate).toISOString().split('T')[0];
-        console.log('Comparing:', timetableDate, 'with selected:', startDate);
         return timetableDate === startDate;
       });
       
-      console.log('Filtered timetables count:', filteredTimetables.length);
       
       // Transform the filtered data to match our interface
       const transformedTimetables = filteredTimetables.map((timetable: any) => {
-        console.log('Processing timetable:', timetable);
         
         // Use the original date from database
         const dateStr = typeof timetable.fullDate === 'string' 
@@ -205,7 +198,6 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
         };
       });
       
-      console.log('Transformed timetables:', transformedTimetables);
       setTimetables(transformedTimetables);
     } catch (error) {
       console.error("Error fetching schedule data:", error);

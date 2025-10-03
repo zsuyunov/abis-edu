@@ -70,17 +70,14 @@ const TeacherHomeworkGrid: React.FC<TeacherHomeworkGridProps> = ({
 
   // Debug audio players state changes
   useEffect(() => {
-    console.log('🎵 audio players state changed:', audioPlayers);
   }, [audioPlayers]);
 
   // Fetch homework data
   const fetchHomework = async () => {
     if (!selectedClass || !selectedSubject) {
-      console.log('❌ Cannot fetch homework: missing class or subject', { selectedClass, selectedSubject });
       return;
     }
     
-    console.log('🔄 Fetching homework for:', { selectedClass, selectedSubject, teacherId });
     setLoading(true);
     try {
       const response = await fetch(`/api/teacher-homework?classId=${selectedClass}&subjectId=${selectedSubject}`, {
@@ -89,11 +86,9 @@ const TeacherHomeworkGrid: React.FC<TeacherHomeworkGridProps> = ({
         },
       });
       
-      console.log('📡 API Response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Homework data received:', data);
         setHomeworkList(data.homework || []);
       } else {
         console.error('❌ API Error:', response.status, await response.text());

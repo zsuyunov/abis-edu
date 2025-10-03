@@ -125,7 +125,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     error,
     refetch
   } = useOptimizedQuery(
-    ['teacher-timetables', teacherId, formattedDate, selectedBranchId, selectedRole, refreshTrigger.toString()],
+    ['teacher-timetables', teacherId, formattedDate, selectedBranchId, selectedRole],
     async () => {
       if (!selectedBranchId) return [];
       
@@ -133,7 +133,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
       const cacheKey = `${teacherId}-${formattedDate}-${selectedBranchId}-${selectedRole}`;
       const cachedData = getCachedData(cacheKey);
       if (cachedData && cachedData.length > 0) {
-        console.log('🚀 Using cached timetable data for:', cacheKey);
         return cachedData;
       }
       
@@ -160,12 +159,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         
         const data = await response.json();
         
-        // Debug: Log the raw data structure
-        console.log('Raw API response:', data);
-        console.log('Timetables array:', data.timetables);
-        if (data.timetables && data.timetables.length > 0) {
-          console.log('First timetable structure:', data.timetables[0]);
-        }
         
         // Ensure data.timetables is an array
         const rawTimetables = Array.isArray(data.timetables) ? data.timetables : [];
@@ -246,7 +239,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
 
         // ALWAYS cache the result, even if empty array - this prevents stuck loading
         setCachedData(cacheKey, processedTimetables);
-        console.log('💾 Cached timetable data for:', cacheKey, 'Count:', processedTimetables.length);
         
         return processedTimetables;
       } catch (error) {
@@ -271,18 +263,12 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     const cacheKey = `${teacherId}-${formattedDate}-${selectedBranchId}-${selectedRole}`;
     const cachedData = getCachedData(cacheKey);
     
-    console.log('🔍 Cache check for:', cacheKey);
-    console.log('📊 Cached data:', cachedData);
-    console.log('📋 Query data:', timetables);
-    
     // If we have cached data (even if empty array), use it immediately
     if (cachedData !== null) {
-      console.log('⚡ INSTANT timetable data from cache:', cacheKey, 'Count:', cachedData.length);
       return cachedData;
     }
     
     // Fallback to query data if no cache
-    console.log('🔄 Using query data as fallback');
     return timetables;
   }, [teacherId, formattedDate, selectedBranchId, selectedRole, getCachedData, timetables]);
 
@@ -306,45 +292,39 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   useEffect(() => {
     const handleFocus = () => {
       if (selectedBranchId && teacherId) {
-        console.log('🔄 Dashboard focused - refreshing cache...');
         // Only refresh if cache is stale (older than 5 minutes)
         const cacheKey = `${teacherId}-${formattedDate}-${selectedBranchId}-${selectedRole}`;
         const cachedData = getCachedData(cacheKey);
         
         if (!cachedData) {
-          console.log('📊 No cached data found, refreshing...');
           // Force refresh the current day's data
           setRefreshTrigger(prev => prev + 1);
           // Also refresh the entire week
           preloadWeek(teacherId, selectedBranchId, selectedRole);
         } else {
-          console.log('✅ Using cached data, no refresh needed');
         }
       }
     };
 
-    // Listen for window focus (when user returns to tab)
-    window.addEventListener('focus', handleFocus);
-    
-    // Also trigger on component mount (when navigating back to dashboard)
-    handleFocus();
+    // Disabled focus refresh to prevent excessive API calls
+    // window.addEventListener('focus', handleFocus);
+    // handleFocus();
 
     return () => {
       window.removeEventListener('focus', handleFocus);
     };
   }, [selectedBranchId, teacherId, selectedRole, preloadWeek, formattedDate, getCachedData]);
 
-  // Background sync for seamless updates (runs every 5 minutes)
-  useEffect(() => {
-    if (selectedBranchId && teacherId) {
-      const syncInterval = setInterval(() => {
-        console.log('🔄 Background sync for seamless updates...');
-        preloadWeek(teacherId, selectedBranchId, selectedRole);
-      }, 5 * 60 * 1000); // Every 5 minutes
+  // Background sync disabled to prevent excessive API calls
+  // useEffect(() => {
+  //   if (selectedBranchId && teacherId) {
+  //     const syncInterval = setInterval(() => {
+  //       preloadWeek(teacherId, selectedBranchId, selectedRole);
+  //     }, 5 * 60 * 1000); // Every 5 minutes
 
-      return () => clearInterval(syncInterval);
-    }
-  }, [selectedBranchId, teacherId, selectedRole, preloadWeek]);
+  //     return () => clearInterval(syncInterval);
+  //   }
+  // }, [selectedBranchId, teacherId, selectedRole, preloadWeek]);
 
   // Topic mutation
   const topicMutation = useOptimizedMutation(
@@ -368,11 +348,9 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         setShowTopicModal(false);
         setNewTopic("");
         // Force immediate refresh by updating trigger
-        console.log('🔄 Triggering immediate refresh after topic save...');
         setRefreshTrigger(prev => prev + 1);
         // Also refetch for extra safety
         await refetch();
-        console.log('✅ Timetable data refreshed');
       },
       invalidateQueries: [['teacher-timetables', teacherId, formattedDate, selectedBranchId, selectedRole]]
     }
@@ -431,13 +409,11 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
 
   // Fetch students for a class
   const fetchStudents = useCallback(async (classId: number) => {
-    console.log('OptimizedTeacherScheduleDashboard - Fetching students for class:', classId);
     setLoadingStudents(true);
     try {
       const response = await fetch(`/api/students/by-class?classId=${classId}`);
       if (response.ok) {
         const studentData = await response.json();
-        console.log('OptimizedTeacherScheduleDashboard - Students fetched:', studentData);
         setStudents(studentData);
         // Initialize attendance and grade data
         const initialAttendance: Record<string, 'present' | 'absent' | 'late' | 'excused'> = {};
@@ -457,9 +433,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         setGradeComments(initialGradeComments);
         // Initialize the ref with empty comments
         commentsRef.current = initialComments;
-        console.log('OptimizedTeacherScheduleDashboard - Attendance data initialized:', initialAttendance);
-        console.log('OptimizedTeacherScheduleDashboard - Comments initialized:', initialComments);
-        console.log('OptimizedTeacherScheduleDashboard - Grade comments initialized:', initialGradeComments);
       } else {
         console.error('OptimizedTeacherScheduleDashboard - Failed to fetch students:', response.status);
       }
@@ -525,20 +498,13 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
 
   // Save attendance handler
   const handleSaveAttendance = useCallback(async () => {
-    console.log('OptimizedTeacherScheduleDashboard - handleSaveAttendance called');
-    console.log('OptimizedTeacherScheduleDashboard - selectedTimetable:', selectedTimetable);
-    console.log('OptimizedTeacherScheduleDashboard - students:', students);
-    console.log('OptimizedTeacherScheduleDashboard - attendanceData:', attendanceData);
-    console.log('OptimizedTeacherScheduleDashboard - attendanceComments BEFORE processing:', attendanceComments);
     
     if (!selectedTimetable || students.length === 0) {
-      console.log('OptimizedTeacherScheduleDashboard - Missing timetable or students');
       return;
     }
 
     // Force refresh of comment state by getting current values
     const currentComments = { ...attendanceComments };
-    console.log('OptimizedTeacherScheduleDashboard - Current comments after refresh:', currentComments);
 
     // Debug: Check each student's comment
     students.forEach(student => {
@@ -557,9 +523,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         };
       });
 
-    console.log('OptimizedTeacherScheduleDashboard - Processed attendance array:', attendanceArray);
-    console.log('OptimizedTeacherScheduleDashboard - Attendance comments state:', attendanceComments);
-    console.log('OptimizedTeacherScheduleDashboard - Students:', students.map(s => ({ id: s.id, name: `${s.firstName} ${s.lastName}` })));
 
     try {
       const response = await fetch('/api/attendance', {
@@ -579,7 +542,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
 
       if (response.ok) {
         const result = await response.json();
-        console.log('OptimizedTeacherScheduleDashboard - Attendance saved successfully:', result);
         setShowAttendanceModal(false);
         setAttendanceData({});
         // Show success message or refresh data
@@ -599,12 +561,9 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const handleSaveGrades = useCallback(async () => {
     if (!selectedTimetable || students.length === 0) return;
     
-    console.log('OptimizedTeacherScheduleDashboard - handleSaveGrades called');
-    console.log('OptimizedTeacherScheduleDashboard - gradeComments BEFORE processing:', gradeComments);
     
     // Force refresh of comment state by getting current values
     const currentGradeComments = { ...gradeComments };
-    console.log('OptimizedTeacherScheduleDashboard - Current grade comments after refresh:', currentGradeComments);
     
     // Debug: Check each student's comment
     students.forEach(student => {
@@ -1208,12 +1167,10 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                               value={gradeComments[student.id] || ''}
                               onChange={(e) => {
                                 const newValue = e.target.value;
-                                console.log(`OptimizedTeacherScheduleDashboard - Updating grade comment for student ${student.id}: "${newValue}"`);
                                 const newComments = {
                                   ...gradeComments,
                                   [student.id]: newValue
                                 };
-                                console.log('OptimizedTeacherScheduleDashboard - Updated grade comments state:', newComments);
                                 setGradeComments(newComments);
                               }}
                               placeholder="Add comments about this student's performance..."
@@ -1357,13 +1314,11 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                               value={attendanceComments[student.id] || ''}
                               onChange={(e) => {
                                 const newValue = e.target.value;
-                                console.log(`OptimizedTeacherScheduleDashboard - Updating attendance comment for student ${student.id}: "${newValue}"`);
                                 setAttendanceComments(prev => {
                                   const updated = {
                                     ...prev,
                                     [student.id]: newValue
                                   };
-                                  console.log('OptimizedTeacherScheduleDashboard - Updated attendance comments state:', updated);
                                   return updated;
                                 });
                                 // Also update the ref to preserve comments

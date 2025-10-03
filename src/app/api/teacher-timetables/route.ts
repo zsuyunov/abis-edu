@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
     const mode = url.searchParams.get("mode");
 
     // Get teacher's assignments to determine access
-    console.log(`Fetching assignments for teacher: ${userId}`);
     const teacherAssignments = await prisma.teacherAssignment.findMany({
       where: {
         teacherId: userId,
@@ -54,10 +53,8 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log(`Found ${teacherAssignments.length} active teacher assignments`);
 
     if (teacherAssignments.length === 0) {
-      console.error(`No active teaching assignments found for teacher: ${userId}`);
       return NextResponse.json({ 
         error: "No active teaching assignments found" 
       }, { status: 403 });
@@ -141,7 +138,6 @@ export async function GET(request: NextRequest) {
     if (startDate && endDate) {
       // Calculate days of week for the date range
       const daysOfWeek = getDaysOfWeekInRange(startDate, endDate);
-      console.log(`Date range ${startDate} to ${endDate} maps to days:`, daysOfWeek);
       
       // If we have valid days, filter by them
       if (daysOfWeek.length > 0) {
@@ -150,19 +146,16 @@ export async function GET(request: NextRequest) {
         };
       } else {
         // Fallback: show all timetables if date calculation fails
-        console.log('No valid days calculated, showing all timetables');
       }
     } else if (startDate) {
       // If only startDate is provided, get the day of week for that specific date
       const dayOfWeek = getDayNameFromDate(startDate);
-      console.log(`Single date ${startDate} maps to day:`, dayOfWeek);
       if (dayOfWeek) {
         whereClause.dayOfWeek = dayOfWeek;
       }
     } else {
       // If no date is provided, show all timetables (weekly view)
       // Don't filter by dayOfWeek
-      console.log('No date filtering applied - showing all timetables');
     }
     
     // Add branch filter if provided
@@ -181,7 +174,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Log the final where clause for debugging
-    console.log('Fetching timetables with where clause:', JSON.stringify(whereClause, null, 2));
 
     // Fetch timetables with related data
     const timetables = await prisma.timetable.findMany({
@@ -207,17 +199,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log(`Found ${timetables.length} timetables matching the criteria`);
     
-    // Debug: Log first timetable to see room data
-    if (timetables.length > 0) {
-      console.log('First timetable room data:', {
-        roomNumber: timetables[0].roomNumber,
-        buildingName: timetables[0].buildingName,
-        classId: timetables[0].classId,
-        branchId: timetables[0].branchId
-      });
-    }
     
     // Get all unique teacher IDs from all timetables
     const allTeacherIds = Array.from(new Set(

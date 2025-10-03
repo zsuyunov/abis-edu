@@ -81,14 +81,9 @@ export async function GET(request: NextRequest) {
 
     let teachers = Array.from(teachersMap.values());
 
-    console.log('Teachers with subjects API - Input params:', { subjectId, branchId, classId });
-    console.log('Teachers with subjects API - Where clause:', whereClause);
-    console.log('Teachers with subjects API - Found assignments:', teacherAssignments.length);
-    console.log('Teachers with subjects API - Final teachers:', teachers.length);
 
     // If no teachers found with specific assignments, get all teachers for the subject
     if (teachers.length === 0 && subjectId) {
-      console.log('No specific assignments found, fetching all teachers for subject...');
       
       const allTeachers = await prisma.teacher.findMany({
         where: {
@@ -108,7 +103,6 @@ export async function GET(request: NextRequest) {
         subjects: []
       }));
 
-      console.log('Fallback - Found all teachers:', teachers.length);
     }
 
     return NextResponse.json(teachers);

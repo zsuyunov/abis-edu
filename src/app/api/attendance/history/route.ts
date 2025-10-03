@@ -10,10 +10,8 @@ export async function GET(request: NextRequest) {
     const academicYearId = searchParams.get('academicYearId');
     const branchId = searchParams.get('branchId');
 
-    console.log('🔍 Attendance History API - Request params:', { classId, subjectId, month, academicYearId, branchId });
 
     if (!classId || !subjectId || !month) {
-      console.log('❌ Missing required parameters');
       return NextResponse.json(
         { error: 'Class ID, Subject ID, and month are required' },
         { status: 400 }
@@ -26,11 +24,6 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(year, monthNum - 1, 1, 0, 0, 0, 0);
     const endDate = new Date(year, monthNum, 0, 23, 59, 59, 999);
 
-    console.log('📅 Date range:', { startDate, endDate });
-    console.log('📅 Date range ISO:', { 
-      startISO: startDate.toISOString(), 
-      endISO: endDate.toISOString() 
-    });
 
     const whereClause: any = {
       classId: parseInt(classId),
@@ -50,7 +43,6 @@ export async function GET(request: NextRequest) {
       whereClause.branchId = parseInt(branchId);
     }
 
-    console.log('🔍 Where clause:', whereClause);
 
     const attendanceRecords = await prisma.attendance.findMany({
       where: whereClause,
@@ -90,9 +82,7 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    console.log(`📊 Found ${attendanceRecords.length} attendance records`);
     if (attendanceRecords.length > 0) {
-      console.log('📝 Sample record:', attendanceRecords[0]);
     }
 
     return NextResponse.json(attendanceRecords);

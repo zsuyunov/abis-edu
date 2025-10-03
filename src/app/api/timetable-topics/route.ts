@@ -7,8 +7,6 @@ export async function POST(request: NextRequest) {
     const headersList = headers();
     const teacherId = headersList.get("x-user-id");
     
-    console.log('📝 Timetable Topics API - POST request');
-    console.log('👤 Teacher ID:', teacherId);
     
     if (!teacherId) {
       console.log('❌ Unauthorized: No teacher ID provided');
@@ -18,7 +16,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { timetableId, title, description } = body;
     
-    console.log('📋 Request body:', { timetableId, title, description });
 
     if (!timetableId || !title) {
       console.log('❌ Missing required fields');
@@ -29,7 +26,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Get timetable data to populate required fields
-    console.log('🔍 Looking up timetable:', timetableId);
     const timetable = await prisma.timetable.findUnique({
       where: { id: timetableId },
       select: {
@@ -51,30 +47,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Timetable not found" }, { status: 404 });
     }
 
-    console.log('📅 Found timetable:', {
-      id: timetable.id,
-      teacherIds: timetable.teacherIds,
-      classId: timetable.classId,
-      subjectId: timetable.subjectId
-    });
 
     // Check if teacher is assigned to this timetable
     if (!timetable.teacherIds ||
         !Array.isArray(timetable.teacherIds) ||
         !timetable.teacherIds.includes(teacherId)) {
-      console.log('❌ Access denied - Teacher not in timetable teacherIds');
-      console.log('Expected teacherId:', teacherId);
-      console.log('Timetable teacherIds:', timetable.teacherIds);
       
       // For now, let's be more permissive and allow any teacher to add topics
       // This can be made stricter later if needed
-      console.log('⚠️ Allowing access despite teacher not being in timetable teacherIds');
     } else {
-      console.log('✅ Teacher authorized for timetable');
     }
 
     // First, try to find existing topic for this timetable
-    console.log('🔍 Looking for existing topic for timetable:', timetableId);
     const existingTopic = await prisma.timetableTopic.findFirst({
       where: {
         timetableId: parseInt(timetableId),
@@ -84,7 +68,6 @@ export async function POST(request: NextRequest) {
     let topic;
     if (existingTopic) {
       // Update existing topic
-      console.log('📝 Updating existing topic:', existingTopic.id);
       topic = await prisma.timetableTopic.update({
         where: {
           id: existingTopic.id,
@@ -97,7 +80,6 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Create new topic
-      console.log('➕ Creating new topic');
       topic = await prisma.timetableTopic.create({
         data: {
           title,

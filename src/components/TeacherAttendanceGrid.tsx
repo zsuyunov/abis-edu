@@ -433,37 +433,36 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
             </div>
         ) : selectedClass && selectedSubject ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="max-h-96 overflow-y-auto">
-            <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-white sticky top-0 z-10">
-                  <tr>
-                        <th className="sticky left-0 z-20 bg-white px-8 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[220px] border-r border-gray-200">
-                          Student Name
-                    </th>
-                    {monthDays.map(day => (
-                          <th key={day.toISOString()} className="px-3 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[60px]">
-                            <div className="text-base font-bold">{format(day, 'dd')}</div>
-                            <div className="text-xs text-gray-500 font-normal">{format(day, 'EEE')}</div>
+              <div className="max-h-96 overflow-auto">
+                <table className="min-w-full">
+                  <thead className="bg-white sticky top-0 z-10">
+                    <tr>
+                      <th className="sticky left-0 z-20 bg-white px-8 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[220px] border-r border-gray-200">
+                        Student Name
                       </th>
-                    ))}
-                  </tr>
-                </thead>
+                      {monthDays.map(day => (
+                        <th key={day.toISOString()} className="px-3 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[60px]">
+                          <div className="text-base font-bold">{format(day, 'dd')}</div>
+                          <div className="text-xs text-gray-500 font-normal">{format(day, 'EEE')}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
                     <tbody className="bg-white">
-                  {students.map((student, index) => (
+                      {students.map((student, index) => (
                         <tr 
-                      key={student.id} 
+                          key={student.id} 
                           id={`student-${student.id}`}
                           className={`hover:bg-gray-50 transition-colors duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
                         >
                           <td className="sticky left-0 z-20 bg-white px-8 py-4 text-sm font-semibold text-gray-900 min-w-[220px] border-r border-gray-200">
                             <div className="font-bold text-gray-900">{student.lastName}, {student.firstName}</div>
-                      </td>
-                      {monthDays.map(day => {
+                          </td>
+                          {monthDays.map(day => {
                             const status = getCellStatus(student, day);
-                        return (
-                          <td 
-                            key={day.toISOString()} 
+                            return (
+                              <td 
+                                key={day.toISOString()} 
                                 className="px-3 py-4 text-center min-w-[60px]"
                               >
                                 <button
@@ -472,15 +471,14 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                                 >
                                   {getStatusIcon(status || undefined)}
                                 </button>
-                          </td>
-                        );
-                      })}
+                              </td>
+                            );
+                          })}
                         </tr>
-                  ))}
-                </tbody>
-              </table>
-                </div>
-            </div>
+                      ))}
+                    </tbody>
+                  </table>
+              </div>
 
             {/* Legend */}
               <div className="p-8 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200">
@@ -537,115 +535,110 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
         {/* Status Selection Modal */}
       <AnimatePresence>
           {showStatusModal && selectedCell && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">Mark Attendance</h3>
-                <button
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+              <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-8 w-full max-w-sm sm:max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h3 className="text-lg sm:text-2xl font-bold text-gray-900">Mark Attendance</h3>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    onClick={() => handleStatusSelect('NO_RECORD')}
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 ${
+                      getCurrentStatusForModal(selectedCell.student, selectedCell.date) === null 
+                        ? 'bg-gray-600 text-white' 
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    No Record
+                  </button>
+                  <button
                     onClick={() => setShowStatusModal(false)}
-                    className="p-3 hover:bg-gray-100 rounded-xl transition-colors"
-                >
-                    <X className="w-5 h-5 text-gray-500" />
-                </button>
+                    className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl transition-colors"
+                  >
+                    <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+                  </button>
+                </div>
               </div>
               
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-100">
-                    <h4 className="font-bold text-gray-900 mb-2 text-lg">
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 sm:p-6 rounded-xl border border-blue-100">
+                    <h4 className="font-bold text-gray-900 mb-2 text-base sm:text-lg">
                       {selectedCell.student.lastName}, {selectedCell.student.firstName}
                   </h4>
-                    <p className="text-gray-600 font-medium">
+                    <p className="text-gray-600 font-medium text-sm sm:text-base">
                       {format(selectedCell.date, 'MMMM dd, yyyy')}
                   </p>
                 </div>
 
-                  <div className="space-y-3">
-                    <label className="text-lg font-semibold text-gray-700">Comment (optional)</label>
+                  <div className="space-y-2 sm:space-y-3">
+                    <label className="text-base sm:text-lg font-semibold text-gray-700">Comment (optional)</label>
                   <textarea
                     placeholder="Add a comment about this student's attendance..."
                       value={currentComment}
                       onChange={(e) => setCurrentComment(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all duration-200"
-                      rows={4}
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all duration-200"
+                      rows={3}
                     />
-                    <p className="text-sm text-gray-500 italic">
+                    <p className="text-xs sm:text-sm text-gray-500 italic">
                       💡 Tip: Add a comment first if you need to provide additional details about this student's attendance.
                     </p>
                 </div>
 
-                  <div className="space-y-3">
-                    <label className="text-lg font-semibold text-gray-700">Attendance Status</label>
-                    <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2 sm:space-y-3">
+                    <label className="text-base sm:text-lg font-semibold text-gray-700">Attendance Status</label>
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <button
                         onClick={() => handleStatusSelect('PRESENT')}
-                        className={`p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
+                        className={`p-2 sm:p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
                           getCurrentStatusForModal(selectedCell.student, selectedCell.date) === 'PRESENT' 
                             ? 'bg-[#228B22] border-[#1a6b1a] text-white' 
                             : 'bg-[#34C759] border-[#228B22] text-white hover:bg-[#228B22]'
                         }`}
                       >
-                        <div className="flex items-center justify-center gap-2">
-                          <Check className="w-4 h-4" />
-                          <span className="font-semibold text-sm">Present</span>
+                        <div className="flex items-center justify-center gap-1 sm:gap-2">
+                          <Check className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <span className="font-semibold text-xs sm:text-sm">Present</span>
                         </div>
                   </button>
                   <button
                         onClick={() => handleStatusSelect('ABSENT')}
-                        className={`p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
+                        className={`p-2 sm:p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
                           getCurrentStatusForModal(selectedCell.student, selectedCell.date) === 'ABSENT' 
                             ? 'bg-[#B22222] border-[#8b1a1a] text-white' 
                             : 'bg-[#FF3B30] border-[#B22222] text-white hover:bg-[#B22222]'
                         }`}
                       >
-                        <div className="flex items-center justify-center gap-2">
-                          <X className="w-4 h-4" />
-                          <span className="font-semibold text-sm">Absent</span>
+                        <div className="flex items-center justify-center gap-1 sm:gap-2">
+                          <X className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <span className="font-semibold text-xs sm:text-sm">Absent</span>
                 </div>
                       </button>
                 <button
                         onClick={() => handleStatusSelect('LATE')}
-                        className={`p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
+                        className={`p-2 sm:p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
                           getCurrentStatusForModal(selectedCell.student, selectedCell.date) === 'LATE' 
                             ? 'bg-[#B8860B] border-[#9a6b08] text-white' 
                             : 'bg-[#FFCC00] border-[#B8860B] text-white hover:bg-[#B8860B]'
                         }`}
                       >
-                        <div className="flex items-center justify-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          <span className="font-semibold text-sm">Late</span>
+                        <div className="flex items-center justify-center gap-1 sm:gap-2">
+                          <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <span className="font-semibold text-xs sm:text-sm">Late</span>
               </div>
                       </button>
                 <button
                         onClick={() => handleStatusSelect('EXCUSED')}
-                        className={`p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
+                        className={`p-2 sm:p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
                           getCurrentStatusForModal(selectedCell.student, selectedCell.date) === 'EXCUSED' 
                             ? 'bg-[#1E3A8A] border-[#1a2f6b] text-white' 
                             : 'bg-[#007AFF] border-[#1E3A8A] text-white hover:bg-[#1E3A8A]'
                         }`}
                       >
-                        <div className="flex items-center justify-center gap-2">
-                          <Shield className="w-4 h-4" />
-                          <span className="font-semibold text-sm">Excused</span>
+                        <div className="flex items-center justify-center gap-1 sm:gap-2">
+                          <Shield className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <span className="font-semibold text-xs sm:text-sm">Excused</span>
                         </div>
                 </button>
                 </div>
-                    
-                    {/* No Record Button */}
-                    <div className="pt-1">
-                <button
-                        onClick={() => handleStatusSelect('NO_RECORD')}
-                        className={`w-full p-3 rounded-lg border-2 transition-all duration-300 hover:scale-105 shadow-md hover:shadow-lg ${
-                          getCurrentStatusForModal(selectedCell.student, selectedCell.date) === null 
-                            ? 'bg-[#4B5563] border-[#374151] text-white' 
-                            : 'bg-[#D1D5DB] border-[#9CA3AF] text-gray-700 hover:bg-[#4B5563] hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="text-base font-bold">–</span>
-                          <span className="font-semibold text-sm">No Record</span>
-                        </div>
-                </button>
-              </div>
               </div>
 
                 </div>

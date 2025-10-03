@@ -70,7 +70,6 @@ export async function PUT(request: NextRequest) {
     });
 
     // Log the credential update for security
-    console.log(`Teacher ${teacherId} updated credentials at ${new Date().toISOString()}`);
     
     // Note: Session invalidation would require a Session model in the database
     // For now, the user will need to log out and log back in manually

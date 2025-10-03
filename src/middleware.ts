@@ -36,7 +36,6 @@ function decodeJWT(token: string) {
     
     return payload as { id: string; phone: string; role: string; name?: string; surname?: string; branchId?: any };
   } catch (error) {
-    console.log('JWT decode error:', error);
     return null;
   }
 }
@@ -44,36 +43,27 @@ function decodeJWT(token: string) {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  console.log('=== MIDDLEWARE TRIGGERED ===');
-  console.log('Path:', pathname);
-  
   // Allow public routes
   if (publicRoutes.includes(pathname)) {
-    console.log('Public route, allowing access');
     return NextResponse.next();
   }
 
   // Allow API routes
   if (apiRoutes.includes(pathname)) {
-    console.log('API route, allowing access');
     return NextResponse.next();
   }
   
   // Get authentication token from cookie
   const token = request.cookies.get("auth_token")?.value;
-  console.log('Token found:', !!token);
   
   if (!token) {
-    console.log('No token found, redirecting to login');
     return NextResponse.redirect(new URL("/login", request.url));
   }
   
   // Decode and verify token
   const user = decodeJWT(token);
-  console.log('User from token:', user);
   
   if (!user) {
-    console.log('Invalid token, redirecting to login');
     const response = NextResponse.redirect(new URL("/login", request.url));
     response.cookies.delete("auth_token");
     return response;
@@ -84,35 +74,28 @@ export function middleware(request: NextRequest) {
   
   // If user role doesn't have a defined route, redirect to login with error
   if (!userRoleRoute) {
-    console.log('User role not supported:', user.role);
     const response = NextResponse.redirect(new URL("/login?error=unsupported_role", request.url));
     response.cookies.delete("auth_token");
     return response;
   }
   
   if (pathname.startsWith("/admin") && user.role !== "admin") {
-    console.log('Admin route accessed by non-admin, redirecting');
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
   if (pathname.startsWith("/teacher") && user.role !== "teacher") {
-    console.log('Teacher route accessed by non-teacher, redirecting');
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
   if (pathname.startsWith("/student") && user.role !== "student") {
-    console.log('Student route accessed by non-student, redirecting');
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
   
   // Handle root path - redirect to their role dashboard
   if (pathname === "/") {
-    console.log('Root path, redirecting to role dashboard');
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
   
   // Add user info to request headers for use in pages
   const response = NextResponse.next();
-  
-  console.log('Setting headers for user:', user);
   
   response.headers.set("x-user-id", user.id);
   response.headers.set("x-user-role", user.role);
@@ -122,8 +105,6 @@ export function middleware(request: NextRequest) {
   if (user.branchId !== undefined && user.branchId !== null) {
     response.headers.set("x-branch-id", String(user.branchId));
   }
-  
-  console.log('Headers set successfully');
   
   // Set cookie for client-side access
   response.cookies.set('userId', user.id, {

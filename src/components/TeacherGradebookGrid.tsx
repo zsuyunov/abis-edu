@@ -337,16 +337,16 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="w-full max-w-full mx-auto p-4 sm:p-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Gradebook</h1>
-          <p className="text-gray-600">Track and manage student grades</p>
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Gradebook</h1>
+          <p className="text-sm sm:text-base text-gray-600">Track and manage student grades</p>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">
                 <Users className="w-5 h-5 inline mr-2" />
@@ -355,7 +355,7 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
               <select
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
               >
                 <option value="">Select Class</option>
                 {teacherClasses.map(cls => (
@@ -372,7 +372,7 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
               <select
                 value={selectedSubject}
                 onChange={(e) => setSelectedSubject(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
               >
                 <option value="">Select Subject</option>
                 {teacherSubjects.map(subject => (
@@ -384,49 +384,49 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
         </div>
 
         {/* Month Navigation */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex items-center justify-between">
             <button
               onClick={() => navigateMonth('prev')}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-sm sm:text-base text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
             >
-              <ChevronLeft className="w-5 h-5" />
-              Previous
+              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Previous</span>
             </button>
             
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 text-center">
               {format(currentDate, 'MMMM yyyy')}
             </h2>
             
             <button
               onClick={() => navigateMonth('next')}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-sm sm:text-base text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
             >
-              Next
-              <ChevronRight className="w-5 h-5" />
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
         {/* Pending Grades */}
         {pendingGrades.length > 0 && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3 sm:gap-4">
                 <div className="p-2 bg-blue-100 rounded-lg">
-                  <Save className="w-5 h-5 text-blue-600" />
+                  <Save className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 </div>
                 <div>
-                  <span className="text-blue-800 font-semibold text-lg">
+                  <span className="text-blue-800 font-semibold text-base sm:text-lg">
                     {pendingGrades.length} grade record(s) pending save
                   </span>
-                  <p className="text-blue-600 text-sm mt-1">Review your changes before saving</p>
+                  <p className="text-blue-600 text-xs sm:text-sm mt-1">Review your changes before saving</p>
                 </div>
               </div>
               <button
                 onClick={handleBulkSave}
                 disabled={isSaving}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg font-medium"
+                className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg font-medium text-sm sm:text-base"
               >
                 {isSaving ? 'Saving...' : 'Save All'}
               </button>
@@ -447,102 +447,100 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
             </div>
           ) : selectedClass && selectedSubject ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="max-h-96 overflow-y-auto">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-white sticky top-0 z-10">
-                      <tr>
-                        <th className="sticky left-0 z-20 bg-white px-8 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[220px] border-r border-gray-200">
-                          Student Name
+              <div className="max-h-80 sm:max-h-96 overflow-auto">
+                <table className="min-w-full">
+                  <thead className="bg-white sticky top-0 z-10">
+                    <tr>
+                      <th className="sticky left-0 z-20 bg-white px-4 sm:px-8 py-3 sm:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[180px] sm:min-w-[220px] border-r border-gray-200">
+                        Student Name
+                      </th>
+                      {monthDays.map(day => (
+                        <th key={day.toISOString()} className="px-2 sm:px-3 py-3 sm:py-4 text-center text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[50px] sm:min-w-[60px]">
+                          <div className="text-sm sm:text-base font-bold">{format(day, 'dd')}</div>
+                          <div className="text-xs text-gray-500 font-normal">{format(day, 'EEE')}</div>
                         </th>
-                        {monthDays.map(day => (
-                          <th key={day.toISOString()} className="px-3 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[60px]">
-                            <div className="text-base font-bold">{format(day, 'dd')}</div>
-                            <div className="text-xs text-gray-500 font-normal">{format(day, 'EEE')}</div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white">
-                      {students.map((student, index) => (
-                        <tr 
-                          key={student.id} 
-                          id={`student-${student.id}`}
-                          className={`hover:bg-gray-50 transition-colors duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
-                        >
-                          <td className="sticky left-0 z-20 bg-white px-8 py-4 text-sm font-semibold text-gray-900 min-w-[220px] border-r border-gray-200">
-                            <div className="font-bold text-gray-900">{student.lastName}, {student.firstName}</div>
-                          </td>
-                          {monthDays.map(day => {
-                            const grade = getGradeForStudentAndDate(student.id, day);
-                            return (
-                              <td 
-                                key={day.toISOString()} 
-                                className="px-3 py-4 text-center min-w-[60px]"
-                              >
-                                <button
-                                  onClick={() => handleCellClick(student, day)}
-                                  className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform ${getGradeColor(grade)}`}
-                                >
-                                  {getGradeIcon(grade)}
-                                </button>
-                              </td>
-                            );
-                          })}
-                        </tr>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {students.map((student, index) => (
+                      <tr 
+                        key={student.id} 
+                        id={`student-${student.id}`}
+                        className={`hover:bg-gray-50 transition-colors duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                      >
+                        <td className="sticky left-0 z-20 bg-white px-4 sm:px-8 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-gray-900 min-w-[180px] sm:min-w-[220px] border-r border-gray-200">
+                          <div className="font-bold text-gray-900">{student.lastName}, {student.firstName}</div>
+                        </td>
+                        {monthDays.map(day => {
+                          const grade = getGradeForStudentAndDate(student.id, day);
+                          return (
+                            <td 
+                              key={day.toISOString()} 
+                              className="px-2 sm:px-3 py-3 sm:py-4 text-center min-w-[50px] sm:min-w-[60px]"
+                            >
+                              <button
+                                onClick={() => handleCellClick(student, day)}
+                                className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform ${getGradeColor(grade)}`}
+                              >
+                                {getGradeIcon(grade)}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               {/* Legend */}
-              <div className="p-8 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200">
-                <div className="flex flex-wrap items-center justify-center gap-8 text-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#22C55E] rounded-xl flex items-center justify-center shadow-sm">
-                      <span className="text-white text-sm font-bold">95</span>
+              <div className="p-4 sm:p-8 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200">
+                <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-xs sm:text-sm">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-[#22C55E] rounded-xl flex items-center justify-center shadow-sm">
+                      <span className="text-white text-xs sm:text-sm font-bold">95</span>
                     </div>
-                    <span className="text-gray-700 font-semibold">90-100%</span>
+                    <span className="text-gray-700 font-semibold text-xs sm:text-sm">90-100%</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#3B82F6] rounded-xl flex items-center justify-center shadow-sm">
-                      <span className="text-white text-sm font-bold">85</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-[#3B82F6] rounded-xl flex items-center justify-center shadow-sm">
+                      <span className="text-white text-xs sm:text-sm font-bold">85</span>
                     </div>
-                    <span className="text-gray-700 font-semibold">80-89%</span>
+                    <span className="text-gray-700 font-semibold text-xs sm:text-sm">80-89%</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#06B6D4] rounded-xl flex items-center justify-center shadow-sm">
-                      <span className="text-white text-sm font-bold">75</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-[#06B6D4] rounded-xl flex items-center justify-center shadow-sm">
+                      <span className="text-white text-xs sm:text-sm font-bold">75</span>
                     </div>
-                    <span className="text-gray-700 font-semibold">70-79%</span>
+                    <span className="text-gray-700 font-semibold text-xs sm:text-sm">70-79%</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#F59E0B] rounded-xl flex items-center justify-center shadow-sm">
-                      <span className="text-white text-sm font-bold">65</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-[#F59E0B] rounded-xl flex items-center justify-center shadow-sm">
+                      <span className="text-white text-xs sm:text-sm font-bold">65</span>
                     </div>
-                    <span className="text-gray-700 font-semibold">60-69%</span>
+                    <span className="text-gray-700 font-semibold text-xs sm:text-sm">60-69%</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#EF4444] rounded-xl flex items-center justify-center shadow-sm">
-                      <span className="text-white text-sm font-bold">50</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-[#EF4444] rounded-xl flex items-center justify-center shadow-sm">
+                      <span className="text-white text-xs sm:text-sm font-bold">50</span>
                     </div>
-                    <span className="text-gray-700 font-semibold">40-59%</span>
+                    <span className="text-gray-700 font-semibold text-xs sm:text-sm">40-59%</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#991B1B] rounded-xl flex items-center justify-center shadow-sm">
-                      <span className="text-white text-sm font-bold">35</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-[#991B1B] rounded-xl flex items-center justify-center shadow-sm">
+                      <span className="text-white text-xs sm:text-sm font-bold">35</span>
                     </div>
-                    <span className="text-gray-700 font-semibold">Below 40%</span>
+                    <span className="text-gray-700 font-semibold text-xs sm:text-sm">Below 40%</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#D1D5DB] rounded-xl flex items-center justify-center shadow-sm">
-                      <span className="text-gray-500 text-sm font-medium">–</span>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-[#D1D5DB] rounded-xl flex items-center justify-center shadow-sm">
+                      <span className="text-gray-500 text-xs sm:text-sm font-medium">–</span>
                     </div>
-                    <span className="text-gray-700 font-semibold">No Grade</span>
+                    <span className="text-gray-700 font-semibold text-xs sm:text-sm">No Grade</span>
                   </div>
                 </div>
-                <div className="text-center text-sm text-gray-500 mt-4 font-medium">
+                <div className="text-center text-xs sm:text-sm text-gray-500 mt-3 sm:mt-4 font-medium">
                   Click on any cell to mark grade
                 </div>
               </div>
@@ -562,54 +560,54 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
 
         {/* Grade Modal */}
         {showGradeModal && selectedCell && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-xl">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">Mark Grade</h3>
-                <div className="flex items-center gap-3">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-8 w-full max-w-sm sm:max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Mark Grade</h3>
+                <div className="flex items-center gap-2 sm:gap-3">
                   <button
                     onClick={handleNoRecord}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all duration-200 font-medium text-sm"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all duration-200 font-medium text-xs sm:text-sm"
                   >
                     No Record
                   </button>
                   <button
                     onClick={() => setShowGradeModal(false)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
                   >
-                    ✕
+                    <span className="text-sm sm:text-base">✕</span>
                   </button>
                 </div>
               </div>
 
               {/* Student Info */}
-              <div className="bg-blue-50 rounded-xl p-4 mb-6">
-                <div className="font-bold text-gray-900 text-lg">
+              <div className="bg-blue-50 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
+                <div className="font-bold text-gray-900 text-base sm:text-lg">
                   {selectedCell.student.lastName}, {selectedCell.student.firstName}
                 </div>
-                <div className="text-gray-600 text-sm">
+                <div className="text-gray-600 text-xs sm:text-sm">
                   {format(selectedCell.date, 'MMMM dd, yyyy')}
                 </div>
               </div>
 
               {/* Comment Field */}
-              <div className="space-y-3 mb-6">
-                <label className="text-lg font-semibold text-gray-700">Comment (optional)</label>
+              <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+                <label className="text-base sm:text-lg font-semibold text-gray-700">Comment (optional)</label>
                 <textarea
                   placeholder="Add a comment about this student's grade..."
                   value={currentComment}
                   onChange={(e) => setCurrentComment(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all duration-200"
-                  rows={4}
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all duration-200"
+                  rows={3}
                 />
-                <p className="text-sm text-gray-500 italic">
+                <p className="text-xs sm:text-sm text-gray-500 italic">
                   💡 Tip: Add a comment first if you need to provide additional details about this student's grade.
                 </p>
               </div>
 
               {/* Grade Input */}
-              <div className="space-y-4 mb-6">
-                <label className="text-lg font-semibold text-gray-700">Grade (0-100)</label>
+              <div className="space-y-2 sm:space-y-4 mb-4 sm:mb-6">
+                <label className="text-base sm:text-lg font-semibold text-gray-700">Grade (0-100)</label>
                 <input
                   type="number"
                   min="0"
@@ -617,21 +615,21 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
                   value={customGradeInput}
                   onChange={(e) => setCustomGradeInput(e.target.value)}
                   placeholder="Enter grade (0-100)"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                 />
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex justify-end gap-3">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
                 <button
                   onClick={handleNoRecord}
-                  className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-all duration-200 font-medium"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-all duration-200 font-medium text-sm sm:text-base"
                 >
                   No Record
                 </button>
                 <button
                   onClick={handleGradeSubmit}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 font-medium"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 font-medium text-sm sm:text-base"
                 >
                   Add Grade
                 </button>
