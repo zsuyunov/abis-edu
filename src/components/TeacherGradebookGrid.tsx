@@ -561,13 +561,13 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
         {/* Grade Modal */}
         {showGradeModal && selectedCell && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-            <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-8 w-full max-w-sm sm:max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Mark Grade</h3>
-                <div className="flex items-center gap-2 sm:gap-3">
+            <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 w-full max-w-xs sm:max-w-sm shadow-xl max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Mark Grade</h3>
+                <div className="flex items-center gap-1 sm:gap-2">
                   <button
                     onClick={handleNoRecord}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all duration-200 font-medium text-xs sm:text-sm"
+                    className="px-2 py-1 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-all duration-200 font-medium text-xs"
                   >
                     No Record
                   </button>
@@ -575,39 +575,39 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
                     onClick={() => setShowGradeModal(false)}
                     className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
                   >
-                    <span className="text-sm sm:text-base">✕</span>
+                    <span className="text-sm">✕</span>
                   </button>
                 </div>
               </div>
 
               {/* Student Info */}
-              <div className="bg-blue-50 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
-                <div className="font-bold text-gray-900 text-base sm:text-lg">
+              <div className="bg-blue-50 rounded-lg p-2 sm:p-3 mb-3 sm:mb-4">
+                <div className="font-bold text-gray-900 text-sm sm:text-base">
                   {selectedCell.student.lastName}, {selectedCell.student.firstName}
                 </div>
-                <div className="text-gray-600 text-xs sm:text-sm">
+                <div className="text-gray-600 text-xs">
                   {format(selectedCell.date, 'MMMM dd, yyyy')}
                 </div>
               </div>
 
               {/* Comment Field */}
-              <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
-                <label className="text-base sm:text-lg font-semibold text-gray-700">Comment (optional)</label>
+              <div className="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
+                <label className="text-sm sm:text-base font-semibold text-gray-700">Comment (optional)</label>
                 <textarea
                   placeholder="Add a comment about this student's grade..."
                   value={currentComment}
                   onChange={(e) => setCurrentComment(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all duration-200"
-                  rows={3}
+                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none transition-all duration-200"
+                  rows={2}
                 />
-                <p className="text-xs sm:text-sm text-gray-500 italic">
+                <p className="text-xs text-gray-500 italic">
                   💡 Tip: Add a comment first if you need to provide additional details about this student's grade.
                 </p>
               </div>
 
               {/* Grade Input */}
-              <div className="space-y-2 sm:space-y-4 mb-4 sm:mb-6">
-                <label className="text-base sm:text-lg font-semibold text-gray-700">Grade (0-100)</label>
+              <div className="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
+                <label className="text-sm sm:text-base font-semibold text-gray-700">Grade (0-100)</label>
                 <input
                   type="number"
                   min="0"
@@ -615,21 +615,21 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
                   value={customGradeInput}
                   onChange={(e) => setCustomGradeInput(e.target.value)}
                   placeholder="Enter grade (0-100)"
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                 />
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+              <div className="flex flex-col sm:flex-row justify-end gap-1.5 sm:gap-2">
                 <button
                   onClick={handleNoRecord}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-all duration-200 font-medium text-sm sm:text-base"
+                  className="w-full sm:w-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all duration-200 font-medium text-xs sm:text-sm"
                 >
                   No Record
                 </button>
                 <button
                   onClick={handleGradeSubmit}
-                  className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 font-medium text-sm sm:text-base"
+                  className="w-full sm:w-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium text-xs sm:text-sm"
                 >
                   Add Grade
                 </button>
