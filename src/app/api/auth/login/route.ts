@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       const student = await prisma.student.findFirst({ where: { phone } });
       if (student) {
+        console.log(`Found student: ${student.firstName} ${student.lastName}, phone: ${student.phone}`);
         user = student;
         userRole = "student";
       }
@@ -155,7 +156,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password
+    console.log(`Verifying password for user: ${user.phone}, provided password: ${password}`);
     const isValidPassword = await AuthService.verifyPassword(password, user.password);
+    console.log(`Password verification result: ${isValidPassword}`);
     if (!isValidPassword) {
       return NextResponse.json(
         { error: "Invalid phone number or password" },

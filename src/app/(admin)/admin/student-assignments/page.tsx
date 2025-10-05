@@ -357,6 +357,7 @@ const StudentAssignmentsListPage = ({
     }
   };
 
+
   useEffect(() => {
     fetchFilterData();
   }, []);

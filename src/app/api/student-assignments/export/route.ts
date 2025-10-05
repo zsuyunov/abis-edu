@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import * as XLSX from 'xlsx';
+import bcrypt from 'bcryptjs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,13 +32,21 @@ export async function GET(request: NextRequest) {
       academicYearId: parseInt(academicYearId),
     };
 
-    // Fetch students with relations
+    // Fetch students with relations including password
     const students = await prisma.student.findMany({
       where: {
         ...studentWhere,
         class: classWhere
       },
-      include: {
+      select: {
+        id: true,
+        studentId: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        password: true,
+        status: true,
+        createdAt: true,
         class: {
           select: {
             id: true,
@@ -71,17 +80,53 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Prepare data for Excel export
-    const excelData = students.map((student, index) => ({
-      'No': index + 1,
-      'Student ID': student.studentId,
-      'Full Name': `${student.firstName} ${student.lastName}`,
-      'Phone Number': student.phone,
-      'Password': `${student.lastName}_suzuk`, // Default password format
-      'Class': student.class?.name || 'N/A',
-      'Academic Year': student.class?.academicYear?.name || 'N/A',
-      'Branch': student.branch?.shortName || 'N/A',
-      'Status': student.status,
+    // Helper function to get the actual login password
+    const getActualPassword = async (student: any) => {
+      // Try common password patterns that might be used
+      const possiblePasswords = [
+        `${student.lastName.toLowerCase()}_abisedu`,
+        `${student.lastName}_abisedu`, 
+        `${student.lastName.toLowerCase()}_suzuk`,
+        `${student.lastName}_suzuk`,
+        `${student.lastName.toLowerCase()}`,
+        `${student.lastName}`,
+        `${student.studentId}`,
+        `${student.phone}`,
+        'password',
+        '123456',
+        'student123'
+      ];
+
+      for (const password of possiblePasswords) {
+        try {
+          const isMatch = await bcrypt.compare(password, student.password);
+          if (isMatch) {
+            return password;
+          }
+        } catch (error) {
+          console.error(`Error checking password for student ${student.studentId}:`, error);
+        }
+      }
+      
+      return 'Unknown Password';
+    };
+
+    // Prepare data for Excel export with actual login passwords
+    const excelData = await Promise.all(students.map(async (student, index) => {
+      const actualPassword = await getActualPassword(student);
+      console.log(`Export - Student: ${student.firstName} ${student.lastName}, Login Password: ${actualPassword}`);
+      return {
+        'No': index + 1,
+        'Student ID': student.studentId,
+        'Full Name': `${student.firstName} ${student.lastName}`,
+        'Phone Number': student.phone,
+        'Login Password': actualPassword, // Show the actual password students use to log in
+        'Class': student.class?.name || 'N/A',
+        'Academic Year': student.class?.academicYear?.name || 'N/A',
+        'Branch': student.branch?.shortName || 'N/A',
+        'Status': student.status,
+        'Assigned Date': student.createdAt ? new Date(student.createdAt).toLocaleDateString() : 'N/A',
+      };
     }));
 
     // Create workbook and worksheet
@@ -94,11 +139,12 @@ export async function GET(request: NextRequest) {
       { wch: 12 },  // Student ID
       { wch: 25 },  // Full Name
       { wch: 15 },  // Phone Number
-      { wch: 20 },  // Password
+      { wch: 20 },  // Login Password
       { wch: 30 },  // Class
       { wch: 15 },  // Academic Year
       { wch: 10 },  // Branch
       { wch: 10 },  // Status
+      { wch: 12 },  // Assigned Date
     ];
     worksheet['!cols'] = columnWidths;
 
@@ -112,10 +158,10 @@ export async function GET(request: NextRequest) {
     });
 
     // Generate filename
-    const branchName = students[0]?.branch?.shortName || 'Unknown';
+    const branchNameForFile = students[0]?.branch?.shortName || 'Unknown';
     const className = students[0]?.class?.name || 'Unknown';
     const academicYear = students[0]?.class?.academicYear?.name || 'Unknown';
-    const filename = `Students_${branchName}_${academicYear}_${className.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const filename = `Students_${branchNameForFile}_${academicYear}_${className.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     // Return Excel file
     return new NextResponse(excelBuffer, {
