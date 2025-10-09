@@ -41,6 +41,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Dispatch, SetStateAction, useEffect, useState, useTransition } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { useFormState } from "react-dom";
 import { toast } from "react-toastify";
 import { FormContainerProps } from "./FormContainer";
@@ -1022,7 +1023,7 @@ const FormModal = ({
         // For teacher assignments, use the API route instead of server action
         if (table === 'teacherAssignment') {
           try {
-            const response = await fetch('/api/teacher-assignments', {
+            const response = await csrfFetch('/api/teacher-assignments', {
               method: 'DELETE',
               body: formData,
             });

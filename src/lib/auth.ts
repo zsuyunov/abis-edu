@@ -1,49 +1,50 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+/**
+ * Legacy Auth Service - DEPRECATED
+ * This file is maintained for backward compatibility only
+ * New code should use /lib/security/* modules
+ */
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
-const JWT_EXPIRES_IN = '7d';
+import { PasswordService, TokenService } from './security';
+import type { TokenPayload } from './security';
 
-export interface UserPayload {
-  id: string;
-  phone: string;
-  role: 'admin' | 'teacher' | 'student' | 'parent' | 'main_director' | 'support_director' | 'main_hr' | 'support_hr' | 'main_admission' | 'support_admission' | 'doctor' | 'chief';
-  name?: string;
-  surname?: string;
-  branchId?: string | number;
-}
+// Re-export UserPayload type for backward compatibility
+export type UserPayload = TokenPayload;
 
+/**
+ * @deprecated Use PasswordService and TokenService from @/lib/security instead
+ */
 export class AuthService {
-  // Hash password with bcrypt
+  /**
+   * @deprecated Use PasswordService.hash() instead
+   */
   static async hashPassword(password: string): Promise<string> {
-    const saltRounds = 12;
-    return await bcrypt.hash(password, saltRounds);
+    return await PasswordService.hash(password);
   }
 
-  // Verify password
+  /**
+   * @deprecated Use PasswordService.verify() instead
+   */
   static async verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-    return await bcrypt.compare(password, hashedPassword);
+    return await PasswordService.verify(password, hashedPassword);
   }
 
-  // Generate JWT token
+  /**
+   * @deprecated Use TokenService.generateAccessToken() instead
+   */
   static generateToken(payload: UserPayload): string {
-    return jwt.sign(payload, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN
-    });
+    return TokenService.generateAccessToken(payload);
   }
 
-  // Verify JWT token
-  static verifyToken(token: string): UserPayload | null {
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as UserPayload;
-      return decoded;
-    } catch (error) {
-      console.error('Token verification failed:', error);
-      return null;
-    }
+  /**
+   * @deprecated Use TokenService.verifyAccessToken() instead
+   */
+  static async verifyToken(token: string): Promise<UserPayload | null> {
+    return await TokenService.verifyAccessToken(token);
   }
 
-  // Extract token from Authorization header
+  /**
+   * Extract token from Authorization header
+   */
   static extractTokenFromHeader(authorization: string | null): string | null {
     if (!authorization || !authorization.startsWith('Bearer ')) {
       return null;
@@ -51,7 +52,9 @@ export class AuthService {
     return authorization.split(' ')[1];
   }
 
-  // Create secure session token for cookies
+  /**
+   * @deprecated Use TokenService.generateAccessToken() instead
+   */
   static generateSessionToken(payload: UserPayload): string {
     return this.generateToken(payload);
   }

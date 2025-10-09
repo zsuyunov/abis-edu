@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import { prisma } from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 import { timetableTopicSchema } from "@/lib/formValidationSchemas";
@@ -14,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
-    const session = AuthService.verifyToken(token);
+    const session = await AuthService.verifyToken(token);
     if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -71,7 +72,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
+async function putHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -82,7 +83,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
-    const session = AuthService.verifyToken(token);
+    const session = await AuthService.verifyToken(token);
     if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -164,7 +165,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
+async function deleteHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -175,7 +176,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
-    const session = AuthService.verifyToken(token);
+    const session = await AuthService.verifyToken(token);
     if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

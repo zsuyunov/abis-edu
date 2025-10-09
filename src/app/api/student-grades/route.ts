@@ -34,6 +34,15 @@ export async function GET(request: NextRequest) {
       whereClause.subjectId = parseInt(subjectId);
     }
 
+    console.log('🔍 Student Grades Query:', {
+      studentId,
+      view,
+      startDate,
+      endDate,
+      subjectId,
+      whereClause
+    });
+
     if (view === 'statistics') {
       // Fetch grade statistics
       const grades = await prisma.grade.findMany({
@@ -151,15 +160,44 @@ export async function GET(request: NextRequest) {
         ]
       });
 
+      console.log(`✅ Found ${grades.length} grades for student`);
+      
+      // If no grades found, check total count
+      if (grades.length === 0) {
+        const totalCount = await prisma.grade.count({
+          where: { studentId }
+        });
+        console.log(`📊 Total grades in database for student: ${totalCount}`);
+        
+        if (totalCount > 0) {
+          // Get sample grades to show date range
+          const sampleGrades = await prisma.grade.findMany({
+            where: { studentId },
+            take: 5,
+            orderBy: { date: 'desc' },
+            select: { date: true, value: true, maxValue: true, subject: { select: { name: true } } }
+          });
+          console.log('📅 Sample grades:', sampleGrades);
+        }
+      }
+
       // Transform data for frontend
       const transformedGrades = grades.map(grade => ({
         id: grade.id.toString(),
         value: grade.value,
         maxValue: grade.maxValue,
         percentage: (grade.value / grade.maxValue) * 100,
-        subject: grade.subject.name,
+        subjectId: grade.subjectId,
+        subject: {
+          id: grade.subject.id.toString(),
+          name: grade.subject.name
+        },
         class: grade.class.name,
-        teacher: `${grade.teacher.firstName} ${grade.teacher.lastName}`,
+        teacher: {
+          id: grade.teacher.id,
+          firstName: grade.teacher.firstName,
+          lastName: grade.teacher.lastName
+        },
         date: grade.date.toISOString(),
         type: grade.type,
         description: grade.description

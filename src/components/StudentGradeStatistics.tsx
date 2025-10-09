@@ -1,38 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, Award, BookOpen } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { Award, BookOpen, Trophy, Target } from 'lucide-react';
 
 interface StudentGradeStatisticsProps {
   studentId: string;
 }
 
-interface GradeData {
-  id: string;
-  grade: number;
-  date: string;
-  subject: {
-    id: string;
-    name: string;
-  };
-}
-
-interface SubjectAverage {
-  subject: string;
-  average: number;
-  count: number;
-}
-
-interface WeeklyAverage {
-  week: string;
-  average: number;
-}
-
 const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ studentId }) => {
-  const [grades, setGrades] = useState<GradeData[]>([]);
+  const [statistics, setStatistics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<'7days' | '4weeks' | '12weeks' | 'year'>('4weeks');
+  const [period, setPeriod] = useState<'7days' | '4weeks' | '12weeks' | 'year'>('7days');
 
   useEffect(() => {
     fetchGrades();
@@ -41,10 +20,14 @@ const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ student
   const fetchGrades = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/grades?studentId=${studentId}`);
+      const response = await fetch(`/api/student-grades?view=statistics`, {
+        headers: {
+          'x-user-id': studentId
+        }
+      });
       if (response.ok) {
         const data = await response.json();
-        setGrades(data);
+        setStatistics(data.statistics);
       }
     } catch (error) {
       console.error('Error fetching grades:', error);
@@ -53,106 +36,21 @@ const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ student
     }
   };
 
-  const getFilteredGrades = () => {
-    const now = new Date();
-    const cutoffDate = new Date();
+  // Use statistics directly from API
+  const overallStats = statistics ? {
+    average: Math.round(statistics.averageGrade || 0),
+    highestGrade: Math.round(statistics.highestGrade || 0),
+    lowestGrade: Math.round(statistics.lowestGrade || 0),
+    totalGrades: statistics.totalGrades || 0
+  } : { average: 0, highestGrade: 0, lowestGrade: 0, totalGrades: 0 };
 
-    switch (period) {
-      case '7days':
-        cutoffDate.setDate(now.getDate() - 7);
-        break;
-      case '4weeks':
-        cutoffDate.setDate(now.getDate() - 28);
-        break;
-      case '12weeks':
-        cutoffDate.setDate(now.getDate() - 84);
-        break;
-      case 'year':
-        cutoffDate.setFullYear(now.getFullYear() - 1);
-        break;
-    }
-
-    return Array.isArray(grades) ? grades.filter(grade => new Date(grade.date) >= cutoffDate) : [];
-  };
-
-  const getSubjectAverages = (): SubjectAverage[] => {
-    const filteredGrades = getFilteredGrades();
-    const subjectGroups = filteredGrades.reduce((acc, grade) => {
-      const subjectName = grade.subject.name;
-      if (!acc[subjectName]) {
-        acc[subjectName] = [];
-      }
-      acc[subjectName].push(grade.grade);
-      return acc;
-    }, {} as Record<string, number[]>);
-
-    return Object.entries(subjectGroups).map(([subject, gradeList]) => ({
-      subject,
-      average: Math.round(gradeList.reduce((sum, grade) => sum + grade, 0) / gradeList.length),
-      count: gradeList.length
-    }));
-  };
-
-  const getWeeklyAverages = (): WeeklyAverage[] => {
-    const filteredGrades = getFilteredGrades();
-    const weekGroups = filteredGrades.reduce((acc, grade) => {
-      const date = new Date(grade.date);
-      const weekStart = new Date(date);
-      weekStart.setDate(date.getDate() - date.getDay());
-      const weekKey = weekStart.toISOString().split('T')[0];
-      
-      if (!acc[weekKey]) {
-        acc[weekKey] = [];
-      }
-      acc[weekKey].push(grade.grade);
-      return acc;
-    }, {} as Record<string, number[]>);
-
-    return Object.entries(weekGroups)
-      .map(([week, gradeList]) => ({
-        week: new Date(week).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        average: Math.round(gradeList.reduce((sum, grade) => sum + grade, 0) / gradeList.length)
-      }))
-      .sort((a, b) => new Date(a.week).getTime() - new Date(b.week).getTime())
-      .slice(-8); // Last 8 weeks
-  };
-
-  const getOverallStats = () => {
-    const filteredGrades = getFilteredGrades();
-    if (filteredGrades.length === 0) return { average: 0, trend: 0, totalGrades: 0 };
-
-    const average = Math.round(
-      filteredGrades.reduce((sum, grade) => sum + grade.grade, 0) / filteredGrades.length
-    );
-
-    // Calculate trend (compare first half vs second half)
-    const midPoint = Math.floor(filteredGrades.length / 2);
-    const firstHalf = filteredGrades.slice(0, midPoint);
-    const secondHalf = filteredGrades.slice(midPoint);
-
-    const firstAvg = firstHalf.length > 0 
-      ? firstHalf.reduce((sum, grade) => sum + grade.grade, 0) / firstHalf.length 
-      : 0;
-    const secondAvg = secondHalf.length > 0 
-      ? secondHalf.reduce((sum, grade) => sum + grade.grade, 0) / secondHalf.length 
-      : 0;
-
-    const trend = secondAvg - firstAvg;
-
-    return {
-      average,
-      trend: Math.round(trend * 10) / 10,
-      totalGrades: filteredGrades.length
-    };
-  };
-
-  const getGradeDistribution = () => {
-    const filteredGrades = getFilteredGrades();
+  const gradeDistribution = statistics?.recentGrades ? (() => {
+    const grades = statistics.recentGrades.map((g: any) => g.percentage || g.value);
     const distribution = {
-      excellent: filteredGrades.filter(g => g.grade >= 90).length,
-      good: filteredGrades.filter(g => g.grade >= 80 && g.grade < 90).length,
-      satisfactory: filteredGrades.filter(g => g.grade >= 70 && g.grade < 80).length,
-      needsImprovement: filteredGrades.filter(g => g.grade < 70).length,
+      excellent: grades.filter((g: number) => g >= 90).length,
+      good: grades.filter((g: number) => g >= 80 && g < 90).length,
+      satisfactory: grades.filter((g: number) => g >= 70 && g < 80).length,
+      needsImprovement: grades.filter((g: number) => g < 70).length,
     };
 
     return [
@@ -161,20 +59,19 @@ const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ student
       { name: 'Satisfactory (70-79%)', value: distribution.satisfactory, color: '#F59E0B' },
       { name: 'Needs Improvement (<70%)', value: distribution.needsImprovement, color: '#EF4444' },
     ].filter(item => item.value > 0);
-  };
-
-  const subjectAverages = getSubjectAverages();
-  const weeklyAverages = getWeeklyAverages();
-  const overallStats = getOverallStats();
-  const gradeDistribution = getGradeDistribution();
+  })() : [];
 
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="animate-pulse space-y-4">
           <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
+          <div className="grid grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+          <div className="h-64 bg-gray-200 rounded"></div>
         </div>
       </div>
     );
@@ -201,7 +98,7 @@ const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ student
       </div>
 
       {/* Overall Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
@@ -212,21 +109,23 @@ const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ student
           </div>
         </div>
 
-        <div className="bg-green-50 p-4 rounded-lg">
+        <div className="bg-yellow-50 p-4 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-700">Trend</p>
-              <div className="flex items-center gap-1">
-                <p className="text-2xl font-bold text-green-900">
-                  {overallStats.trend > 0 ? '+' : ''}{overallStats.trend}%
-                </p>
-                {overallStats.trend > 0 ? (
-                  <TrendingUp className="w-5 h-5 text-green-600" />
-                ) : overallStats.trend < 0 ? (
-                  <TrendingDown className="w-5 h-5 text-red-600" />
-                ) : null}
-              </div>
+              <p className="text-sm font-medium text-yellow-700">Highest Grade</p>
+              <p className="text-2xl font-bold text-yellow-900">{overallStats.highestGrade}%</p>
             </div>
+            <Trophy className="w-8 h-8 text-yellow-500" />
+          </div>
+        </div>
+
+        <div className="bg-orange-50 p-4 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-orange-700">Lowest Grade</p>
+              <p className="text-2xl font-bold text-orange-900">{overallStats.lowestGrade}%</p>
+            </div>
+            <Target className="w-8 h-8 text-orange-500" />
           </div>
         </div>
 
@@ -241,36 +140,11 @@ const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ student
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Subject Averages */}
-        <div>
-          <h4 className="text-md font-medium text-gray-900 mb-3">Subject Performance</h4>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={subjectAverages}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="subject" 
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                  fontSize={12}
-                />
-                <YAxis domain={[0, 100]} />
-                <Tooltip 
-                  formatter={(value: number, name: string) => [`${value}%`, 'Average']}
-                  labelFormatter={(label) => `Subject: ${label}`}
-                />
-                <Bar dataKey="average" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Grade Distribution */}
-        <div>
-          <h4 className="text-md font-medium text-gray-900 mb-3">Grade Distribution</h4>
-          <div className="h-64">
+      {/* Grade Distribution */}
+      <div className="w-full">
+        <h4 className="text-md font-medium text-gray-900 mb-3">Grade Distribution</h4>
+        <div className="h-64">
+          {gradeDistribution.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -291,7 +165,16 @@ const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ student
                 />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="text-center">
+                <BookOpen className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No grade data available for the selected period</p>
+              </div>
+            </div>
+          )}
+        </div>
+        {gradeDistribution.length > 0 && (
           <div className="mt-4 space-y-2">
             {gradeDistribution.map((item, index) => (
               <div key={index} className="flex items-center gap-2 text-sm">
@@ -303,30 +186,10 @@ const StudentGradeStatistics: React.FC<StudentGradeStatisticsProps> = ({ student
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Weekly Trend */}
-      {weeklyAverages.length > 0 && (
-        <div className="mt-6">
-          <h4 className="text-md font-medium text-gray-900 mb-3">Weekly Average Trend</h4>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyAverages}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="week" />
-                <YAxis domain={[0, 100]} />
-                <Tooltip 
-                  formatter={(value: number) => [`${value}%`, 'Weekly Average']}
-                />
-                <Bar dataKey="average" fill="#10B981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {grades.length === 0 && (
+      {!statistics && (
         <div className="text-center py-8 text-gray-500">
           No grade data available for the selected period.
         </div>

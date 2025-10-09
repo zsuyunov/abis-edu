@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -162,7 +163,7 @@ const ModernTimetableBulkUpload: React.FC<ModernTimetableBulkUploadProps> = ({
         formData.append("relatedData", JSON.stringify(relatedData));
       }
 
-      const response = await fetch("/api/timetables/bulk-upload", {
+      const response = await csrfFetch("/api/timetables/bulk-upload", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${localStorage.getItem("token")}`

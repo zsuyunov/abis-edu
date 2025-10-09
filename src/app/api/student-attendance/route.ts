@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       
-      const session = AuthService.verifyToken(token);
+      const session = await AuthService.verifyToken(token);
       if (!session?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Student ID is required" }, { status: 400 });
     }
     const period = url.searchParams.get("period") || "7days"; // 7days, 4weeks, 12weeks, year
+    const month = url.searchParams.get("month"); // e.g., "2025-10"
     const subjectId = url.searchParams.get("subjectId");
     const academicYearIdRaw = url.searchParams.get("academicYearId");
     const academicYearId: string | undefined = academicYearIdRaw === null ? undefined : academicYearIdRaw;
@@ -56,8 +57,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });
     }
 
-    // Calculate date range based on period
-    const dateRange = calculateDateRange(period);
+    // Calculate date range based on period or month
+    const dateRange = month ? calculateMonthRange(month) : calculateDateRange(period);
 
     // Build filter conditions
     const attendanceWhere: any = {
@@ -68,25 +69,31 @@ export async function GET(request: NextRequest) {
       },
     };
 
+    // Filter by subjectId directly (Attendance has direct subjectId field)
     if (subjectId) {
-      attendanceWhere.timetable = {
-        subjectIds: {
-          has: parseInt(subjectId)
-        }
-      };
+      attendanceWhere.subjectId = parseInt(subjectId);
     }
 
+    // Filter by academicYearId directly (Attendance has direct academicYearId field)
     if (academicYearId) {
-      attendanceWhere.timetable = {
-        ...attendanceWhere.timetable,
-        academicYearId: parseInt(academicYearId),
-      };
+      attendanceWhere.academicYearId = parseInt(academicYearId);
     }
 
-    // Get attendance records
+    // Debug: Log query parameters
+    console.log('🔍 Attendance Query:', {
+      studentId: requestedStudentId,
+      month,
+      period,
+      dateRange,
+      subjectId,
+      whereClause: attendanceWhere
+    });
+
+    // Get attendance records with subject information
     const attendanceRecords = await prisma.attendance.findMany({
       where: attendanceWhere,
       include: {
+        subject: true, // Direct relation from Attendance to Subject
         timetable: {
           include: {
             class: true,
@@ -97,6 +104,27 @@ export async function GET(request: NextRequest) {
         date: 'desc',
       },
     });
+
+    console.log(`✅ Found ${attendanceRecords.length} attendance records`);
+    
+    // If no records found, try to get total count for this student
+    if (attendanceRecords.length === 0) {
+      const totalCount = await prisma.attendance.count({
+        where: { studentId: requestedStudentId }
+      });
+      console.log(`📊 Total attendance records for student: ${totalCount}`);
+      
+      if (totalCount > 0) {
+        // Get a sample record to see the dates
+        const sampleRecords = await prisma.attendance.findMany({
+          where: { studentId: requestedStudentId },
+          take: 5,
+          orderBy: { date: 'desc' },
+          select: { date: true, status: true }
+        });
+        console.log('📅 Sample attendance dates:', sampleRecords);
+      }
+    }
 
     // Calculate statistics
     const stats = calculateAttendanceStats(attendanceRecords, period);
@@ -113,6 +141,24 @@ export async function GET(request: NextRequest) {
     // Format data for analytics components
     const barData = generateBarChartData(attendanceRecords, period);
     
+    // Format attendance records with subject information
+    const formattedAttendanceRecords = attendanceRecords.map(record => ({
+      id: record.id.toString(),
+      date: record.date.toISOString(),
+      status: record.status,
+      notes: record.notes,
+      subject: {
+        id: record.subject?.id?.toString() || record.subjectId?.toString() || '',
+        name: record.subject?.name || 'Unknown Subject'
+      },
+      timetable: {
+        startTime: record.timetable?.startTime ? 
+          new Date(record.timetable.startTime).toISOString().substring(11, 16) : '00:00',
+        endTime: record.timetable?.endTime ? 
+          new Date(record.timetable.endTime).toISOString().substring(11, 16) : '00:00'
+      }
+    }));
+    
     return NextResponse.json({
       student: {
         id: student.id,
@@ -122,6 +168,10 @@ export async function GET(request: NextRequest) {
         class: student.class,
         branch: student.branch,
       },
+      data: {
+        attendanceRecords: formattedAttendanceRecords
+      },
+      attendanceRecords: formattedAttendanceRecords, // Backward compatibility
       attendance: attendanceRecords,
       stats: {
         present: stats.presentCount,
@@ -133,8 +183,17 @@ export async function GET(request: NextRequest) {
       },
       barData,
       period,
-      dateRange,
+      month,
+      dateRange: {
+        start: dateRange.startDate.toISOString(),
+        end: dateRange.endDate.toISOString()
+      },
       subjects: student.class?.branch ? [] : [],
+      debug: {
+        recordCount: attendanceRecords.length,
+        formattedCount: formattedAttendanceRecords.length,
+        queryParams: { month, period, subjectId, academicYearId }
+      }
     });
 
   } catch (error) {
@@ -169,6 +228,24 @@ function calculateDateRange(period: string) {
       startDate.setDate(now.getDate() - 7);
   }
 
+  return { startDate, endDate };
+}
+
+function calculateMonthRange(month: string) {
+  // Month format: "2025-10"
+  const [year, monthNum] = month.split('-').map(Number);
+  // Start of month at 00:00:00
+  const startDate = new Date(year, monthNum - 1, 1, 0, 0, 0, 0);
+  // End of month at 23:59:59.999
+  const endDate = new Date(year, monthNum, 0, 23, 59, 59, 999);
+  
+  console.log(`📅 Month range for ${month}:`, {
+    start: startDate.toISOString(),
+    end: endDate.toISOString(),
+    startLocal: startDate.toString(),
+    endLocal: endDate.toString()
+  });
+  
   return { startDate, endDate };
 }
 
@@ -245,19 +322,14 @@ async function getAttendanceCalendar(studentId: string, dateRange: any, subjectI
     },
   };
 
+  // Filter by subjectId directly (Attendance has direct subjectId field)
   if (subjectId) {
-    attendanceWhere.timetable = {
-      subjectIds: {
-        has: parseInt(subjectId)
-      }
-    };
+    attendanceWhere.subjectId = parseInt(subjectId);
   }
 
+  // Filter by academicYearId directly (Attendance has direct academicYearId field)
   if (academicYearId) {
-    attendanceWhere.timetable = {
-      ...attendanceWhere.timetable,
-      academicYearId: parseInt(academicYearId),
-    };
+    attendanceWhere.academicYearId = parseInt(academicYearId);
   }
 
   const attendanceRecords = await prisma.attendance.findMany({

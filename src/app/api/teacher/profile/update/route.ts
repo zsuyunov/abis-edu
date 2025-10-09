@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
@@ -95,3 +96,5 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
+
+export const PUT = withCSRF(putHandler);

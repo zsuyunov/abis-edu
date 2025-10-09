@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 // Using Date.now() for unique IDs instead of uuid
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
@@ -87,3 +88,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

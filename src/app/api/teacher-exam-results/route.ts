@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
-    const session = AuthService.verifyToken(token);
+    const session = await AuthService.verifyToken(token);
     if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -150,7 +151,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     const token = AuthService.extractTokenFromHeader(authHeader);
@@ -158,7 +159,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
-    const session = AuthService.verifyToken(token);
+    const session = await AuthService.verifyToken(token);
     if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -209,3 +210,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const POST = withCSRF(postHandler);

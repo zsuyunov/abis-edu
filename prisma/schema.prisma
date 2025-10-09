@@ -8,9 +8,19 @@ datasource db {
 }
 
 model Admin {
-  id       String @id
-  phone    String @unique
-  password String
+  id                    String    @id
+  phone                 String    @unique
+  password              String
+  tokenVersion          Int       @default(0)
+  mfaEnabled            Boolean   @default(false)
+  mfaSecret             String?
+  lastPasswordChange    DateTime?
+  failedLoginAttempts   Int       @default(0)
+  accountLockedUntil    DateTime?
+  lastLoginAt           DateTime?
+  lastLoginIp           String?
+  passwordResetToken    String?   @unique
+  passwordResetExpires  DateTime?
 }
 
 model Student {
@@ -29,6 +39,12 @@ model Student {
   status              StudentStatus              @default(ACTIVE)
   studentId           String                     @unique
   updatedAt           DateTime                   @updatedAt
+  tokenVersion        Int                        @default(0)
+  lastPasswordChange  DateTime?
+  failedLoginAttempts Int                        @default(0)
+  accountLockedUntil  DateTime?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
   archiveComments     ArchiveComment[]
   attendances         Attendance[]
   complaints          Complaint[]
@@ -65,6 +81,16 @@ model Teacher {
   status              TeacherStatus              @default(ACTIVE)
   teacherId           String                     @unique
   updatedAt           DateTime                   @updatedAt
+  tokenVersion        Int                        @default(0)
+  mfaEnabled          Boolean                    @default(false)
+  mfaSecret           String?
+  lastPasswordChange  DateTime?
+  failedLoginAttempts Int                        @default(0)
+  accountLockedUntil  DateTime?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
+  passwordResetToken  String?                    @unique
+  passwordResetExpires DateTime?
   archiveComments     ArchiveComment[]
   attendances         Attendance[]
   complaints          Complaint[]
@@ -85,22 +111,28 @@ model Teacher {
 }
 
 model Parent {
-  id              String           @id
-  phone           String           @unique
-  createdAt       DateTime         @default(now())
-  password        String
-  archivedAt      DateTime?
-  firstName       String
-  lastName        String
-  parentId        String           @unique
-  restoredAt      DateTime?
-  status          ParentStatus     @default(ACTIVE)
-  updatedAt       DateTime         @updatedAt
-  branchId        Int
-  archiveComments ArchiveComment[]
-  complaints      Complaint[]
-  branch          Branch           @relation(fields: [branchId], references: [id])
-  studentParents  StudentParent[]
+  id                  String           @id
+  phone               String           @unique
+  createdAt           DateTime         @default(now())
+  password            String
+  archivedAt          DateTime?
+  firstName           String
+  lastName            String
+  parentId            String           @unique
+  restoredAt          DateTime?
+  status              ParentStatus     @default(ACTIVE)
+  updatedAt           DateTime         @updatedAt
+  branchId            Int
+  tokenVersion        Int              @default(0)
+  lastPasswordChange  DateTime?
+  failedLoginAttempts Int              @default(0)
+  accountLockedUntil  DateTime?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
+  archiveComments     ArchiveComment[]
+  complaints          Complaint[]
+  branch              Branch           @relation(fields: [branchId], references: [id])
+  studentParents      StudentParent[]
 
   @@index([branchId, status])
   @@index([firstName, lastName])
@@ -677,32 +709,42 @@ model Director {
 */
 
 model User {
-  id               String           @id @default(cuid())
-  firstName        String
-  lastName         String
-  gender           UserGender
-  dateOfBirth      DateTime
-  phone            String           @unique
-  userId           String           @unique
-  email            String?          @unique
-  status           UserStatus       @default(ACTIVE)
-  address          String
-  position         UserPosition
-  branchId         Int?
-  password         String
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  archivedAt       DateTime?
-  restoredAt       DateTime?
-  archiveComments  ArchiveComment[]
+  id                   String           @id @default(cuid())
+  firstName            String
+  lastName             String
+  gender               UserGender
+  dateOfBirth          DateTime
+  phone                String           @unique
+  userId               String           @unique
+  email                String?          @unique
+  status               UserStatus       @default(ACTIVE)
+  address              String
+  position             UserPosition
+  branchId             Int?
+  password             String
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  archivedAt           DateTime?
+  restoredAt           DateTime?
+  tokenVersion         Int              @default(0)
+  mfaEnabled           Boolean          @default(false)
+  mfaSecret            String?
+  lastPasswordChange   DateTime?
+  failedLoginAttempts  Int              @default(0)
+  accountLockedUntil   DateTime?
+  lastLoginAt          DateTime?
+  lastLoginIp          String?
+  passwordResetToken   String?          @unique
+  passwordResetExpires DateTime?
+  archiveComments      ArchiveComment[]
   // mealApprovals    MealApproval[]   @relation("MealApprovals")
   // createdMealPlans MealPlan[]       @relation("CreatedMealPlans")
-  receivedMessages Message[]        @relation("ReceivedMessages")
-  sentMessages     Message[]        @relation("SentMessages")
-  branch           Branch?          @relation(fields: [branchId], references: [id])
-  attachments      UserAttachment[]
-  education        UserEducation?
-  passport         UserPassport?
+  receivedMessages     Message[]        @relation("ReceivedMessages")
+  sentMessages         Message[]        @relation("SentMessages")
+  branch               Branch?          @relation(fields: [branchId], references: [id])
+  attachments          UserAttachment[]
+  education            UserEducation?
+  passport             UserPassport?
   // settings         UserSettings?
 }
 
@@ -1417,4 +1459,65 @@ enum BulkUploadStatus {
   COMPLETED
   FAILED
   PARTIALLY_COMPLETED
+}
+
+// ============================================================================
+// Security Models for Authentication Hardening
+// ============================================================================
+
+model RefreshToken {
+  id            String   @id @default(cuid())
+  tokenHash     String   @unique
+  userId        String
+  userRole      String
+  userAgent     String?
+  ipAddress     String?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  revokedAt     DateTime?
+  replacedBy    String?
+
+  @@index([userId, userRole])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+model SecurityLog {
+  id            Int      @id @default(autoincrement())
+  userId        String?
+  userRole      String?
+  eventType     SecurityEventType
+  eventStatus   SecurityEventStatus
+  ipAddress     String?
+  userAgent     String?
+  details       String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([userId, eventType])
+  @@index([eventType, createdAt])
+  @@index([eventStatus, createdAt])
+}
+
+enum SecurityEventType {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  TOKEN_REFRESH
+  PASSWORD_CHANGE
+  PASSWORD_RESET_REQUEST
+  PASSWORD_RESET_COMPLETE
+  MFA_ENABLED
+  MFA_DISABLED
+  MFA_VERIFICATION_SUCCESS
+  MFA_VERIFICATION_FAILED
+  ACCOUNT_LOCKED
+  ACCOUNT_UNLOCKED
+  SUSPICIOUS_ACTIVITY
+}
+
+enum SecurityEventStatus {
+  SUCCESS
+  FAILURE
+  WARNING
 }

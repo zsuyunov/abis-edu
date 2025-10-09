@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 import { writeFile, mkdir } from "fs/promises";
@@ -149,7 +150,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const studentId = request.headers.get('x-user-id');
     
@@ -281,7 +282,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+export const POST = withCSRF(postHandler);
+
+async function patchHandler(request: NextRequest) {
   try {
     const studentId = request.headers.get('x-user-id');
     
@@ -371,3 +374,5 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
+export const PATCH = withCSRF(patchHandler);

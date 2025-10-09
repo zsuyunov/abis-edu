@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   ClipboardCheck, 
@@ -63,7 +64,7 @@ const MealApprovals = () => {
   const { data: mealPlans, isLoading } = useQuery<MealPlan[]>({
     queryKey: ["doctor-meal-approvals"],
     queryFn: async () => {
-      const response = await fetch("/api/doctor/meal-approvals");
+      const response = await csrfFetch("/api/doctor/meal-approvals");
       if (!response.ok) throw new Error("Failed to fetch meal approvals");
       return response.json();
     },
@@ -71,7 +72,7 @@ const MealApprovals = () => {
 
   const approvalMutation = useMutation({
     mutationFn: async ({ mealPlanId, status, comment }: { mealPlanId: number; status: string; comment?: string }) => {
-      const response = await fetch("/api/doctor/meal-approvals", {
+      const response = await csrfFetch("/api/doctor/meal-approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mealPlanId, status, comment }),

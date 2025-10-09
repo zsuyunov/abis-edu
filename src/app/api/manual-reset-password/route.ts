@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const { phone } = await request.json();
 
@@ -73,3 +74,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

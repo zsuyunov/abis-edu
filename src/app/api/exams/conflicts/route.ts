@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import { checkExamConflicts } from "@/lib/actions";
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const body = await request.json();
     const { date, startTime, endTime, classId, roomNumber, excludeExamId } = body;

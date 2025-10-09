@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { format, addDays, subDays, isToday, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, Clock, XCircle, AlertCircle, Calendar, ChevronLeft, ChevronRight, BookOpen } from "lucide-react";
+import { CheckCircle, Clock, XCircle, AlertCircle, Calendar, ChevronLeft, ChevronRight, BookOpen, MapPin, User } from "lucide-react";
 import { useOptimizedQuery, usePrefetch, useMemoizedSelector } from "@/hooks/useOptimizedQuery";
 import { StudentAttendanceAnalyticsLazy, StudentGradeStatisticsLazy } from "@/components/lazy/LazyComponents";
 import SkeletonLoader from "@/components/ui/SkeletonLoader";
@@ -74,19 +74,25 @@ const OptimizedStudentScheduleDashboard = ({ studentId, studentData }: StudentSc
     return `${year}-${month}-${day}`;
   }, [selectedDate]);
 
-  // Optimized query for schedule data with caching
+  // Get day name from selected date
+  const getDayOfWeek = (date: Date) => {
+    const days = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+    return days[date.getDay()];
+  };
+
+  // Fetch weekly data once and cache it
   const {
-    data: timetables = [],
-    isLoading,
-    error,
-    refetch
+    data: weeklyData,
+    isLoading: isLoadingWeekly,
+    error: weeklyError,
+    refetch: refetchWeekly
   } = useOptimizedQuery(
-    ['student-timetables', studentId, formattedDate, branchId?.toString() || '', classId?.toString() || ''],
+    ['student-timetables-week', studentId, branchId?.toString() || '', classId?.toString() || ''],
     async () => {
       if (!branchId || !classId) return [];
       
       const response = await fetch(
-        `/api/student-timetables?studentId=${studentId}&startDate=${formattedDate}&endDate=${formattedDate}&branchId=${branchId}&classId=${classId}`,
+        `/api/student-timetables?studentId=${studentId}&view=weekly`,
         {
           headers: {
             'x-user-id': studentId,
@@ -99,73 +105,49 @@ const OptimizedStudentScheduleDashboard = ({ studentId, studentData }: StudentSc
       }
       
       const data = await response.json();
-      
-      // Filter and transform data
-      const filteredTimetables = (data.timetables || []).filter((timetable: any) => {
-        const timetableDate = typeof timetable.fullDate === 'string' 
-          ? timetable.fullDate.split('T')[0] 
-          : new Date(timetable.fullDate).toISOString().split('T')[0];
-        return timetableDate === formattedDate;
-      });
-      
-      // Remove duplicates and transform
-      const uniqueTimetables = filteredTimetables.filter((timetable: any, index: number, array: any[]) => {
-        const currentKey = `${timetable.fullDate}-${timetable.startTime}-${timetable.subject?.id}`;
-        return array.findIndex((t: any) => 
-          `${t.fullDate}-${t.startTime}-${t.subject?.id}` === currentKey
-        ) === index;
-      });
-      
-      return uniqueTimetables.map((timetable: any) => {
-        const dateStr = typeof timetable.fullDate === 'string' 
-          ? timetable.fullDate.split('T')[0] 
-          : new Date(timetable.fullDate).toISOString().split('T')[0];
-        
-        return {
-          id: timetable.id,
-          fullDate: dateStr,
-          startTime: timetable.startTime || "00:00",
-          endTime: timetable.endTime || "00:00",
-          lessonNumber: timetable.lessonNumber || 1,
-          classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
-          subject: timetable.subject,
-          topics: timetable.topics || [],
-          attendance: timetable.attendance
-        };
-      });
+      return data.timetables || [];
     },
     {
       enabled: !!branchId && !!classId,
-      staleTime: 2 * 60 * 1000, // 2 minutes for schedule data
-      refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
+      staleTime: 5 * 60 * 1000, // 5 minutes cache for weekly data
+      refetchInterval: 0, // Don't auto-refetch
     }
   );
 
-  // Prefetch adjacent days for smooth navigation
-  useEffect(() => {
-    if (branchId && classId) {
-      const tomorrow = addDays(selectedDate, 1);
-      const yesterday = subDays(selectedDate, 1);
-      
-      [tomorrow, yesterday].forEach(date => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        
-        prefetchQuery(
-          ['student-timetables', studentId, dateStr, branchId.toString(), classId.toString()],
-          async () => {
-            const response = await fetch(
-              `/api/student-timetables?studentId=${studentId}&startDate=${dateStr}&endDate=${dateStr}&branchId=${branchId}&classId=${classId}`,
-              { headers: { 'x-user-id': studentId } }
-            );
-            return response.ok ? response.json() : [];
-          }
-        );
-      });
-    }
-  }, [selectedDate, branchId, classId, studentId, prefetchQuery]);
+  // Filter timetables for selected day (client-side filtering for instant response)
+  const timetables = useMemo(() => {
+    if (!weeklyData || weeklyData.length === 0) return [];
+    
+    const dayOfWeek = getDayOfWeek(selectedDate);
+    
+    console.log('🔍 Filtering timetables:', {
+      selectedDate: format(selectedDate, 'yyyy-MM-dd (EEEE)'),
+      dayOfWeek,
+      totalTimetables: weeklyData.length,
+      // ES5-compatible unique list without iterating a Set
+      availableDays: weeklyData
+        .map((t: any) => t.dayOfWeek)
+        .filter((value: any, index: number, self: any[]) => self.indexOf(value) === index)
+    });
+    
+    // Filter timetables for the selected day
+    const dayTimetables = weeklyData.filter((timetable: any) => {
+      return timetable.dayOfWeek === dayOfWeek;
+    });
+    
+    console.log(`📅 Found ${dayTimetables.length} lessons for ${dayOfWeek}`);
+    
+    // Sort by start time
+    return dayTimetables.sort((a: any, b: any) => {
+      const timeA = a.startTime.split(':').map(Number);
+      const timeB = b.startTime.split(':').map(Number);
+      return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
+    });
+  }, [weeklyData, selectedDate]);
+
+  const isLoading = isLoadingWeekly;
+  const error = weeklyError;
+  const refetch = refetchWeekly;
 
   // Memoized navigation handlers
   const navigateWeek = useCallback((direction: "prev" | "next") => {
@@ -396,7 +378,7 @@ const OptimizedStudentScheduleDashboard = ({ studentId, studentData }: StudentSc
               className="text-center py-12"
             >
               <div className="text-6xl mb-4">🎉</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No classes today</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No lessons today</h3>
               <p className="text-gray-600">Enjoy your free time!</p>
             </motion.div>
           ) : (
@@ -407,15 +389,33 @@ const OptimizedStudentScheduleDashboard = ({ studentId, studentData }: StudentSc
               className="grid gap-3"
             >
               {timetables.map((timetable: any, index: number) => {
-                const lessonDate = new Date(timetable.fullDate + 'T' + timetable.startTime);
-                const lessonEndDate = new Date(timetable.fullDate + 'T' + timetable.endTime);
+                // Check if lesson is today and calculate status
                 const now = new Date();
+                const isToday = isSameDay(selectedDate, now);
+                const todayDateStr = format(selectedDate, 'yyyy-MM-dd');
                 
-                const isPastLesson = lessonEndDate < now;
+                // Parse times for status calculation
+                const [startHours, startMinutes] = timetable.startTime.split(':').map(Number);
+                const [endHours, endMinutes] = timetable.endTime.split(':').map(Number);
+                const lessonStart = new Date(todayDateStr + 'T' + timetable.startTime);
+                const lessonEnd = new Date(todayDateStr + 'T' + timetable.endTime);
                 
-                const cardStyles = isPastLesson 
+                const isPastLesson = isToday && now > lessonEnd;
+                const isCurrentLesson = isToday && now >= lessonStart && now <= lessonEnd;
+                
+                const cardStyles = isCurrentLesson
+                  ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-300 ring-2 ring-green-200"
+                  : isPastLesson 
                   ? "bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200" 
                   : "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200";
+                
+                // Get first subject and teacher if available
+                const subject = timetable.subjects && timetable.subjects.length > 0 
+                  ? timetable.subjects[0] 
+                  : null;
+                const teacher = timetable.teachers && timetable.teachers.length > 0 
+                  ? timetable.teachers[0] 
+                  : null;
                 
                 return (
                   <motion.div
@@ -426,37 +426,45 @@ const OptimizedStudentScheduleDashboard = ({ studentId, studentData }: StudentSc
                     className={`${cardStyles} p-4 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200`}
                   >
                     <div className="flex flex-col gap-2">
+                      {/* Subject Name */}
                       <div className="text-lg font-bold text-gray-900">
-                        {timetable.subject.name}
+                        {subject ? subject.name : 'Class Period'}
                       </div>
                       
+                      {/* Teacher */}
+                      {teacher && (
+                        <div className="text-sm text-gray-600 flex items-center gap-2">
+                          <User className="w-4 h-4" />
+                          {teacher.firstName} {teacher.lastName}
+                        </div>
+                      )}
+
+                      {/* Time */}
                       <div className="text-sm text-gray-600 flex items-center gap-2">
                         <Clock className="w-4 h-4" />
                         {formatTime(timetable.startTime)} – {formatTime(timetable.endTime)}
                       </div>
 
-                      <div className="text-sm text-gray-600 flex items-center gap-2">
-                        <BookOpen className="w-4 h-4" />
-                        {timetable.topics && timetable.topics.length > 0 
-                          ? timetable.topics[0].title 
-                          : "No lesson topic"
-                        }
-                      </div>
+                      {/* Room */}
+                      {timetable.roomNumber && (
+                        <div className="text-sm text-gray-600 flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          Room {timetable.roomNumber}
+                          {timetable.buildingName && ` (${timetable.buildingName})`}
+                        </div>
+                      )}
 
+                      {/* Status Badge */}
                       <div className="flex items-center justify-between mt-2">
                         <div className={`px-3 py-1 rounded-lg text-xs font-semibold ${
-                          isPastLesson 
+                          isCurrentLesson
+                            ? "bg-green-100 text-green-700 ring-1 ring-green-300"
+                            : isPastLesson 
                             ? "bg-gray-100 text-gray-700" 
                             : "bg-blue-100 text-blue-700"
                         }`}>
-                          {isPastLesson ? 'Completed' : 'Upcoming'}
+                          {isCurrentLesson ? '🔴 In Progress' : isPastLesson ? 'Completed' : 'Upcoming'}
                         </div>
-                        
-                        {isPastLesson && timetable.Attendance && timetable.Attendance.length > 0 && (
-                          <div className={`flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-medium bg-green-100 text-green-700`}>
-                            ✓ <span className="hidden sm:inline">Present</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </motion.div>

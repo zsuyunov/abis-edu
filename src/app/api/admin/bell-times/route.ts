@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 
 // Temporary in-memory storage until database migration is applied
 let savedBellTimes: any[] = [];
@@ -119,7 +120,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST - Create or update bell times
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const body = await request.json();
     console.log('Received bell times data:', body);
@@ -154,3 +155,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export const POST = withCSRF(postHandler);

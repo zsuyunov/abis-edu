@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import Image from "next/image";
 import { toast } from "react-toastify";
 import { Upload, FileText, X, Download, Eye, Calendar, Clock, User, BookOpen } from "lucide-react";
@@ -38,7 +39,7 @@ const TimetableTopicModal = ({ timetable, onClose, onSuccess }: TimetableTopicMo
   const fetchTopics = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/timetable-topics?timetableId=${timetable.id}`);
+      const response = await csrfFetch(`/api/timetable-topics?timetableId=${timetable.id}`);
       if (response.ok) {
         const data = await response.json();
         setTopics(data.topics || []);
@@ -58,7 +59,7 @@ const TimetableTopicModal = ({ timetable, onClose, onSuccess }: TimetableTopicMo
       formData.append('file', file);
       
       try {
-        const response = await fetch('/api/upload', {
+        const response = await csrfFetch('/api/upload', {
           method: 'POST',
           body: formData,
         });
@@ -111,7 +112,7 @@ const TimetableTopicModal = ({ timetable, onClose, onSuccess }: TimetableTopicMo
         academicYearId: timetable.academicYearId,
       };
 
-      const response = await fetch("/api/timetable-topics", {
+      const response = await csrfFetch("/api/timetable-topics", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -147,7 +148,7 @@ const TimetableTopicModal = ({ timetable, onClose, onSuccess }: TimetableTopicMo
 
   const handleUpdate = async (topicId: number, updates: any) => {
     try {
-      const response = await fetch(`/api/timetable-topics/${topicId}`, {
+      const response = await csrfFetch(`/api/timetable-topics/${topicId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -173,7 +174,7 @@ const TimetableTopicModal = ({ timetable, onClose, onSuccess }: TimetableTopicMo
     if (!confirm("Are you sure you want to delete this topic?")) return;
 
     try {
-      const response = await fetch(`/api/timetable-topics/${topicId}`, {
+      const response = await csrfFetch(`/api/timetable-topics/${topicId}`, {
         method: "DELETE",
       });
 

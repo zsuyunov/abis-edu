@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No token provided" }, { status: 401 });
     }
 
-    const user = AuthService.verifyToken(token);
+    const user = await AuthService.verifyToken(token);
     if (!user) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization");
     const token = AuthService.extractTokenFromHeader(authHeader);
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No token provided" }, { status: 401 });
     }
 
-    const user = AuthService.verifyToken(token);
+    const user = await AuthService.verifyToken(token);
     if (!user) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
@@ -148,3 +149,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, getDaysInMonth, getDay } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Users, BookOpen, Calendar, Check, X, Clock, Shield, Save } from 'lucide-react';
@@ -71,7 +72,7 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
     if (!selectedClass) return;
     
     try {
-      const response = await fetch(`/api/students/by-class?classId=${selectedClass}`);
+      const response = await csrfFetch(`/api/students/by-class?classId=${selectedClass}`);
       if (response.ok) {
         const data = await response.json();
         setStudents(data);
@@ -92,7 +93,7 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
         month: format(currentDate, 'yyyy-MM')
       });
 
-      const response = await fetch(`/api/attendance/history?${params}`);
+      const response = await csrfFetch(`/api/attendance/history?${params}`);
       if (response.ok) {
         const result = await response.json();
         const attendanceRecords = Array.isArray(result) ? result : [];
@@ -228,7 +229,7 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
 
       // Save attendance records
       const savePromises = recordsToSave.map(async (pending) => {
-        const response = await fetch('/api/attendance', {
+        const response = await csrfFetch('/api/attendance', {
           method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -252,7 +253,7 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
 
       // Delete attendance records (NO_RECORD)
       const deletePromises = recordsToDelete.map(async (pending) => {
-      const response = await fetch('/api/attendance', {
+      const response = await csrfFetch('/api/attendance', {
           method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

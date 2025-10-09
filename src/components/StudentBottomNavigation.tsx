@@ -49,7 +49,7 @@ const StudentBottomNavigation = () => {
     {
       icon: User,
       label: t('nav.profile'),
-      href: "/profile",
+      href: "/student/profile",
       color: "text-indigo-500",
       activeColor: "text-indigo-600",
     },

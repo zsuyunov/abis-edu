@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 
-export async function PATCH(
+async function patchHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -53,3 +54,5 @@ export async function PATCH(
     );
   }
 }
+
+export const PATCH = withCSRF(patchHandler);

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     // Try both authorization header and x-user-id header for compatibility
     const authHeader = request.headers.get('authorization');
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       
-      const session = AuthService.verifyToken(token);
+      const session = await AuthService.verifyToken(token);
       if (!session?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
@@ -123,6 +124,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withCSRF(postHandler);
+
 export async function GET(request: NextRequest) {
   try {
     // Try both authorization header and x-user-id header for compatibility
@@ -137,7 +140,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       
-      const session = AuthService.verifyToken(token);
+      const session = await AuthService.verifyToken(token);
       if (!session?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }

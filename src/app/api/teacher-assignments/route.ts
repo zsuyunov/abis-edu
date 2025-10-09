@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 
 export const revalidate = 60; // cache for 1 min
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const body = await request.json();
     const { teacherId, classId, subjectId, academicYearId, branchId, role } = body || {};
@@ -162,7 +163,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export const POST = withCSRF(postHandler);
+
+async function deleteHandler(request: NextRequest) {
   try {
     const formData = await request.formData();
 
@@ -235,3 +238,5 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+
+export const DELETE = withCSRF(deleteHandler);

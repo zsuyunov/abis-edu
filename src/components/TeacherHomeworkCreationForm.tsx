@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 
 interface TeacherHomeworkCreationFormProps {
   teacherId: string;
@@ -204,7 +205,7 @@ const TeacherHomeworkCreationForm = ({
         formDataToSend.append(`voiceMessages`, file);
       });
 
-      const response = await fetch("/api/teacher-homework/with-files", {
+      const response = await csrfFetch("/api/teacher-homework/with-files", {
         method: "POST",
         headers: {
           'x-user-id': teacherId,

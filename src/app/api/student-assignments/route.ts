@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const body = await request.json();
     const { studentId, classId, branchId, academicYearId, status = "ACTIVE" } = body;
@@ -194,3 +195,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

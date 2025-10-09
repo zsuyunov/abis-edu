@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withCSRF } from '@/lib/security';
 import prisma from '@/lib/prisma';
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
@@ -265,6 +266,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withCSRF(postHandler);
+
 export async function GET(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
@@ -373,7 +376,7 @@ export async function GET(request: NextRequest) {
 }
 
 // PUT method for updating individual grades
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
@@ -432,7 +435,9 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export const PUT = withCSRF(putHandler);
+
+async function deleteHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
@@ -494,3 +499,5 @@ export async function DELETE(request: NextRequest) {
     }, { status: 500 });
   }
 }
+
+export const DELETE = withCSRF(deleteHandler);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import Image from "next/image";
 import TimeSelector from "@/components/ui/TimeSelector";
 
@@ -144,7 +145,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
     if (formData.branchId && formData.academicYearId) {
       const fetchClasses = async () => {
         try {
-          const response = await fetch(`/api/classes?branchId=${formData.branchId}&academicYearId=${formData.academicYearId}`);
+          const response = await csrfFetch(`/api/classes?branchId=${formData.branchId}&academicYearId=${formData.academicYearId}`);
           const data = await response.json();
           setFilterData(prev => ({ ...prev, classes: Array.isArray(data) ? data : (data.classes || []) }));
         } catch (error) {
@@ -160,7 +161,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
     if (type === "update" && data?.branchId && data?.academicYearId) {
       const fetchClasses = async () => {
         try {
-          const response = await fetch(`/api/classes?branchId=${data.branchId}&academicYearId=${data.academicYearId}`);
+          const response = await csrfFetch(`/api/classes?branchId=${data.branchId}&academicYearId=${data.academicYearId}`);
           const classesData = await response.json();
           setFilterData(prev => ({ ...prev, classes: Array.isArray(classesData) ? classesData : (classesData.classes || []) }));
         } catch (error) {
@@ -189,7 +190,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
           
           console.log('Fetching teachers with params:', { subjectId: formData.subjectId, branchId: formData.branchId, classId: formData.classId });
           
-          const response = await fetch(`/api/teachers/with-subjects?${params}`);
+          const response = await csrfFetch(`/api/teachers/with-subjects?${params}`);
           const teachersData = await response.json();
           
           console.log('Teachers API response:', teachersData);
@@ -222,7 +223,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
             params.append('classId', data.classId);
           }
 
-          const response = await fetch(`/api/teachers/with-subjects?${params}`);
+          const response = await csrfFetch(`/api/teachers/with-subjects?${params}`);
           const teachersData = await response.json();
           
           console.log('Fetched teachers for edit:', teachersData);
@@ -284,7 +285,7 @@ const ExamForm = ({ type, data, onClose, onSuccess }: ExamFormProps) => {
 
       console.log('Submitting exam data:', submitData);
 
-      const response = await fetch('/api/exams', {
+      const response = await csrfFetch('/api/exams', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

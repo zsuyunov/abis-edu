@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Dispatch, SetStateAction, useEffect, useState, useTransition } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 // useFormState removed - using direct API calls for delete functionality
 import {
   teacherAssignmentSchema,
@@ -46,7 +47,7 @@ const TeacherAssignmentForm = ({
 
     try {
       console.log("🗑️ About to submit to API route");
-      const response = await fetch('/api/teacher-assignments', {
+      const response = await csrfFetch('/api/teacher-assignments', {
         method: 'DELETE',
         body: formData,
       });
@@ -277,7 +278,7 @@ const TeacherAssignmentForm = ({
   useEffect(() => {
     const refreshSubjects = async () => {
       try {
-        const response = await fetch('/api/subjects', {
+        const response = await csrfFetch('/api/subjects', {
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache'
@@ -364,7 +365,7 @@ const TeacherAssignmentForm = ({
       }
       try {
         setLoading(true);
-        const teachersRes = await fetch('/api/teachers?status=ACTIVE&limit=500');
+        const teachersRes = await csrfFetch('/api/teachers?status=ACTIVE&limit=500');
         if (teachersRes.ok) {
           const t = await teachersRes.json();
           setTeachers(t.teachers || []);
@@ -391,7 +392,7 @@ const TeacherAssignmentForm = ({
     if (!selectedAcademicYearId || !branchId) return;
 
     try {
-      const classesRes = await fetch(`/api/classes?academicYearId=${selectedAcademicYearId}&branchId=${branchId}`);
+      const classesRes = await csrfFetch(`/api/classes?academicYearId=${selectedAcademicYearId}&branchId=${branchId}`);
       if (classesRes.ok) {
         const c = await classesRes.json();
         setClasses(prev => ({ ...prev, [assignmentId]: Array.isArray(c) ? c : (c.classes || []) }));
@@ -404,7 +405,7 @@ const TeacherAssignmentForm = ({
   // Fetch subjects by branch
   const fetchSubjectsByBranch = async (branchId: string) => {
     try {
-      const response = await fetch(`/api/subjects/by-branch?branchId=${branchId}`, {
+      const response = await csrfFetch(`/api/subjects/by-branch?branchId=${branchId}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache'

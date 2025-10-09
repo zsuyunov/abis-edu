@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { format, addDays, subDays, isToday, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import TeacherHomeworkContainer from "./TeacherHomeworkContainer";
@@ -144,7 +145,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
       const startDate = `${year}-${month}-${day}`;
       const endDate = startDate;
       
-      const response = await fetch(
+      const response = await csrfFetch(
         `/api/teacher-timetables?teacherId=${teacherId}&startDate=${startDate}&endDate=${endDate}&branchId=${selectedBranchId}&mode=${selectedRole.toLowerCase()}`,
         {
           headers: {
@@ -275,7 +276,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
       formData.append('allowLateSubmission', homeworkData.allowLateSubmission?.toString() || 'true');
       formData.append('latePenaltyPerDay', homeworkData.latePenaltyPerDay || '0');
 
-      const response = await fetch('/api/teacher-homework/with-files', {
+      const response = await csrfFetch('/api/teacher-homework/with-files', {
         method: 'POST',
         headers: {
           'x-user-id': teacherId,
@@ -303,7 +304,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
 
   const handleSaveAttendance = async (attendanceData: any) => {
     try {
-      const response = await fetch('/api/teacher-attendance', {
+      const response = await csrfFetch('/api/teacher-attendance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -336,7 +337,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
 
   const handleSaveGrades = async (gradeData: any) => {
     try {
-      const response = await fetch('/api/teacher-grades', {
+      const response = await csrfFetch('/api/teacher-grades', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -379,7 +380,7 @@ const TeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherScheduleDas
     if (!selectedTimetable || !newTopic.trim()) return;
     
     try {
-      const response = await fetch('/api/timetable-topics', {
+      const response = await csrfFetch('/api/timetable-topics', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

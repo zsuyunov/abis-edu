@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -44,7 +45,7 @@ const TimetableBulkUpload: React.FC<TimetableBulkUploadProps> = ({
 
   const downloadTemplate = async () => {
     try {
-      const response = await fetch("/api/timetable-bulk-upload/template", {
+      const response = await csrfFetch("/api/timetable-bulk-upload/template", {
         method: "GET",
         headers: {
           "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -111,7 +112,7 @@ const TimetableBulkUpload: React.FC<TimetableBulkUploadProps> = ({
         });
       }, 200);
 
-      const response = await fetch("/api/timetable-bulk-upload", {
+      const response = await csrfFetch("/api/timetable-bulk-upload", {
         method: "POST",
         body: formData,
       });

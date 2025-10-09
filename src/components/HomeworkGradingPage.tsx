@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Users, Eye, CheckCircle, Clock, FileText, Mic, Image, Play, Pause, Download, X, Star, MessageSquare } from 'lucide-react';
 
@@ -70,7 +71,7 @@ const HomeworkGradingPage: React.FC<HomeworkGradingPageProps> = ({
       setLoading(true);
       
       // Fetch students and submissions
-      const response = await fetch(`/api/homework-grading?homeworkId=${homeworkId}`);
+      const response = await csrfFetch(`/api/homework-grading?homeworkId=${homeworkId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch data');
       }
@@ -112,7 +113,7 @@ const HomeworkGradingPage: React.FC<HomeworkGradingPageProps> = ({
     try {
       setSubmittingGrade(true);
       
-      const response = await fetch('/api/homework-grading', {
+      const response = await csrfFetch('/api/homework-grading', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

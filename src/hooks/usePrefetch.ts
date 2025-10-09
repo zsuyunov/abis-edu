@@ -71,16 +71,16 @@ const PREFETCH_RULES: PrefetchRule[] = [
   // Student Dashboard
   {
     currentPath: '/student',
-    prefetchPaths: ['/student/homework', '/student/grades', '/student/attendance'],
+    prefetchPaths: ['/student/homework', '/student/gradebook', '/student/attendance'],
     queryKeys: [
       ['student-homework', 'pending'],
-      ['student-grades', 'current-term'],
+      ['student-grades', 'statistics'],
       ['student-attendance', 'current-month']
     ],
     queryFns: [
-      () => fetch('/api/student/homework/pending').then(res => res.json()),
-      () => fetch('/api/student/grades/current').then(res => res.json()),
-      () => fetch('/api/student/attendance/current').then(res => res.json())
+      () => fetch('/api/student-homework?status=pending').then(res => res.json()),
+      () => fetch('/api/student-grades?view=statistics').then(res => res.json()),
+      () => fetch('/api/student-attendance?month=' + new Date().toISOString().slice(0, 7)).then(res => res.json())
     ],
     priority: 'high',
     delay: 800

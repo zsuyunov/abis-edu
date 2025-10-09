@@ -10,13 +10,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const currentUserId = AuthService.verifyToken(token);
-    if (!currentUserId || typeof currentUserId !== 'string') {
+    const currentUserId = await AuthService.verifyToken(token);
+    if (!currentUserId || typeof (currentUserId as any).id !== 'string') {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const url = new URL(request.url);
-    const studentId = url.searchParams.get("studentId") || currentUserId;
+    const studentId = url.searchParams.get("studentId") || (currentUserId as any).id;
 
     // Get student information
     const student = await prisma.student.findUnique({

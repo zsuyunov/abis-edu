@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Users, BookOpen, GraduationCap, X, Clock, MessageSquare, Edit3, BarChart3 } from 'lucide-react';
@@ -109,7 +110,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
     if (!selectedClass) return;
     
     try {
-      const response = await fetch(`/api/students/by-class?classId=${selectedClass}`);
+      const response = await csrfFetch(`/api/students/by-class?classId=${selectedClass}`);
       if (response.ok) {
         const data = await response.json();
         setStudents(data);
@@ -126,7 +127,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
     setIsLoadingLessons(true);
     try {
       const today = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/teacher-timetables?date=${today}&classId=${selectedLessonClass}&subjectId=${selectedLessonSubject}&branchId=${selectedLessonBranch}`, {
+      const response = await csrfFetch(`/api/teacher-timetables?date=${today}&classId=${selectedLessonClass}&subjectId=${selectedLessonSubject}&branchId=${selectedLessonBranch}`, {
         headers: {
           'x-user-id': teacherId,
         },
@@ -160,7 +161,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
       const subjectId = targetLesson.subjects?.[0]?.id || targetLesson.subject?.id || selectedLessonSubject;
       const classId = targetLesson.class?.id || selectedLessonClass;
 
-      const response = await fetch(`/api/students?classId=${classId}&subjectId=${subjectId}`, {
+      const response = await csrfFetch(`/api/students?classId=${classId}&subjectId=${subjectId}`, {
         headers: {
           'x-user-id': teacherId,
         },
@@ -219,7 +220,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
         comments: lessonGradeComments[student.id] || '',
       }));
 
-      const response = await fetch('/api/grades', {
+      const response = await csrfFetch('/api/grades', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -279,7 +280,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
         ...(selectedBranch && { branchId: selectedBranch })
       });
 
-      const response = await fetch(`/api/grades?${params}`);
+      const response = await csrfFetch(`/api/grades?${params}`);
       if (response.ok) {
         const result = await response.json();
         console.log('Grades API Response:', result);
@@ -352,7 +353,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
 
     setIsUpdating(true);
     try {
-      const response = await fetch('/api/grades', {
+      const response = await csrfFetch('/api/grades', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

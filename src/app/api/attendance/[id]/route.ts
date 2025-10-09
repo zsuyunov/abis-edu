@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from '@/lib/prisma';
 import { headers } from 'next/headers';
 
 // PATCH /api/attendance/[id] - Update attendance record
-export async function PATCH(
+async function patchHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -67,8 +68,10 @@ export async function PATCH(
   }
 }
 
+export const PATCH = withCSRF(patchHandler);
+
 // DELETE /api/attendance/[id] - Delete attendance record
-export async function DELETE(
+async function deleteHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -112,3 +115,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export const DELETE = withCSRF(deleteHandler);

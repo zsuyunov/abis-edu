@@ -1,10 +1,55 @@
+/**
+ * Student Assignments Export API with Plain Text Passwords
+ * 
+ * SECURITY NOTES:
+ * - This endpoint exports student login credentials in plain text format (first_name_abisedu)
+ * - Access is restricted to authenticated admins only
+ * - All export actions are logged for security audit
+ * - Exported files should be handled securely and deleted after distribution
+ * - Passwords are standardized to match the format: firstname_abisedu
+ * 
+ * IMPORTANT: The exported Excel file contains sensitive information and should be:
+ * 1. Stored securely
+ * 2. Transmitted through secure channels only
+ * 3. Deleted after passwords are distributed to students
+ * 4. Never committed to version control or publicly accessible locations
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import * as XLSX from 'xlsx';
-import bcrypt from 'bcryptjs';
+import { headers } from "next/headers";
 
 export async function GET(request: NextRequest) {
   try {
+    // Security: Verify admin authentication
+    const headersList = headers();
+    const userId = headersList.get("x-user-id");
+    
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized - Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    // Security: Verify user is an admin
+    const admin = await prisma.admin.findUnique({
+      where: { id: userId },
+      select: { id: true }
+    });
+
+    if (!admin) {
+      console.warn(`⚠️ Unauthorized access attempt to student passwords export by user ${userId}`);
+      return NextResponse.json(
+        { success: false, error: "Unauthorized - Admin access required" },
+        { status: 403 }
+      );
+    }
+
+    // Log the export action for security audit
+    console.log(`🔐 Admin ${userId} is exporting student passwords`);
+
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get("branchId");
     const academicYearId = searchParams.get("academicYearId");
@@ -80,54 +125,33 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Helper function to get the actual login password
-    const getActualPassword = async (student: any) => {
-      // Try common password patterns that might be used
-      const possiblePasswords = [
-        `${student.lastName.toLowerCase()}_abisedu`,
-        `${student.lastName}_abisedu`, 
-        `${student.lastName.toLowerCase()}_suzuk`,
-        `${student.lastName}_suzuk`,
-        `${student.lastName.toLowerCase()}`,
-        `${student.lastName}`,
-        `${student.studentId}`,
-        `${student.phone}`,
-        'password',
-        '123456',
-        'student123'
-      ];
-
-      for (const password of possiblePasswords) {
-        try {
-          const isMatch = await bcrypt.compare(password, student.password);
-          if (isMatch) {
-            return password;
-          }
-        } catch (error) {
-          console.error(`Error checking password for student ${student.studentId}:`, error);
-        }
-      }
+    // Prepare data for Excel export with first_name_abisedu passwords
+    const excelData = students.map((student, index) => {
+      // Extract first name (first word of the full name) and create password
+      // This matches the password format used in update-students-passwords.js
+      const firstName = student.firstName.split(' ')[0].toLowerCase();
+      const loginPassword = `${firstName}_abisedu`;
       
-      return 'Unknown Password';
-    };
-
-    // Prepare data for Excel export with actual login passwords
-    const excelData = await Promise.all(students.map(async (student, index) => {
-      const actualPassword = await getActualPassword(student);
-      console.log(`Export - Student: ${student.firstName} ${student.lastName}, Login Password: ${actualPassword}`);
       return {
         'No': index + 1,
         'Student ID': student.studentId,
         'Full Name': `${student.firstName} ${student.lastName}`,
         'Phone Number': student.phone,
-        'Login Password': actualPassword, // Show the actual password students use to log in
+        'Login Password': loginPassword, // Plain text password in first_name_abisedu format
         'Class': student.class?.name || 'N/A',
         'Academic Year': student.class?.academicYear?.name || 'N/A',
         'Branch': student.branch?.shortName || 'N/A',
         'Status': student.status,
         'Assigned Date': student.createdAt ? new Date(student.createdAt).toLocaleDateString() : 'N/A',
       };
-    }));
+    });
+
+    // Security audit log
+    console.log(`📊 Successfully exported ${students.length} student passwords for:`);
+    console.log(`   - Branch: ${students[0]?.branch?.shortName || 'Unknown'}`);
+    console.log(`   - Class: ${students[0]?.class?.name || 'Unknown'}`);
+    console.log(`   - Academic Year: ${students[0]?.class?.academicYear?.name || 'Unknown'}`);
+    console.log(`   - Exported by Admin: ${userId}`);
 
     // Create workbook and worksheet
     const workbook = XLSX.utils.book_new();

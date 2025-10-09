@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { X, Save, Users, Search, MessageSquare } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -64,7 +65,7 @@ const GradeModal = ({
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const response = await fetch(
+      const response = await csrfFetch(
         `/api/attendance/students?classId=${lessonData.classId}&subjectId=${lessonData.subjectId}&branchId=${lessonData.branchId}&academicYearId=${lessonData.academicYearId}`,
         {
           headers: {
@@ -156,7 +157,7 @@ const GradeModal = ({
         return;
       }
 
-      const response = await fetch('/api/teacher-grades', {
+      const response = await csrfFetch('/api/teacher-grades', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { X, Upload, FileText, Image as ImageIcon, Mic, Calendar, Clock, Target, Award } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -129,7 +130,7 @@ const HomeworkModal: React.FC<HomeworkModalProps> = ({
         formDataToSend.append(`attachmentTypes`, attachment.type);
       });
 
-      const response = await fetch('/api/teacher-homework', {
+      const response = await csrfFetch('/api/teacher-homework', {
         method: 'POST',
         headers: {
           'x-user-id': teacherId,

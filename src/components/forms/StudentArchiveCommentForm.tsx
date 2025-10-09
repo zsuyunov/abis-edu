@@ -77,6 +77,9 @@ const StudentArchiveCommentForm = ({
       setOpen(false);
       router.refresh();
     }
+    if (state.error) {
+      toast.error(`Failed to ${action.toLowerCase()} student ${studentName}. Please try again.`);
+    }
   }, [state, router, setOpen, studentName, action]);
 
   const isArchive = action === "ARCHIVE";

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Users, BookOpen, Calendar, Check, X, Clock, Shield, Save, Edit3, MessageSquare } from 'lucide-react';
@@ -78,7 +79,7 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
     if (!selectedClass) return;
     
     try {
-      const response = await fetch(`/api/students/by-class?classId=${selectedClass}`);
+      const response = await csrfFetch(`/api/students/by-class?classId=${selectedClass}`);
       if (response.ok) {
         const data = await response.json();
         setStudents(data);
@@ -99,7 +100,7 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
         month: format(currentDate, 'yyyy-MM')
       });
 
-      const response = await fetch(`/api/grades?${params}`);
+      const response = await csrfFetch(`/api/grades?${params}`);
       if (response.ok) {
         const result = await response.json();
         const gradeRecords = result.grades || result.data?.grades || result.data || result;
@@ -268,7 +269,7 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
 
       // Save grade records
       const savePromises = recordsToSave.map(async (pending) => {
-        const response = await fetch('/api/grades', {
+        const response = await csrfFetch('/api/grades', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -292,7 +293,7 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
 
       // Delete grade records (No Record)
       const deletePromises = recordsToDelete.map(async (pending) => {
-        const response = await fetch('/api/grades', {
+        const response = await csrfFetch('/api/grades', {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',

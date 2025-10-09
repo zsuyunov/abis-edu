@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get("x-user-id");
 
@@ -186,7 +187,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export const POST = withCSRF(postHandler);
+
+async function deleteHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get("x-user-id");
     const { searchParams } = new URL(request.url);
@@ -229,3 +232,5 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export const DELETE = withCSRF(deleteHandler);

@@ -1,358 +1,260 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useMemo } from "react";
 import { 
   Clock, 
   MapPin, 
-  Users, 
   BookOpen, 
-  Calendar,
   User,
-  GraduationCap,
   Building,
-  ChevronRight,
-  Check,
-  X,
   AlertCircle,
-  Timer,
-  UserCheck
+  Calendar as CalendarIcon
 } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useOptimizedQuery } from "@/hooks/useOptimizedQuery";
 
 interface TimetableEntry {
   id: number;
-  fullDate: string;
-  day: string;
+  dayOfWeek: string;
   startTime: string;
   endTime: string;
   roomNumber: string;
   buildingName?: string;
-  status: string;
-  subject: { id: number; name: string };
+  subjects: Array<{ id: number; name: string }>;
+  teachers: Array<{ id: string; firstName: string; lastName: string }>;
   class: { id: number; name: string };
-  teacher: { id: string; firstName: string; lastName: string };
   branch: { id: number; shortName: string };
-  attendance?: {
-    id: number;
-    status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
-    date: string;
-  };
+  academicYear?: { id: number; name: string };
 }
 
 interface StudentWeeklyTimetableProps {
   studentId: string;
-  studentData: any;
-  relatedData: {
-    timetables: TimetableEntry[];
-    currentWeekStart: string;
-  };
-  onDataUpdate: (data: any) => void;
+  filters?: any;
+  dateRange?: { start: Date; end: Date };
 }
 
-const StudentWeeklyTimetable: React.FC<StudentWeeklyTimetableProps> = ({
+const StudentWeeklyTimetable = ({ 
   studentId,
-  studentData,
-  relatedData,
-  onDataUpdate,
-}) => {
-  const [selectedWeek, setSelectedWeek] = useState(new Date());
-  const [timetableData, setTimetableData] = useState<TimetableEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  filters = {},
+  dateRange 
+}: StudentWeeklyTimetableProps) => {
+  const { t } = useLanguage();
 
-  useEffect(() => {
-    if (relatedData?.timetables) {
-      setTimetableData(relatedData.timetables);
-    }
-  }, [relatedData]);
+  const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+  const timeSlots = [
+    "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", 
+    "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
+    "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00"
+  ];
 
-  const getAttendanceIcon = (status?: string) => {
-    switch (status) {
-      case 'PRESENT':
-        return <Check className="w-4 h-4 text-green-600" />;
-      case 'ABSENT':
-        return <X className="w-4 h-4 text-red-600" />;
-      case 'LATE':
-        return <Timer className="w-4 h-4 text-yellow-600" />;
-      case 'EXCUSED':
-        return <UserCheck className="w-4 h-4 text-blue-600" />;
-      default:
-        return <AlertCircle className="w-4 h-4 text-gray-400" />;
-    }
+  // Function to format day names for display
+  const formatDayName = (day: string) => {
+    return day.charAt(0) + day.slice(1).toLowerCase();
   };
 
-  const getAttendanceText = (status?: string) => {
-    switch (status) {
-      case 'PRESENT':
-        return 'Present';
-      case 'ABSENT':
-        return 'Absent';
-      case 'LATE':
-        return 'Late';
-      case 'EXCUSED':
-        return 'Excused';
-      default:
-        return 'No Record';
-    }
-  };
+  // Optimized query with caching for super-fast performance
+  const {
+    data: timetables = [],
+    isLoading: loading,
+    error: fetchError,
+    refetch
+  } = useOptimizedQuery(
+    ['student-weekly-timetables', studentId, JSON.stringify(filters)],
+    async () => {
+      const queryParams = new URLSearchParams({
+        studentId,
+        view: 'weekly',
+        ...filters,
+        ...(dateRange && {
+          startDate: dateRange.start.toISOString().split('T')[0],
+          endDate: dateRange.end.toISOString().split('T')[0],
+        })
+      });
 
-  const getAttendanceColor = (status?: string) => {
-    switch (status) {
-      case 'PRESENT':
-        return 'bg-green-50 text-green-700 border-green-200';
-      case 'ABSENT':
-        return 'bg-red-50 text-red-700 border-red-200';
-      case 'LATE':
-        return 'bg-yellow-50 text-yellow-700 border-yellow-200';
-      case 'EXCUSED':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      default:
-        return 'bg-gray-50 text-gray-500 border-gray-200';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'SCHEDULED':
-        return 'bg-blue-100 text-blue-800';
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-800';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-800';
-      case 'RESCHEDULED':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const isCurrentLesson = (entry: TimetableEntry) => {
-    const now = new Date();
-    const lessonDate = new Date(entry.fullDate);
-    const [startHour, startMinute] = entry.startTime.split(':').map(Number);
-    const [endHour, endMinute] = entry.endTime.split(':').map(Number);
-    
-    const lessonStart = new Date(lessonDate);
-    lessonStart.setHours(startHour, startMinute, 0, 0);
-    
-    const lessonEnd = new Date(lessonDate);
-    lessonEnd.setHours(endHour, endMinute, 0, 0);
-    
-    return now >= lessonStart && now <= lessonEnd;
-  };
-
-  const isPastLesson = (entry: TimetableEntry) => {
-    const now = new Date();
-    const lessonDate = new Date(entry.fullDate);
-    const [endHour, endMinute] = entry.endTime.split(':').map(Number);
-    
-    const lessonEnd = new Date(lessonDate);
-    lessonEnd.setHours(endHour, endMinute, 0, 0);
-    
-    return now > lessonEnd;
-  };
-
-  const groupByDay = (timetables: TimetableEntry[]) => {
-    const grouped: { [key: string]: TimetableEntry[] } = {};
-    
-    timetables.forEach(entry => {
-      const day = entry.day;
-      if (!grouped[day]) {
-        grouped[day] = [];
+      const response = await fetch(`/api/student-timetables?${queryParams}`, {
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-id': studentId
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load timetable');
       }
-      grouped[day].push(entry);
-    });
-    
-    // Sort entries within each day by start time
-    Object.keys(grouped).forEach(day => {
-      grouped[day].sort((a, b) => a.startTime.localeCompare(b.startTime));
-    });
-    
-    return grouped;
-  };
+      
+      const data = await response.json();
+      return data.timetables || [];
+    },
+    {
+      staleTime: 5 * 60 * 1000, // 5 minutes cache
+      refetchInterval: 0, // Manual refetch only
+    }
+  );
 
-  const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const groupedTimetables = groupByDay(timetableData);
+  const error = fetchError ? 'Failed to load timetable' : null;
+
+  // Memoized function to get timetable for a specific slot (super-fast lookup)
+  const getTimetableForSlot = useMemo(() => {
+    // Create a map for O(1) lookup instead of O(n) find
+    const slotMap = new Map<string, TimetableEntry>();
+    
+    timetables.forEach((entry: TimetableEntry) => {
+      const [startHours, startMinutes] = entry.startTime.split(':').map(Number);
+      const [endHours, endMinutes] = entry.endTime.split(':').map(Number);
+      const startMinutesTotal = startHours * 60 + startMinutes;
+      const endMinutesTotal = endHours * 60 + endMinutes;
+      
+      // Map all time slots within this lesson
+      timeSlots.forEach(timeSlot => {
+        const [slotHours, slotMinutes] = timeSlot.split(':').map(Number);
+        const slotMinutesTotal = slotHours * 60 + slotMinutes;
+        
+        if (slotMinutesTotal >= startMinutesTotal && slotMinutesTotal < endMinutesTotal) {
+          const key = `${entry.dayOfWeek}-${timeSlot}`;
+          slotMap.set(key, entry);
+        }
+      });
+    });
+    
+    return (day: string, timeSlot: string): TimetableEntry | undefined => {
+      return slotMap.get(`${day}-${timeSlot}`);
+    };
+  }, [timetables]);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="grid grid-cols-7 gap-2">
+            {[...Array(7 * 10)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="flex items-center gap-3 text-red-600 bg-red-50 p-4 rounded-lg">
+          <AlertCircle className="w-6 h-6" />
+          <div>
+            <h3 className="font-semibold">Error Loading Timetable</h3>
+            <p className="text-sm">{error}</p>
+            <button 
+              onClick={() => refetch()}
+              className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-white" />
-            </div>
+          <CalendarIcon className="w-8 h-8" />
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Weekly Schedule</h3>
-              <p className="text-sm text-gray-600">
-                {studentData?.student?.class?.name} • {studentData?.student?.branch?.shortName}
-              </p>
-            </div>
-          </div>
-          
-          <div className="text-right">
-            <div className="text-sm text-gray-600">Current Week</div>
-            <div className="font-medium text-gray-900">
-              {new Date().toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric',
-                year: 'numeric'
-              })}
-            </div>
+            <h2 className="text-2xl font-bold">My Weekly Timetable</h2>
+            <p className="text-blue-100 text-sm mt-1">Your class schedule for the week</p>
           </div>
         </div>
       </div>
 
-      {/* Timetable Content */}
-      <div className="p-6">
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin text-2xl mb-2">📚</div>
-            <div className="text-gray-600">Loading schedule...</div>
+      {/* Timetable Grid */}
+      <div className="overflow-x-auto">
+        <div className="inline-block min-w-full align-middle">
+          <table className="min-w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b-2 border-gray-200">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200 sticky left-0 bg-gray-50 z-10">
+                  Time
+                </th>
+                {days.map(day => (
+                  <th key={day} className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200 min-w-[180px]">
+                    {formatDayName(day)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {timeSlots.map((timeSlot, timeIndex) => (
+                <tr key={timeSlot} className={timeIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td className="px-4 py-2 text-xs font-medium text-gray-600 border-r border-gray-200 sticky left-0 z-10 bg-inherit">
+                    <div className="flex flex-col items-center">
+                      <Clock className="w-3 h-3 mb-1 text-gray-400" />
+                      {timeSlot}
           </div>
-        ) : timetableData.length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Classes Scheduled</h3>
-            <p className="text-gray-600">
-              There are no classes scheduled for this week.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {dayOrder.map(day => {
-              const dayTimetables = groupedTimetables[day] || [];
-              
-              if (dayTimetables.length === 0) return null;
+                  </td>
+                  {days.map(day => {
+                    const timetable = getTimetableForSlot(day, timeSlot);
               
               return (
-                <div key={day} className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <h4 className="text-lg font-semibold text-gray-900">{day}</h4>
-                    <div className="flex-1 h-px bg-gray-200"></div>
-                    <span className="text-sm text-gray-500">
-                      {dayTimetables.length} class{dayTimetables.length !== 1 ? 'es' : ''}
-                    </span>
+                      <td key={`${day}-${timeSlot}`} className="px-2 py-2 border-r border-gray-200 align-top">
+                        {timetable && (
+                          <div className="p-3 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 hover:shadow-md transition-all duration-200">
+                            {/* Subjects */}
+                            <div className="font-semibold text-sm text-gray-900 mb-2">
+                              {timetable.subjects && timetable.subjects.length > 0 
+                                ? timetable.subjects.map(s => s.name).join(' | ')
+                                : 'No Subject'}
                   </div>
                   
-                  <div className="grid gap-3">
-                    {dayTimetables.map((entry) => {
-                      const isCurrent = isCurrentLesson(entry);
-                      const isPast = isPastLesson(entry);
-                      
-                      return (
-                        <div
-                          key={entry.id}
-                          className={`p-4 rounded-xl border transition-all duration-200 ${
-                            isCurrent
-                              ? 'border-blue-500 bg-blue-50 shadow-md'
-                              : isPast
-                              ? 'border-gray-200 bg-gray-50'
-                              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <div className="flex items-center gap-2">
-                                  <BookOpen className="w-5 h-5 text-blue-600" />
-                                  <h5 className="font-semibold text-gray-900">
-                                    {entry.subject.name}
-                                  </h5>
+                            {/* Time */}
+                            <div className="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {timetable.startTime} - {timetable.endTime}
                                 </div>
                                 
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(entry.status)}`}>
-                                  {entry.status}
-                                </span>
-                                
-                                {isCurrent && (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    <div className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></div>
-                                    Live Now
-                                  </span>
-                                )}
+                            {/* Teachers */}
+                            {timetable.teachers && timetable.teachers.length > 0 && (
+                              <div className="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                                <User className="w-3 h-3" />
+                                {timetable.teachers.map(t => `${t.firstName} ${t.lastName}`).join(', ')}
                               </div>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm text-gray-600">
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-4 h-4" />
-                                  <span>{entry.startTime} - {entry.endTime}</span>
-                                </div>
-                                
-                                <div className="flex items-center gap-2">
-                                  <MapPin className="w-4 h-4" />
-                                  <span>
-                                    Room {entry.roomNumber}
-                                    {entry.buildingName && ` (${entry.buildingName})`}
-                                  </span>
-                                </div>
-                                
-                                <div className="flex items-center gap-2">
-                                  <User className="w-4 h-4" />
-                                  <span>
-                                    {entry.teacher.firstName} {entry.teacher.lastName}
-                                  </span>
-                                </div>
-                              </div>
-                              
-                              {/* Attendance Status for Past Lessons */}
-                              {isPast && (
-                                <div className="mt-3 pt-3 border-t border-gray-200">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-gray-700">Attendance:</span>
-                                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm border ${getAttendanceColor(entry.attendance?.status)}`}>
-                                      {getAttendanceIcon(entry.attendance?.status)}
-                                      <span>{getAttendanceText(entry.attendance?.status)}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                            )}
                             
-                            <div className="flex items-center gap-2 ml-4">
-                              {isCurrent && (
-                                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                            {/* Room */}
+                            {timetable.roomNumber && (
+                              <div className="text-xs text-gray-600 flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                Room {timetable.roomNumber}
+                                {timetable.buildingName && ` (${timetable.buildingName})`}
+                                </div>
                               )}
-                              <ChevronRight className="w-5 h-5 text-gray-400" />
                             </div>
+                              )}
+                        {!timetable && (
+                          <div className="h-20 flex items-center justify-center text-gray-400">
+                            <span className="text-xs">-</span>
                           </div>
-                        </div>
+                        )}
+                      </td>
                       );
                     })}
-                  </div>
-                </div>
-              );
-            })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
           </div>
-        )}
       </div>
 
-      {/* Legend */}
-      <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-gray-600">Current Class</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Check className="w-4 h-4 text-green-600" />
-              <span className="text-gray-600">Present</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Timer className="w-4 h-4 text-yellow-600" />
-              <span className="text-gray-600">Late</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <X className="w-4 h-4 text-red-600" />
-              <span className="text-gray-600">Absent</span>
-            </div>
-          </div>
-          
-          <div className="text-gray-500">
-            Total: {timetableData.length} classes this week
-          </div>
+      {/* Empty State */}
+      {timetables.length === 0 && (
+        <div className="p-12 text-center">
+          <BookOpen className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">No Timetable Available</h3>
+          <p className="text-gray-600">Your class timetable hasn't been set up yet.</p>
         </div>
-      </div>
+      )}
     </div>
   );
 };

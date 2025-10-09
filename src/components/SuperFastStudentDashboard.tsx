@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { useScopedStudents } from '@/hooks/useScopedData';
 import { useOptimisticAttendance } from '@/hooks/useOptimisticUpdates';
 import { useHoverPrefetch } from '@/hooks/usePrefetch';
@@ -88,7 +89,7 @@ const SuperFastStudentDashboard: React.FC<SuperFastStudentDashboardProps> = ({
         case 'export':
           await exportWithFeedback(
             async () => {
-              const response = await fetch('/api/students/export', {
+              const response = await csrfFetch('/api/students/export', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -124,7 +125,7 @@ const SuperFastStudentDashboard: React.FC<SuperFastStudentDashboardProps> = ({
         case 'send-notification':
           await saveWithFeedback(
             async () => {
-              const response = await fetch('/api/notifications/bulk', {
+              const response = await csrfFetch('/api/notifications/bulk', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Phone, Lock, Eye, EyeOff, X } from "lucide-react";
 
@@ -78,7 +79,7 @@ const ProfileUpdateModal = ({
     setSuccess("");
 
     try {
-      const response = await fetch('/api/teacher/profile/update', {
+      const response = await csrfFetch('/api/teacher/profile/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

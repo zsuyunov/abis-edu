@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 import { writeFile, mkdir } from "fs/promises";
@@ -6,7 +7,7 @@ import { join } from "path";
 import path from "path";
 import { existsSync } from "fs";
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     // Try header-based auth first, then fallback to token auth
     const teacherId = request.headers.get('x-user-id');
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       
-      const session = AuthService.verifyToken(token);
+      const session = await AuthService.verifyToken(token);
       if (!session?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
@@ -331,3 +332,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

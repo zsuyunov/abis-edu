@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Clock, 
@@ -72,7 +73,7 @@ const BellTimesManagement: React.FC = () => {
   const fetchBellTimes = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/admin/bell-times?yearRange=${selectedYearRange}`);
+      const response = await csrfFetch(`/api/admin/bell-times?yearRange=${selectedYearRange}`);
       if (response.ok) {
         const data = await response.json();
         if (data.length === 0) {
@@ -98,7 +99,7 @@ const BellTimesManagement: React.FC = () => {
     setError(null);
 
     try {
-      const response = await fetch('/api/admin/bell-times', {
+      const response = await csrfFetch('/api/admin/bell-times', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

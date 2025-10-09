@@ -1,10 +1,32 @@
+/**
+ * Enhanced Security Middleware
+ * - Verifies JWT tokens with tokenVersion validation
+ * - Applies security headers (HSTS, CSP, etc.)
+ * - Role-based access control
+ * - Automatic token refresh when near expiry
+ */
+
 import { NextRequest, NextResponse } from "next/server";
+import { SecurityHeaders } from "@/lib/security/headers";
 
 // Define public routes that don't require authentication
-const publicRoutes = ["/login", "/admin-direct", "/logout", "/force-logout", "/test-panels", "/session-debug"];
+const publicRoutes = [
+  "/login",
+  "/admin-direct",
+  "/logout",
+  "/force-logout",
+  "/test-panels",
+  "/session-debug",
+];
 
 // Define API routes that should be allowed through
-const apiRoutes = ["/api/auth/login", "/api/auth/me", "/api/auth/logout"];
+const publicApiRoutes = [
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/refresh",
+  "/api/auth/password-reset/request",
+  "/api/auth/password-reset/complete",
+];
 
 // Define role-based route mappings
 const roleRoutes = {
@@ -19,22 +41,39 @@ const roleRoutes = {
   main_admission: "/main-admission",
   support_admission: "/support-admission",
   doctor: "/doctor",
-  chief: "/chief"
+  chief: "/chief",
 };
 
-// Simple JWT decoder for middleware
+/**
+ * Decode JWT without verification (for middleware only)
+ * SECURITY NOTE: This is a lightweight check for routing purposes.
+ * Full verification with DB tokenVersion check happens in API routes via TokenService.verifyAccessToken()
+ * The middleware only checks:
+ * - Token structure and expiry
+ * - Presence of tokenVersion field (rejects legacy tokens)
+ * The actual tokenVersion value is validated against DB in API routes
+ */
 function decodeJWT(token: string) {
   try {
-    const parts = token.split('.');
+    const parts = token.split(".");
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-    
+    const payload = JSON.parse(Buffer.from(parts[1], "base64").toString());
+
     // Check if token is expired
     if (payload.exp && Date.now() >= payload.exp * 1000) {
       return null;
     }
-    
-    return payload as { id: string; phone: string; role: string; name?: string; surname?: string; branchId?: any };
+
+    return payload as {
+      id: string;
+      phone: string;
+      role: string;
+      name?: string;
+      surname?: string;
+      branchId?: any;
+      tokenVersion?: number;
+      exp?: number;
+    };
   } catch (error) {
     return null;
   }
@@ -42,43 +81,112 @@ function decodeJWT(token: string) {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
+  // Create response
+  let response = NextResponse.next();
+
+  // Apply security headers to ALL responses
+  response = SecurityHeaders.apply(response);
+
   // Allow public routes
   if (publicRoutes.includes(pathname)) {
-    return NextResponse.next();
+    return response;
   }
 
-  // Allow API routes
-  if (apiRoutes.includes(pathname)) {
-    return NextResponse.next();
+  // Allow public API routes
+  if (publicApiRoutes.some(route => pathname === route)) {
+    return response;
   }
-  
+
+  // Allow Next.js static files and API routes that don't need auth
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api/health") ||
+    pathname === "/favicon.ico"
+  ) {
+    return response;
+  }
+
   // Get authentication token from cookie
   const token = request.cookies.get("auth_token")?.value;
-  
+
   if (!token) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // Redirect to login for protected pages
+    if (!pathname.startsWith("/api")) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    
+    // Return 401 for API routes
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 }
+    );
   }
-  
+
   // Decode and verify token
   const user = decodeJWT(token);
-  
+
   if (!user) {
-    const response = NextResponse.redirect(new URL("/login", request.url));
-    response.cookies.delete("auth_token");
-    return response;
+    // Token is invalid or expired
+    const redirectResponse = pathname.startsWith("/api")
+      ? NextResponse.json(
+          { error: "Invalid or expired token" },
+          { status: 401 }
+        )
+      : NextResponse.redirect(new URL("/login?error=session_expired", request.url));
+
+    // Clear invalid token
+    redirectResponse.cookies.delete("auth_token");
+    redirectResponse.cookies.delete("refresh_token");
+    return redirectResponse;
   }
-  
-  // Check if user is accessing the correct role-based route
+
+  // SECURITY: Reject tokens without tokenVersion (old tokens from before security update)
+  if (user.tokenVersion === undefined || user.tokenVersion === null) {
+    console.log(`⚠️ Rejecting legacy token without tokenVersion for user ${user.id}`);
+    
+    const redirectResponse = pathname.startsWith("/api")
+      ? NextResponse.json(
+          { error: "Security upgrade required. Please login again." },
+          { status: 401 }
+        )
+      : NextResponse.redirect(new URL("/login?error=security_upgrade", request.url));
+
+    // Clear old token
+    redirectResponse.cookies.delete("auth_token");
+    redirectResponse.cookies.delete("refresh_token");
+    return redirectResponse;
+  }
+
+  // Check if token is near expiry (less than 5 minutes remaining)
+  // Suggest refresh to client via header
+  if (user.exp) {
+    const timeUntilExpiry = user.exp * 1000 - Date.now();
+    if (timeUntilExpiry < 5 * 60 * 1000 && timeUntilExpiry > 0) {
+      response.headers.set("X-Token-Refresh-Suggested", "true");
+    }
+  }
+
+  // Check if user role has a defined route
   const userRoleRoute = roleRoutes[user.role as keyof typeof roleRoutes];
-  
-  // If user role doesn't have a defined route, redirect to login with error
+
   if (!userRoleRoute) {
-    const response = NextResponse.redirect(new URL("/login?error=unsupported_role", request.url));
-    response.cookies.delete("auth_token");
-    return response;
+    // Unsupported role
+    const errorResponse = pathname.startsWith("/api")
+      ? NextResponse.json(
+          { error: "Unsupported user role" },
+          { status: 403 }
+        )
+      : NextResponse.redirect(new URL("/login?error=unsupported_role", request.url));
+
+    errorResponse.cookies.delete("auth_token");
+    return errorResponse;
   }
-  
+
+  // Role-based access control
+  const isAccessingOwnRoute = pathname.startsWith(userRoleRoute) || pathname === "/";
+
+  // Check specific role routes
   if (pathname.startsWith("/admin") && user.role !== "admin") {
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
@@ -88,37 +196,50 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith("/student") && user.role !== "student") {
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
-  
-  // Handle root path - redirect to their role dashboard
+  if (pathname.startsWith("/parent") && user.role !== "parent") {
+    return NextResponse.redirect(new URL(userRoleRoute, request.url));
+  }
+
+  // Handle root path - redirect to role dashboard
   if (pathname === "/") {
     return NextResponse.redirect(new URL(userRoleRoute, request.url));
   }
-  
-  // Add user info to request headers for use in pages
-  const response = NextResponse.next();
-  
+
+  // Add user info to request headers for use in pages/API routes
   response.headers.set("x-user-id", user.id);
   response.headers.set("x-user-role", user.role);
-  response.headers.set("x-user-phone", user.phone || '');
-  response.headers.set("x-user-name", user.name || 'User');
-  response.headers.set("x-user-surname", user.surname || 'User');
+  response.headers.set("x-user-phone", user.phone || "");
+  response.headers.set("x-user-name", user.name || "User");
+  response.headers.set("x-user-surname", user.surname || "User");
+  
+  if (user.tokenVersion !== undefined) {
+    response.headers.set("x-token-version", String(user.tokenVersion));
+  }
+  
   if (user.branchId !== undefined && user.branchId !== null) {
     response.headers.set("x-branch-id", String(user.branchId));
   }
-  
-  // Set cookie for client-side access
-  response.cookies.set('userId', user.id, {
+
+  // Set non-httpOnly cookie for client-side access (if needed)
+  response.cookies.set("userId", user.id, {
     httpOnly: false,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7 // 7 days
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   });
-  
+
   return response;
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.gif|.*\\.svg|.*\\.ico|.*\\.webp).*)',
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico, icon files
+     * - public files (images, etc.)
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.gif|.*\\.svg|.*\\.ico|.*\\.webp).*)",
   ],
 };

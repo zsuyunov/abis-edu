@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, BookOpen, Upload, X, Image, FileText, Mic, Play, Square, Trash2, ArrowLeft, Calendar } from 'lucide-react';
 import ImageKitUpload from './ImageKitUpload';
@@ -176,7 +177,7 @@ const ModernHomeworkCreation: React.FC<ModernHomeworkCreationProps> = ({
         const formData = new FormData();
         formData.append('attachments', file);
         
-        const response = await fetch('/api/upload-attachments', {
+        const response = await csrfFetch('/api/upload-attachments', {
           method: 'POST',
           headers: {
             'x-user-id': teacherId,
@@ -262,7 +263,7 @@ const ModernHomeworkCreation: React.FC<ModernHomeworkCreationProps> = ({
         attachments: formData.attachments,
       };
 
-      const response = await fetch('/api/teacher-homework', {
+      const response = await csrfFetch('/api/teacher-homework', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -668,7 +669,7 @@ const ModernHomeworkCreation: React.FC<ModernHomeworkCreationProps> = ({
                                     formData.append('attachments', file);
                                     
                                     try {
-                                      const response = await fetch('/api/upload-attachments', {
+                                      const response = await csrfFetch('/api/upload-attachments', {
                                         method: 'POST',
                                         headers: {
                                           'x-user-id': teacherId,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { Download, FileText, Calendar, BarChart3, X } from "lucide-react";
 import { toast } from "react-toastify";
 
@@ -38,7 +39,7 @@ const TimetableExportModal = ({ teacherId, filters, onClose }: TimetableExportMo
         filters
       };
 
-      const response = await fetch('/api/teacher-timetables/export', {
+      const response = await csrfFetch('/api/teacher-timetables/export', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

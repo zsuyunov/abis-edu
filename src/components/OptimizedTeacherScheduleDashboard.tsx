@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { format, addDays, subDays, isToday, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -147,7 +148,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         const startDate = startOfWeek.toISOString().split('T')[0];
         const endDate = endOfWeek.toISOString().split('T')[0];
         
-        const response = await fetch(
+        const response = await csrfFetch(
           `/api/teacher-timetables?teacherId=${teacherId}&startDate=${startDate}&endDate=${endDate}&branchId=${selectedBranchId}&mode=${selectedRole.toLowerCase()}`,
           { 
             headers: { 'x-user-id': teacherId },
@@ -329,7 +330,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   // Topic mutation
   const topicMutation = useOptimizedMutation(
     async (topicData: { timetableId: string; title: string; }) => {
-      const response = await fetch('/api/timetable-topics', {
+      const response = await csrfFetch('/api/timetable-topics', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -411,7 +412,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const fetchStudents = useCallback(async (classId: number) => {
     setLoadingStudents(true);
     try {
-      const response = await fetch(`/api/students/by-class?classId=${classId}`);
+      const response = await csrfFetch(`/api/students/by-class?classId=${classId}`);
       if (response.ok) {
         const studentData = await response.json();
         setStudents(studentData);
@@ -525,7 +526,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
 
 
     try {
-      const response = await fetch('/api/attendance', {
+      const response = await csrfFetch('/api/attendance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -609,7 +610,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     }
     
     try {
-      const response = await fetch('/api/grades', {
+      const response = await csrfFetch('/api/grades', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

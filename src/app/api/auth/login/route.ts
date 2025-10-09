@@ -1,212 +1,469 @@
+/**
+ * Secure Login Route
+ * Implements OWASP best practices for authentication
+ * - Rate limiting to prevent brute force
+ * - Argon2 password verification
+ * - Account lockout after failed attempts
+ * - Security event logging
+ * - Short-lived access tokens + rotating refresh tokens
+ * - MFA support for admin/teacher accounts (currently disabled)
+ */
+
 import { NextRequest, NextResponse } from "next/server";
-import { AuthService } from "@/lib/auth";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
+import { 
+  PasswordService, 
+  TokenService, 
+  SecurityLogger, 
+  // MFAService, // TODO: Uncomment when enabling MFA
+  RateLimiter,
+  RateLimitPresets
+} from "@/lib/security";
+import { loginSchema } from "@/lib/security/validation";
+import { z } from "zod";
 
-export async function POST(request: NextRequest) {
+// Account lockout configuration
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MINUTES = 30;
+
+async function postHandler(request: NextRequest) {
+  const clientIp = RateLimiter.getClientIp(request);
+  const userAgent = request.headers.get('user-agent') || undefined;
+
   try {
-    const { phone, password } = await request.json();
+    // Rate limiting - prevent brute force attacks (ASYNC for Redis support)
+    const rateLimitResult = await RateLimiter.checkAsync(
+      `login:${clientIp}`,
+      RateLimitPresets.LOGIN
+    );
 
-    if (!phone || !password) {
+    if (!rateLimitResult.allowed) {
+      await SecurityLogger.logSuspiciousActivity(
+        undefined,
+        undefined,
+        'Rate limit exceeded for login attempts',
+        clientIp,
+        userAgent
+      );
+
       return NextResponse.json(
-        { error: "Phone number and password are required" },
+        { 
+          error: "Too many login attempts. Please try again later.",
+          retryAfter: Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)
+        },
+        { status: 429 }
+      );
+    }
+
+    // Parse and validate request body
+    const body = await request.json();
+    const validationResult = loginSchema.safeParse(body);
+
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: "Invalid input", details: validationResult.error.flatten() },
         { status: 400 }
       );
     }
 
-    // Check in all user tables to find the user
-    let user = null;
-    let userRole = null;
+    const { phone, password /*, mfaCode */ } = validationResult.data; // MFA disabled for now
+    
+    console.log(`\n🔐 Login attempt for phone: ${phone}`);
+
+    // Find user across all user tables
+    let user: any = null; // Using 'any' to handle different user types with security fields
+    let userRole: string | null = null;
+    let userTable: string | null = null;
 
     // Check Admin
-    const admin = await prisma.admin.findUnique({ where: { phone } });
+    const admin = await prisma.admin.findUnique({ 
+      where: { phone },
+      select: {
+        id: true,
+        phone: true,
+        password: true,
+        tokenVersion: true,
+        failedLoginAttempts: true,
+        accountLockedUntil: true,
+        lastLoginAt: true,
+        lastLoginIp: true,
+        lastPasswordChange: true,
+        // mfaEnabled: true, // Uncomment when enabling MFA
+        // mfaSecret: true,  // Uncomment when enabling MFA
+      } as any // Type assertion until Prisma client is regenerated after migration
+    });
     if (admin) {
       user = admin;
       userRole = "admin";
+      userTable = "admin";
     }
 
     // Check Teacher
     if (!user) {
-      const teacher = await prisma.teacher.findUnique({ where: { phone } });
+      const teacher = await prisma.teacher.findUnique({ 
+        where: { phone },
+        select: {
+          id: true,
+          phone: true,
+          password: true,
+          tokenVersion: true,
+          failedLoginAttempts: true,
+          accountLockedUntil: true,
+          lastLoginAt: true,
+          lastLoginIp: true,
+          lastPasswordChange: true,
+          // mfaEnabled: true, // Uncomment when enabling MFA
+          // mfaSecret: true,  // Uncomment when enabling MFA
+        } as any // Type assertion until Prisma client is regenerated after migration
+      });
       if (teacher) {
         user = teacher;
         userRole = "teacher";
+        userTable = "teacher";
       }
     }
 
     // Check Student
     if (!user) {
-      const student = await prisma.student.findFirst({ where: { phone } });
+      const student = await prisma.student.findFirst({ 
+        where: { phone },
+        select: {
+          id: true,
+          phone: true,
+          password: true,
+          tokenVersion: true,
+          failedLoginAttempts: true,
+          accountLockedUntil: true,
+          lastLoginAt: true,
+          lastLoginIp: true,
+          lastPasswordChange: true,
+        } as any // Type assertion until Prisma client is regenerated after migration
+      });
       if (student) {
-        console.log(`Found student: ${student.firstName} ${student.lastName}, phone: ${student.phone}`);
         user = student;
         userRole = "student";
+        userTable = "student";
       }
     }
 
     // Check Parent
     if (!user) {
-      const parent = await prisma.parent.findUnique({ where: { phone } });
+      const parent = await prisma.parent.findUnique({ 
+        where: { phone },
+        select: {
+          id: true,
+          phone: true,
+          password: true,
+          tokenVersion: true,
+          failedLoginAttempts: true,
+          accountLockedUntil: true,
+          lastLoginAt: true,
+          lastLoginIp: true,
+          lastPasswordChange: true,
+        } as any // Type assertion until Prisma client is regenerated after migration
+      });
       if (parent) {
         user = parent;
         userRole = "parent";
+        userTable = "parent";
       }
     }
 
-    // Check Main Director (User with MAIN_DIRECTOR position)
+    // Check User table for staff positions
     if (!user) {
-      const mainDirector = await prisma.user.findUnique({ 
+      const staffUser: any = await prisma.user.findUnique({ 
         where: { phone },
-        include: { branch: true }
+        select: {
+          id: true,
+          phone: true,
+          password: true,
+          position: true,
+          tokenVersion: true,
+          failedLoginAttempts: true,
+          accountLockedUntil: true,
+          lastLoginAt: true,
+          lastLoginIp: true,
+          lastPasswordChange: true,
+          // mfaEnabled: true, // Uncomment when enabling MFA
+          // mfaSecret: true,  // Uncomment when enabling MFA
+          branch: true,
+        } as any // Type assertion until Prisma client is regenerated after migration
       });
-      if (mainDirector && mainDirector.position === "MAIN_DIRECTOR") {
-        user = mainDirector;
-        userRole = "main_director";
+      if (staffUser) {
+        user = staffUser;
+        userRole = String(staffUser.position).toLowerCase();
+        userTable = "user";
       }
     }
 
-    // Check Support Director (User with SUPPORT_DIRECTOR position)
-    if (!user) {
-      const supportDirector = await prisma.user.findUnique({
-        where: { phone },
-        include: { branch: true }
-      });
-      if (supportDirector && supportDirector.position === "SUPPORT_DIRECTOR") {
-        user = supportDirector;
-        userRole = "support_director";
-      }
-    }
+    // User not found
+    if (!user || !userRole || !userTable) {
+      console.log(`❌ User not found for phone: ${phone}`);
+      await SecurityLogger.logLoginFailure(
+        phone,
+        'User not found',
+        clientIp,
+        userAgent
+      );
 
-    // Check Main HR (User with MAIN_HR position)
-    if (!user) {
-      const mainHR = await prisma.user.findUnique({
-        where: { phone },
-        include: { branch: true }
-      });
-      if (mainHR && mainHR.position === "MAIN_HR") {
-        user = mainHR;
-        userRole = "main_hr";
-      }
-    }
-
-    // Check Support HR (User with SUPPORT_HR position)
-    if (!user) {
-      const supportHR = await prisma.user.findUnique({
-        where: { phone },
-        include: { branch: true }
-      });
-      if (supportHR && supportHR.position === "SUPPORT_HR") {
-        user = supportHR;
-        userRole = "support_hr";
-      }
-    }
-
-    // Check Main Admission (User with MAIN_ADMISSION position)
-    if (!user) {
-      const mainAdmission = await prisma.user.findUnique({
-        where: { phone },
-        include: { branch: true }
-      });
-      if (mainAdmission && mainAdmission.position === "MAIN_ADMISSION") {
-        user = mainAdmission;
-        userRole = "main_admission";
-      }
-    }
-
-    // Check Support Admission (User with SUPPORT_ADMISSION position)
-    if (!user) {
-      const supportAdmission = await prisma.user.findUnique({
-        where: { phone },
-        include: { branch: true }
-      });
-      if (supportAdmission && supportAdmission.position === "SUPPORT_ADMISSION") {
-        user = supportAdmission;
-        userRole = "support_admission";
-      }
-    }
-
-    // Check Doctor (User with DOCTOR position)
-    if (!user) {
-      const doctor = await prisma.user.findUnique({
-        where: { phone },
-        include: { branch: true }
-      });
-      if (doctor && doctor.position === "DOCTOR") {
-        user = doctor;
-        userRole = "doctor";
-      }
-    }
-
-    // Check Chief (User with CHIEF position)
-    if (!user) {
-      const chief = await prisma.user.findUnique({
-        where: { phone },
-        include: { branch: true }
-      });
-      if (chief && chief.position === "CHIEF") {
-        user = chief;
-        userRole = "chief";
-      }
-    }
-
-    if (!user) {
+      // Generic error message to prevent user enumeration
       return NextResponse.json(
         { error: "Invalid phone number or password" },
         { status: 401 }
       );
     }
 
-    // Verify password
-    console.log(`Verifying password for user: ${user.phone}, provided password: ${password}`);
-    const isValidPassword = await AuthService.verifyPassword(password, user.password);
-    console.log(`Password verification result: ${isValidPassword}`);
+    console.log(`✅ User found: ${user.id}, role: ${userRole}, table: ${userTable}`);
+    console.log(`📝 Password hash starts with: ${user.password.substring(0, 10)}...`);
+
+    // Check account lockout
+    if (user.accountLockedUntil && new Date(user.accountLockedUntil) > new Date()) {
+      await SecurityLogger.logLoginFailure(
+        phone,
+        'Account locked',
+        clientIp,
+        userAgent
+      );
+
+      const lockoutRemaining = Math.ceil(
+        (new Date(user.accountLockedUntil).getTime() - Date.now()) / 60000
+      );
+
+      return NextResponse.json(
+        { 
+          error: `Account locked due to too many failed attempts. Try again in ${lockoutRemaining} minutes.`,
+          lockedUntil: user.accountLockedUntil
+        },
+        { status: 403 }
+      );
+    }
+
+    // Verify password - check if hash is bcrypt or Argon2
+    let isValidPassword = false;
+    
+    // Detect hash type: bcrypt starts with $2a$, $2b$, or $2y$
+    // Argon2 starts with $argon2
+    const isBcryptHash = user.password.startsWith('$2a$') || 
+                         user.password.startsWith('$2b$') || 
+                         user.password.startsWith('$2y$');
+    
+    if (isBcryptHash) {
+      // Legacy bcrypt password - verify with bcrypt
+      console.log(`🔐 Verifying bcrypt password for user ${user.id}`);
+      const bcrypt = require('bcryptjs');
+      isValidPassword = await bcrypt.compare(password, user.password);
+      
+      // If bcrypt works, upgrade to Argon2 for next login
+      if (isValidPassword) {
+        console.log(`🔄 Upgrading password hash to Argon2 for user ${user.id}`);
+        try {
+          const newHash = await PasswordService.hash(password);
+          await (prisma as any)[userTable].update({
+            where: { id: user.id },
+            data: { 
+              password: newHash,
+              lastPasswordChange: new Date()
+            }
+          });
+          console.log(`✅ Password upgraded successfully for user ${user.id}`);
+        } catch (upgradeError) {
+          console.error('Failed to upgrade password hash:', upgradeError);
+          // Don't fail login if upgrade fails - user can still login
+        }
+      }
+    } else {
+      // New Argon2 password
+      console.log(`🔐 Verifying Argon2 password for user ${user.id}`);
+      isValidPassword = await PasswordService.verify(password, user.password);
+    }
+
+    console.log(`🔍 Password verification result: ${isValidPassword}`);
+
     if (!isValidPassword) {
+      console.log(`❌ Password verification failed for user ${user.id}`);
+      
+      // Increment failed login attempts
+      const failedAttempts = (user.failedLoginAttempts || 0) + 1;
+      const updateData: any = { failedLoginAttempts: failedAttempts };
+
+      // Lock account after max failed attempts
+      if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+        const lockoutUntil = new Date();
+        lockoutUntil.setMinutes(lockoutUntil.getMinutes() + LOCKOUT_DURATION_MINUTES);
+        updateData.accountLockedUntil = lockoutUntil;
+
+        await SecurityLogger.logAccountLocked(
+          user.id,
+          userRole,
+          `Too many failed login attempts (${failedAttempts})`,
+          clientIp,
+          userAgent
+        );
+      }
+
+      // Update user record
+      await (prisma as any)[userTable].update({
+        where: { id: user.id },
+        data: updateData,
+      });
+
+      await SecurityLogger.logLoginFailure(
+        phone,
+        `Invalid password (attempt ${failedAttempts}/${MAX_FAILED_ATTEMPTS})`,
+        clientIp,
+        userAgent
+      );
+
       return NextResponse.json(
         { error: "Invalid phone number or password" },
         { status: 401 }
       );
     }
 
-    // Generate JWT token
+    // ============================================
+    // MFA LOGIC - COMMENTED OUT (Enable later)
+    // ============================================
+    /*
+    // Check if MFA is enabled and required
+    if (user.mfaEnabled && user.mfaSecret) {
+      if (!mfaCode) {
+        return NextResponse.json(
+          { 
+            error: "MFA code required",
+            requiresMfa: true 
+          },
+          { status: 401 }
+        );
+      }
+
+      // Verify MFA code
+      const isMfaValid = MFAService.verifyToken(mfaCode, user.mfaSecret);
+
+      if (!isMfaValid) {
+        await SecurityLogger.logMFAVerificationFailed(
+          user.id,
+          userRole,
+          clientIp,
+          userAgent
+        );
+
+      return NextResponse.json(
+          { error: "Invalid MFA code" },
+        { status: 401 }
+      );
+    }
+
+      await SecurityLogger.logMFAVerificationSuccess(
+        user.id,
+        userRole,
+        clientIp,
+        userAgent
+      );
+    }
+    */
+    // ============================================
+
+    // Successful login - reset failed attempts and update last login
+    await (prisma as any)[userTable].update({
+      where: { id: user.id },
+      data: {
+        failedLoginAttempts: 0,
+        accountLockedUntil: null,
+        lastLoginAt: new Date(),
+        lastLoginIp: clientIp,
+      },
+    });
+
+    // Generate tokens
     const tokenPayload = {
       id: user.id,
       phone: user.phone,
-      role: userRole as 'admin' | 'teacher' | 'student' | 'parent' | 'main_director' | 'support_director' | 'main_hr' | 'support_hr' | 'main_admission' | 'support_admission' | 'doctor' | 'chief',
+      role: userRole,
       name: (user as any).firstName || (user as any).name || 'User',
       surname: (user as any).lastName || (user as any).surname || 'User',
-      branchId: (user as any).branchId || (user as any).branch?.id || null
+      branchId: (user as any).branchId || (user as any).branch?.id || null,
+      tokenVersion: user.tokenVersion || 0,
     };
 
-    const token = AuthService.generateToken(tokenPayload);
+    const accessToken = TokenService.generateAccessToken(tokenPayload);
+    const { token: refreshToken, tokenId } = TokenService.generateRefreshToken(
+      user.id,
+      userRole,
+      user.tokenVersion || 0
+    );
 
-    // Create response with secure cookie
+    // Store refresh token in database
+    await TokenService.storeRefreshToken(
+      tokenId,
+      refreshToken,
+      user.id,
+      userRole,
+      clientIp,
+      userAgent
+    );
+
+    // Log successful login
+    await SecurityLogger.logLoginSuccess(
+      user.id,
+      userRole,
+      clientIp,
+      userAgent
+    );
+
+    // Clear rate limit on successful login
+    await RateLimiter.reset(`login:${clientIp}`);
+
+    // Create response
     const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
         phone: user.phone,
         role: userRole,
-        name: (user as any).firstName || (user as any).name || 'User',
-        surname: (user as any).lastName || (user as any).surname || 'User',
-        branchId: (user as any).branchId || (user as any).branch?.id || null
+        name: tokenPayload.name,
+        surname: tokenPayload.surname,
+        branchId: tokenPayload.branchId,
       },
-      token
+      accessToken,
     });
 
-    // Set secure HTTP-only cookie
-    response.cookies.set('auth_token', token, {
+    // Set access token in httpOnly cookie (short-lived)
+    response.cookies.set('auth_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: '/'
+      maxAge: 15 * 60, // 15 minutes
+      path: '/',
+    });
+
+    // Set refresh token in httpOnly cookie (longer-lived)
+    response.cookies.set('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: '/api/auth',
     });
 
     return response;
   } catch (error) {
     console.error("Login error:", error);
+    
+    await SecurityLogger.logSuspiciousActivity(
+      undefined,
+      undefined,
+      `Login error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      clientIp,
+      userAgent
+    );
+
+    // Never expose internal errors to users
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "An error occurred during login. Please try again." },
       { status: 500 }
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

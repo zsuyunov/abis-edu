@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from '@/lib/prisma';
 
 // GET - Fetch single timetable
@@ -34,7 +35,7 @@ export async function GET(
 }
 
 // PUT - Update timetable (handles single to multiple subjects transition)
-export async function PUT(
+async function putHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -192,8 +193,10 @@ export async function PUT(
   }
 }
 
+export const PUT = withCSRF(putHandler);
+
 // DELETE - Delete single timetable
-export async function DELETE(
+async function deleteHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -223,3 +226,5 @@ export async function DELETE(
     }, { status: 500 });
   }
 }
+
+export const DELETE = withCSRF(deleteHandler);

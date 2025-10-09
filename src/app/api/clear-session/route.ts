@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const response = NextResponse.json({
       success: true,
@@ -66,7 +67,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withCSRF(postHandler);
+
 export async function GET(request: NextRequest) {
   // Allow GET requests too for easy testing
-  return POST(request);
+  return postHandler(request);
 }

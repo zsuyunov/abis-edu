@@ -16,11 +16,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       
-      session = AuthService.verifyToken(token);
-      if (!session?.id) {
+      session = await AuthService.verifyToken(token);
+      if (!session || !(session as any).id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-      authenticatedUserId = session.id;
+      authenticatedUserId = (session as any).id;
     }
 
     const url = new URL(request.url);

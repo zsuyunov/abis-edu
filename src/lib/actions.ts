@@ -5390,7 +5390,7 @@ export const deleteStudent = async (
 
   try {
     await prisma.$transaction(async (tx) => {
-      // Log the delete action before deletion
+      // Record delete comment (will be removed as part of cleanup due to FK constraints)
       await tx.archiveComment.create({
         data: {
           studentId: studentId,
@@ -5400,10 +5400,25 @@ export const deleteStudent = async (
         },
       });
 
-      // Delete the student
-      await tx.student.delete({
-        where: { id: studentId },
-      });
+      // Clean up dependent data that does not cascade on student delete
+      await tx.homeworkSubmission.deleteMany({ where: { studentId } });
+      await tx.examResult.deleteMany({ where: { studentId } });
+      await tx.grade.deleteMany({ where: { studentId } });
+      await tx.attendance.deleteMany({ where: { studentId } });
+      await tx.result.deleteMany({ where: { studentId } });
+      await tx.documentAssignment.deleteMany({ where: { studentId } });
+      await tx.studentAttachment.deleteMany({ where: { studentId } });
+      await tx.studentParent.deleteMany({ where: { studentId } });
+
+      // Nullify optional relations to avoid constraint issues
+      await tx.complaint.updateMany({ where: { studentId }, data: { studentId: null } });
+      await tx.eventParticipation.updateMany({ where: { studentId }, data: { studentId: null } });
+
+      // Remove archive comments linked to this student to satisfy FK (since student relation lacks cascade)
+      await tx.archiveComment.deleteMany({ where: { studentId } });
+
+      // Finally delete the student
+      await tx.student.delete({ where: { id: studentId } });
     });
 
     return { success: true, error: false };

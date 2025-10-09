@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import Image from "next/image";
 import VoiceRecorder from "./VoiceRecorder";
 
@@ -91,7 +92,7 @@ const TeacherHomeworkCreation = ({
   const fetchHomeworkForEdit = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/teacher-homework?id=${editHomeworkId}`, {
+      const response = await csrfFetch(`/api/teacher-homework?id=${editHomeworkId}`, {
         headers: {
           'x-user-id': teacherId,
         },
@@ -188,7 +189,7 @@ const TeacherHomeworkCreation = ({
       console.log('Files count:', attachments.files.length);
       console.log('Voice messages count:', attachments.voiceMessages.length);
 
-      const response = await fetch("/api/teacher-homework/with-files", {
+      const response = await csrfFetch("/api/teacher-homework/with-files", {
         method: "POST",
         headers: {
           'x-user-id': teacherId,

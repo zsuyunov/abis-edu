@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import Image from "next/image";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -73,7 +74,7 @@ const TeacherHomeworkGrading: React.FC<TeacherHomeworkGradingProps> = ({
   const fetchHomeworkSubmissions = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/teacher-homework/submissions?homeworkId=${homeworkId}&view=individual`, {
+      const response = await csrfFetch(`/api/teacher-homework/submissions?homeworkId=${homeworkId}&view=individual`, {
         headers: {
           'x-user-id': teacherId,
         },
@@ -120,7 +121,7 @@ const TeacherHomeworkGrading: React.FC<TeacherHomeworkGradingProps> = ({
     
     try {
       setGrading(true);
-      const response = await fetch("/api/teacher-homework/grade", {
+      const response = await csrfFetch("/api/teacher-homework/grade", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

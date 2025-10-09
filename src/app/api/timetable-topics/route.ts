@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { headers } from "next/headers";
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const headersList = headers();
     const teacherId = headersList.get("x-user-id");
@@ -105,6 +106,8 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withCSRF(postHandler);
 
 export async function GET(request: NextRequest) {
   try {

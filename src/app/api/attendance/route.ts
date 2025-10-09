@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withCSRF } from '@/lib/security';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
@@ -63,7 +64,9 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export const DELETE = withCSRF(deleteHandler);
+
+async function putHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
@@ -127,7 +130,9 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export const PUT = withCSRF(putHandler);
+
+async function postHandler(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
     if (!teacherId) {
@@ -412,3 +417,5 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
+
+export const POST = withCSRF(postHandler);

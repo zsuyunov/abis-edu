@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -133,7 +134,7 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
     setLoading(true);
 
     try {
-      const response = await fetch("/api/timetable-templates/generate", {
+      const response = await csrfFetch("/api/timetable-templates/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -180,7 +181,7 @@ const TimetableRecurrenceForm: React.FC<TimetableRecurrenceFormProps> = ({
     }
 
     try {
-      const response = await fetch(`/api/teachers/by-subjects?subjectIds=${subjectIds.join(',')}&classId=${classId}&academicYearId=${academicYearId}`);
+      const response = await csrfFetch(`/api/teachers/by-subjects?subjectIds=${subjectIds.join(',')}&classId=${classId}&academicYearId=${academicYearId}`);
       if (response.ok) {
         const data = await response.json();
         setFilteredTeachers(data);

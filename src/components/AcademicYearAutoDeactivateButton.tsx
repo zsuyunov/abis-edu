@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import { toast } from "react-toastify";
 
 const AcademicYearAutoDeactivateButton = () => {
@@ -10,7 +11,7 @@ const AcademicYearAutoDeactivateButton = () => {
   const handleAutoDeactivate = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/academic-years/auto-deactivate", {
+      const response = await csrfFetch("/api/academic-years/auto-deactivate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -37,7 +38,7 @@ const AcademicYearAutoDeactivateButton = () => {
 
   const checkStatus = async () => {
     try {
-      const response = await fetch("/api/academic-years/auto-deactivate");
+      const response = await csrfFetch("/api/academic-years/auto-deactivate");
       if (response.ok) {
         const result = await response.json();
         const overdueYears = result.activeYears.filter((year: any) => year.shouldDeactivate);

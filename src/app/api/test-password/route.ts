@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const { phone, password } = await request.json();
 
@@ -46,9 +47,9 @@ export async function POST(request: NextRequest) {
       },
       passwordTest: {
         providedPassword: password,
-        expectedPassword: `${student.lastName}_suzuk`,
+        expectedPassword: `${student.firstName.split(' ')[0].toLowerCase()}_abisedu`,
         isValid: isValidPassword,
-        passwordMatches: password === `${student.lastName}_suzuk`
+        passwordMatches: password === `${student.firstName.split(' ')[0].toLowerCase()}_abisedu`
       }
     });
 
@@ -60,3 +61,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

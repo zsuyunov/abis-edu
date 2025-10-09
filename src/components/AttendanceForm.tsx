@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, CheckCircle, Clock, XCircle, AlertCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 
 interface Student {
   id: string;
@@ -208,7 +209,7 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
         attendance: attendance
       });
 
-      const response = await fetch('/api/attendance', {
+      const response = await csrfFetch('/api/attendance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

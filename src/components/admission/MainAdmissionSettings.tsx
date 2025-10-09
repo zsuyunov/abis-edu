@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import Image from "next/image";
 import { toast } from "@/components/ui/Toast";
 import { InlineGifLoader } from "@/components/ui/CustomGifLoader";
@@ -41,7 +42,7 @@ const MainAdmissionSettings = () => {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/main-admission/settings");
+      const response = await csrfFetch("/api/main-admission/settings");
       if (response.ok) {
         const data = await response.json();
         setSettings(data.settings);
@@ -73,7 +74,7 @@ const MainAdmissionSettings = () => {
 
     try {
       setSaving(true);
-      const response = await fetch("/api/main-admission/settings", {
+      const response = await csrfFetch("/api/main-admission/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
@@ -97,7 +98,7 @@ const MainAdmissionSettings = () => {
 
     try {
       setSaving(true);
-      const response = await fetch("/api/main-admission/settings/reset", {
+      const response = await csrfFetch("/api/main-admission/settings/reset", {
         method: "POST",
       });
 

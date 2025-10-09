@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import { AuthService } from "@/lib/auth";
 
-export async function POST(
+async function postHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -12,7 +13,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
-    const session = AuthService.verifyToken(token);
+    const session = await AuthService.verifyToken(token);
     if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -36,3 +37,5 @@ export async function POST(
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Save, Users, BookOpen, Calendar } from 'lucide-react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 
 interface Student {
   id: string;
@@ -142,7 +143,7 @@ const GradeInputForm: React.FC<GradeInputFormProps> = ({
         return;
       }
       
-      const response = await fetch('/api/grades', {
+      const response = await csrfFetch('/api/grades', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

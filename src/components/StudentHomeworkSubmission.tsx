@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import Image from "next/image";
 
 interface StudentHomeworkSubmissionProps {
@@ -40,7 +41,7 @@ const StudentHomeworkSubmission = ({
   const fetchHomeworkDetails = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/student-homework/submit?homeworkId=${selectedHomeworkId}`, {
+      const response = await csrfFetch(`/api/student-homework/submit?homeworkId=${selectedHomeworkId}`, {
         headers: {
           'x-user-id': studentId,
         },
@@ -153,7 +154,7 @@ const StudentHomeworkSubmission = ({
       formData.append('type', 'homework_submission');
       
       try {
-        const response = await fetch('/api/upload', {
+        const response = await csrfFetch('/api/upload', {
           method: 'POST',
           body: formData,
         });
@@ -198,7 +199,7 @@ const StudentHomeworkSubmission = ({
         formData.append('files', audioFile);
       }
       
-      const response = await fetch("/api/student-homework/submit", {
+      const response = await csrfFetch("/api/student-homework/submit", {
         method: "POST",
         headers: {
           "x-user-id": studentId,
@@ -228,7 +229,7 @@ const StudentHomeworkSubmission = ({
     if (!selectedHomeworkId) return;
     
     try {
-      const response = await fetch(`/api/student-homework/submit`, {
+      const response = await csrfFetch(`/api/student-homework/submit`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -258,7 +259,7 @@ const StudentHomeworkSubmission = ({
     if (!selectedHomeworkId) return;
     
     try {
-      const response = await fetch(`/api/student-homework/submit`, {
+      const response = await csrfFetch(`/api/student-homework/submit`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

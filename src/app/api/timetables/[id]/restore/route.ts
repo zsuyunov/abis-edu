@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import { restoreTimetable } from "@/lib/actions";
 
-export async function POST(
+async function postHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -34,3 +35,5 @@ export async function POST(
     );
   }
 }
+
+export const POST = withCSRF(postHandler);

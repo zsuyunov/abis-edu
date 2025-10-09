@@ -26,8 +26,9 @@ async function main() {
 
     for (const student of students) {
       try {
-        // Generate new password: last_name_abisedu
-        const newPassword = `${student.lastName.toLowerCase()}_abisedu`;
+        // Generate new password: first_name_abisedu (first word of full name)
+        const firstName = student.firstName.split(' ')[0].toLowerCase();
+        const newPassword = `${firstName}_abisedu`;
         
         // Hash the new password
         const hashedPassword = await bcrypt.hash(newPassword, 12);
@@ -62,7 +63,7 @@ async function main() {
       });
     } else {
       console.log('\n✅ All students passwords updated successfully!');
-      console.log('🔐 New password format: last_name_abisedu');
+      console.log('🔐 New password format: first_name_abisedu');
     }
 
   } catch (error) {

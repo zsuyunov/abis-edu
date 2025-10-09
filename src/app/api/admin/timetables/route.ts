@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { withCSRF } from '@/lib/security';
 import prisma from '@/lib/prisma';
 
 // GET - Fetch timetables with filtering
@@ -166,7 +167,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST - Create new timetable
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   try {
     const body = await request.json();
     console.log('Received timetable data:', body);
@@ -387,8 +388,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withCSRF(postHandler);
+
 // PUT - Update timetable
-export async function PUT(request: NextRequest) {
+async function putHandler(request: NextRequest) {
   try {
     const body = await request.json();
     const { id, ...updateData } = body;
@@ -475,8 +478,10 @@ export async function PUT(request: NextRequest) {
   }
 }
 
+export const PUT = withCSRF(putHandler);
+
 // DELETE - Delete timetable
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -512,3 +517,5 @@ export async function DELETE(request: NextRequest) {
     }, { status: 500 });
   }
 }
+
+export const DELETE = withCSRF(deleteHandler);
