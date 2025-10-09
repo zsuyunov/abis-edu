@@ -1,15 +1,21 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
+  // Add connection pooling parameters to DATABASE_URL for Neon
+  const databaseUrl = process.env.DATABASE_URL || '';
+  const urlWithPooling = databaseUrl.includes('?') 
+    ? `${databaseUrl}&connection_limit=10&pool_timeout=20&connect_timeout=10`
+    : `${databaseUrl}?connection_limit=10&pool_timeout=20&connect_timeout=10`;
+
   return new PrismaClient({
     // Only log errors and warnings, no query logs
     log: ['error', 'warn'],
     // Performance optimizations
     errorFormat: 'minimal',
-    // Connection management for static generation
+    // Connection management for Neon with pooling
     datasources: {
       db: {
-        url: process.env.DATABASE_URL,
+        url: urlWithPooling,
       },
     },
   })
@@ -51,23 +57,35 @@ export async function withPrismaRetry<T>(
       return await operation()
     } catch (error: unknown) {
       const message = typeof error === 'object' && error && 'message' in error ? String((error as any).message) : ''
+      const errorString = String(error);
 
       const isTransient =
         message.includes('Server has closed the connection') ||
         message.includes('Connection terminated unexpectedly') ||
         message.includes('ECONNRESET') ||
-        message.includes('read ECONNRESET')
+        message.includes('read ECONNRESET') ||
+        message.includes('Connection closed') ||
+        message.includes('Connection lost') ||
+        errorString.includes('kind: Closed') ||
+        message.includes('ETIMEDOUT') ||
+        message.includes('ENOTFOUND');
 
       if (!isTransient || attempt >= maxRetries) {
         throw error
       }
 
       attempt += 1
+      console.warn(`⚠️ Database connection issue detected (attempt ${attempt}/${maxRetries}), retrying...`);
+      
       try {
-        await prisma.$connect()
-      } catch {
-        // Ignore connect error; we'll still backoff and retry the operation
+        // Force disconnect and reconnect
+        await prisma.$disconnect();
+        await prisma.$connect();
+      } catch (reconnectError) {
+        // Ignore reconnect errors; we'll still backoff and retry the operation
+        console.warn('   Reconnect attempt failed, will retry operation anyway');
       }
+      
       const delay = baseDelayMs * Math.pow(2, attempt - 1)
       await new Promise((r) => setTimeout(r, delay))
     }

@@ -466,4 +466,6 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+// Login endpoint doesn't use CSRF protection because there's no session yet
+// CSRF will be enforced on authenticated endpoints after login
+export const POST = postHandler;

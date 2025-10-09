@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import * as crypto from 'crypto';
+// Note: Do not import Node 'crypto' here; middleware runs on Edge runtime
 
 export class SecurityHeaders {
   /**
@@ -23,6 +23,7 @@ export class SecurityHeaders {
   ): NextResponse {
     // Generate nonce for inline scripts (if not provided)
     const nonce = options.nonce || this.generateNonce();
+    const isDev = process.env.NODE_ENV !== 'production';
     
     // Build connect-src with custom domains if provided
     const connectSrcDomains = ["'self'"];
@@ -31,23 +32,27 @@ export class SecurityHeaders {
     }
     
     // Content Security Policy (CSP)
-    // PRODUCTION-HARDENED: No unsafe-inline or unsafe-eval
-    // Use nonces for any inline scripts you must keep
+    // In development, allow unsafe-inline/eval to enable Next.js dev features and hydration
+    // In production, require nonces and avoid unsafe directives
+    const scriptSrc = isDev
+      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net`
+      : `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net`;
+    const styleSrc = isDev
+      ? `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`
+      : `style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com`;
+
     const cspDirectives = [
       "default-src 'self'",
-      // HARDENED: Removed unsafe-inline and unsafe-eval - use nonces for inline scripts
-      `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net`,
-      // Allow inline styles with nonce-based approach (better than unsafe-inline)
-      `style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com`,
+      scriptSrc,
+      styleSrc,
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https: blob:",
-      // Lock down connect-src to specific domains
       `connect-src ${connectSrcDomains.join(' ')}`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
-      "object-src 'none'", // Prevent Flash/plugins
-      "upgrade-insecure-requests", // Force HTTPS
+      "object-src 'none'",
+      "upgrade-insecure-requests",
     ];
     
     response.headers.set(
@@ -100,8 +105,21 @@ export class SecurityHeaders {
    * @returns Nonce string
    */
   static generateNonce(): string {
-    const crypto = require('crypto');
-    return crypto.randomBytes(16).toString('base64');
+    // Use Web Crypto API for Edge compatibility
+    // Generate 16 random bytes and base64-encode them
+    try {
+      const bytes = new Uint8Array(16);
+      (globalThis as any).crypto?.getRandomValues(bytes);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      // btoa is available in Edge runtime
+      return (globalThis as any).btoa(binary);
+    } catch (_e) {
+      // Fallback for environments without Web Crypto (shouldn't happen in Edge)
+      return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    }
   }
 }
 

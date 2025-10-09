@@ -57,6 +57,8 @@ const StudentForm = ({
     setValue,
   } = methods;
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Branch and class assignment is handled in Student Assignments section
   const [attachments, setAttachments] = useState<{
     document1: any;
@@ -144,14 +146,31 @@ const StudentForm = ({
 
   useEffect(() => {
     if (state.success) {
-      toast(`Student has been ${type === "create" ? "created" : "updated"}!`);
-      setOpen(false);
-      router.refresh();
+      toast.success(`Student has been ${type === "create" ? "created" : "updated"} successfully!`);
+      setIsSubmitting(false);
+      setTimeout(() => {
+        setOpen(false);
+        router.refresh();
+      }, 500);
     }
     if (state.error) {
-      toast.error(`Failed to ${type === "create" ? "create" : "update"} student!`);
+      toast.error(state.message || `Failed to ${type === "create" ? "create" : "update"} student!`);
+      setIsSubmitting(false);
     }
   }, [state, router, type, setOpen]);
+
+  // Timeout mechanism - if submitting for more than 30 seconds, reset
+  useEffect(() => {
+    if (isSubmitting) {
+      const timeout = setTimeout(() => {
+        console.warn("⏰ Form submission timeout - resetting");
+        setIsSubmitting(false);
+        toast.error("Request timeout. Please try again.");
+      }, 30000); // 30 seconds
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isSubmitting]);
 
   return (
     <FormProvider {...methods}>
@@ -412,15 +431,28 @@ const StudentForm = ({
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="px-3 py-2 text-sm bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400"
+            disabled={isSubmitting}
+            className="px-3 py-2 text-sm bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button 
             type="submit" 
-            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            disabled={isSubmitting || studentIdError !== ""}
+            onClick={(e) => {
+              if (studentIdError) {
+                e.preventDefault();
+                toast.error("Please fix Student ID error before submitting");
+                return;
+              }
+              setIsSubmitting(true);
+            }}
+            className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {type === "create" ? "Create" : "Update"} Student
+            {isSubmitting && (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            )}
+            {isSubmitting ? "Processing..." : `${type === "create" ? "Create" : "Update"} Student`}
           </button>
         </div>
       </form>

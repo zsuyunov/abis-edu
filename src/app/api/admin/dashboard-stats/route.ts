@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
-
-const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,70 +9,82 @@ export async function GET(request: NextRequest) {
     
     console.log("Starting dashboard stats fetch...");
 
-    // Get counts for all user types with error handling
+    // Get counts for all user types with retry logic for connection issues
     console.log("Fetching counts...");
     
-    const totalTeachers = await prisma.teacher.count().catch(e => {
+    const totalTeachers = await withPrismaRetry(() => 
+      prisma.teacher.count()
+    ).catch(e => {
       console.error("Teacher count error:", e);
       return 0;
     });
     
-    const maleTeachers = await prisma.teacher.count({ 
-      where: { gender: 'MALE' } 
-    }).catch(e => {
+    const maleTeachers = await withPrismaRetry(() =>
+      prisma.teacher.count({ where: { gender: 'MALE' } })
+    ).catch(e => {
       console.error("Male teacher count error:", e);
       return 0;
     });
     
-    const femaleTeachers = await prisma.teacher.count({ 
-      where: { gender: 'FEMALE' } 
-    }).catch(e => {
+    const femaleTeachers = await withPrismaRetry(() =>
+      prisma.teacher.count({ where: { gender: 'FEMALE' } })
+    ).catch(e => {
       console.error("Female teacher count error:", e);
       return 0;
     });
     
-    const totalStudents = await prisma.student.count({ 
-      where: { status: 'ACTIVE' } 
-    }).catch(e => {
+    const totalStudents = await withPrismaRetry(() =>
+      prisma.student.count({ where: { status: 'ACTIVE' } })
+    ).catch(e => {
       console.error("Student count error:", e);
       return 0;
     });
     
-    const maleStudents = await prisma.student.count({ 
-      where: { gender: 'MALE', status: 'ACTIVE' } 
-    }).catch(e => {
+    const maleStudents = await withPrismaRetry(() =>
+      prisma.student.count({ where: { gender: 'MALE', status: 'ACTIVE' } })
+    ).catch(e => {
       console.error("Male student count error:", e);
       return 0;
     });
     
-    const femaleStudents = await prisma.student.count({ 
-      where: { gender: 'FEMALE', status: 'ACTIVE' } 
-    }).catch(e => {
+    const femaleStudents = await withPrismaRetry(() =>
+      prisma.student.count({ where: { gender: 'FEMALE', status: 'ACTIVE' } })
+    ).catch(e => {
       console.error("Female student count error:", e);
       return 0;
     });
     
-    const totalParents = await prisma.parent.count().catch(e => {
+    const totalParents = await withPrismaRetry(() =>
+      prisma.parent.count()
+    ).catch(e => {
       console.error("Parent count error:", e);
       return 0;
     });
     
-    const totalStaff = await prisma.admin.count().catch(e => {
+    const totalStaff = await withPrismaRetry(() =>
+      prisma.admin.count()
+    ).catch(e => {
       console.error("Admin count error:", e);
       return 0;
     });
     
-    const totalClasses = await prisma.class.count().catch(e => {
+    const totalClasses = await withPrismaRetry(() =>
+      prisma.class.count()
+    ).catch(e => {
       console.error("Class count error:", e);
       return 0;
     });
     
-    const totalSubjects = await prisma.subject.count().catch(e => {
+    const totalSubjects = await withPrismaRetry(() =>
+      prisma.subject.count()
+    ).catch(e => {
       console.error("Subject count error:", e);
       return 0;
     });
     
-    const totalEvents = await prisma.event.count().catch(e => {
+    const totalEvents = await withPrismaRetry(() =>
+      prisma.event.count()
+    ).catch(e => {
       console.error("Event count error:", e);
       return 0;
     });
@@ -95,15 +105,15 @@ export async function GET(request: NextRequest) {
       lastMonthStudents,
       lastMonthParents
     ] = await Promise.all([
-      prisma.teacher.count({
-        where: { createdAt: { lt: thisMonth } }
-      }),
-      prisma.student.count({
-        where: { createdAt: { lt: thisMonth } }
-      }),
-      prisma.parent.count({
-        where: { createdAt: { lt: thisMonth } }
-      })
+      withPrismaRetry(() =>
+        prisma.teacher.count({ where: { createdAt: { lt: thisMonth } } })
+      ).catch(() => totalTeachers),
+      withPrismaRetry(() =>
+        prisma.student.count({ where: { createdAt: { lt: thisMonth } } })
+      ).catch(() => totalStudents),
+      withPrismaRetry(() =>
+        prisma.parent.count({ where: { createdAt: { lt: thisMonth } } })
+      ).catch(() => totalParents)
     ]);
 
     // Calculate trends
@@ -159,7 +169,5 @@ export async function GET(request: NextRequest) {
       { error: "Failed to fetch dashboard statistics" },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

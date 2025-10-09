@@ -100,80 +100,166 @@ class MemoryStorage implements StorageAdapter {
 }
 
 /**
- * Redis Storage (for production)
- * Uncomment this when you have Redis setup
+ * Redis Storage with Resilient Fallback (for production)
+ * Automatically falls back to in-memory storage if Redis is unavailable
+ * This ensures the app continues to work even if Redis is down
  */
 
-class RedisStorage implements StorageAdapter {
+class ResilientRedisStorage implements StorageAdapter {
   private client: Redis;
+  private fallback: MemoryStorage;
+  private isRedisHealthy: boolean = true;
+  private lastHealthCheck: number = 0;
+  private readonly HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
 
   constructor(redisUrl: string) {
+    // Initialize fallback storage immediately
+    this.fallback = new MemoryStorage();
+    this.fallback.startCleanup();
+
+    // Initialize Redis with fast-fail configuration
     this.client = new Redis(redisUrl, {
-      maxRetriesPerRequest: 3,
-      enableReadyCheck: true,
+      maxRetriesPerRequest: 2, // Reduced retries
+      connectTimeout: 5000, // 5 second timeout
+      commandTimeout: 3000, // 3 second command timeout
+      enableReadyCheck: false, // Don't wait for ready
+      lazyConnect: true, // Don't connect immediately
       retryStrategy(times) {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
+        if (times > 3) return null; // Stop retrying after 3 attempts
+        return Math.min(times * 200, 1000); // Fast retry with max 1s delay
       },
     });
 
+    // Handle connection errors gracefully
     this.client.on('error', (error) => {
-      console.error('Redis connection error:', error);
+      if (this.isRedisHealthy) {
+        console.warn('⚠️ Redis connection lost, falling back to in-memory storage');
+        console.warn('   Error:', error.message);
+        this.isRedisHealthy = false;
+      }
     });
 
     this.client.on('connect', () => {
-      console.log('✅ Redis connected successfully');
+      if (!this.isRedisHealthy) {
+        console.log('✅ Redis connection restored');
+      }
+      this.isRedisHealthy = true;
+    });
+
+    this.client.on('ready', () => {
+      this.isRedisHealthy = true;
+      console.log('✅ Redis is ready and healthy');
+    });
+
+    // Attempt initial connection (non-blocking)
+    this.client.connect().catch(err => {
+      console.warn('⚠️ Initial Redis connection failed, using in-memory storage');
+      console.warn('   The app will automatically retry connecting to Redis');
+      this.isRedisHealthy = false;
     });
   }
 
-  async get(key: string): Promise<string | null> {
-    return await this.client.get(key);
-  }
+  private async executeWithFallback<T>(
+    operation: () => Promise<T>,
+    fallbackOperation: () => Promise<T>,
+    operationName: string
+  ): Promise<T> {
+    // Periodic health check
+    const now = Date.now();
+    if (!this.isRedisHealthy && now - this.lastHealthCheck > this.HEALTH_CHECK_INTERVAL) {
+      this.lastHealthCheck = now;
+      // Try to reconnect
+      this.client.connect().catch(() => {/* silent fail */});
+    }
 
-  async set(key: string, value: string, expiresInSeconds?: number): Promise<void> {
-    if (expiresInSeconds) {
-      await this.client.setex(key, expiresInSeconds, value);
-    } else {
-      await this.client.set(key, value);
+    if (!this.isRedisHealthy) {
+      return await fallbackOperation();
+    }
+
+    try {
+      return await operation();
+    } catch (error) {
+      // Redis operation failed, use fallback
+      this.isRedisHealthy = false;
+      console.warn(`⚠️ Redis ${operationName} failed, using fallback`);
+      return await fallbackOperation();
     }
   }
 
+  async get(key: string): Promise<string | null> {
+    return this.executeWithFallback(
+      () => this.client.get(key),
+      () => this.fallback.get(key),
+      'get'
+    );
+  }
+
+  async set(key: string, value: string, expiresInSeconds?: number): Promise<void> {
+    return this.executeWithFallback(
+      async () => {
+        if (expiresInSeconds) {
+          await this.client.setex(key, expiresInSeconds, value);
+        } else {
+          await this.client.set(key, value);
+        }
+      },
+      () => this.fallback.set(key, value, expiresInSeconds),
+      'set'
+    );
+  }
+
   async del(key: string): Promise<void> {
-    await this.client.del(key);
+    return this.executeWithFallback(
+      () => this.client.del(key).then(() => {}),
+      () => this.fallback.del(key),
+      'del'
+    );
   }
 
   async keys(pattern: string): Promise<string[]> {
-    return await this.client.keys(pattern);
+    return this.executeWithFallback(
+      () => this.client.keys(pattern),
+      () => this.fallback.keys(pattern),
+      'keys'
+    );
   }
 
   async ttl(key: string): Promise<number> {
-    return await this.client.ttl(key);
+    return this.executeWithFallback(
+      () => this.client.ttl(key),
+      () => this.fallback.ttl(key),
+      'ttl'
+    );
   }
 
   async disconnect(): Promise<void> {
-    await this.client.quit();
+    try {
+      await this.client.quit();
+    } catch (error) {
+      // Ignore disconnect errors
+    }
   }
 }
 
 
 /**
  * Get storage adapter instance
- * Automatically uses Redis if REDIS_URL is set, otherwise falls back to memory
+ * Automatically uses Redis with resilient fallback if REDIS_URL is set
+ * Otherwise uses in-memory storage
  */
 export function getStorageAdapter(): StorageAdapter {
   const redisUrl = process.env.REDIS_URL;
 
   if (redisUrl && redisUrl.startsWith('redis')) {
-    console.log('🚀 Using Redis for distributed storage');
-    // Uncomment when Redis is setup:
-     return new RedisStorage(redisUrl);
-    
-    console.warn('⚠️ REDIS_URL is set but Redis client is not installed. Falling back to in-memory storage.');
-    console.warn('   To use Redis: npm install ioredis and uncomment RedisStorage in redis-adapter.ts');
+    console.log('🚀 Using Redis with automatic in-memory fallback for security features');
+    console.log('   Redis will provide distributed rate limiting and session management');
+    console.log('   If Redis is unreachable, the app will seamlessly fall back to in-memory storage');
+    return new ResilientRedisStorage(redisUrl);
   }
 
   console.log('⚠️ Using in-memory storage (NOT suitable for production with multiple instances)');
   console.log('   Set REDIS_URL in .env for production deployment');
+  console.log('   For multi-instance deployments, Redis is required for distributed security features');
   
   const memStorage = new MemoryStorage();
   memStorage.startCleanup();

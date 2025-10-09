@@ -88,6 +88,31 @@ export function middleware(request: NextRequest) {
   // Apply security headers to ALL responses
   response = SecurityHeaders.apply(response);
 
+  // Allow Next.js Server Actions (they have special headers)
+  const isServerAction = request.headers.get('next-action') !== null || 
+                         request.headers.get('content-type')?.includes('multipart/form-data');
+  
+  if (isServerAction) {
+    // Server actions need the user context, so we still decode the token
+    const token = request.cookies.get("auth_token")?.value;
+    if (token) {
+      const user = decodeJWT(token);
+      if (user && user.tokenVersion !== undefined) {
+        // Add user info to headers for server actions
+        response.headers.set("x-user-id", user.id);
+        response.headers.set("x-user-role", user.role);
+        response.headers.set("x-user-phone", user.phone || "");
+        response.headers.set("x-user-name", user.name || "User");
+        response.headers.set("x-user-surname", user.surname || "User");
+        response.headers.set("x-token-version", String(user.tokenVersion));
+        if (user.branchId !== undefined && user.branchId !== null) {
+          response.headers.set("x-branch-id", String(user.branchId));
+        }
+      }
+    }
+    return response;
+  }
+
   // Allow public routes
   if (publicRoutes.includes(pathname)) {
     return response;

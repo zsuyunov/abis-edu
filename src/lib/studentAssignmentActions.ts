@@ -20,16 +20,21 @@ export const createStudentAssignment = async (
       return { success: false, error: true, message };
     }
 
-    // Check if student is already assigned to a class
-    const existingStudent = await prisma.student.findFirst({
-      where: {
-        id: data.studentId,
-        classId: { not: null }
-      },
+    // First, check if the student exists
+    const student = await prisma.student.findUnique({
+      where: { id: data.studentId },
+      select: { id: true, classId: true, firstName: true, lastName: true, studentId: true }
     });
 
-    if (existingStudent) {
-      const message = "This student is already assigned to a class";
+    if (!student) {
+      const message = `Student with ID ${data.studentId} not found in database. The student may have been deleted.`;
+      console.error("❌ [Student Not Found]", message);
+      return { success: false, error: true, message };
+    }
+
+    // Check if student is already assigned to a class
+    if (student.classId !== null) {
+      const message = `${student.firstName} ${student.lastName} (${student.studentId}) is already assigned to a class`;
       console.error("❌ [Duplicate Error]", message);
       return { success: false, error: true, message };
     }
@@ -43,16 +48,18 @@ export const createStudentAssignment = async (
       },
     });
 
-    console.log("✅ Student assignment created successfully");
+    console.log(`✅ Student assignment created successfully for ${student.firstName} ${student.lastName}`);
     
     revalidatePath("/admin/student-assignments");
-    return { success: true, error: false };
+    revalidatePath("/admin/list/students");
+    return { success: true, error: false, message: "Student assigned successfully!" };
   } catch (error) {
     console.error("❌ Error creating student assignment:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return { 
       success: false, 
       error: true, 
-      message: "Failed to create student assignment. Please try again." 
+      message: `Failed to create student assignment: ${errorMessage}` 
     };
   }
 };
@@ -71,6 +78,18 @@ export const updateStudentAssignment = async (
       return { success: false, error: true, message };
     }
 
+    // First, check if the student exists
+    const student = await prisma.student.findUnique({
+      where: { id: data.studentId },
+      select: { id: true, firstName: true, lastName: true, studentId: true }
+    });
+
+    if (!student) {
+      const message = `Student with ID ${data.studentId} not found in database. The student may have been deleted.`;
+      console.error("❌ [Student Not Found]", message);
+      return { success: false, error: true, message };
+    }
+
     // Update the student assignment
     await prisma.student.update({
       where: { id: data.studentId },
@@ -80,16 +99,18 @@ export const updateStudentAssignment = async (
       },
     });
 
-    console.log("✅ Student assignment updated successfully");
+    console.log(`✅ Student assignment updated successfully for ${student.firstName} ${student.lastName}`);
     
     revalidatePath("/admin/student-assignments");
-    return { success: true, error: false };
+    revalidatePath("/admin/list/students");
+    return { success: true, error: false, message: "Student assignment updated successfully!" };
   } catch (error) {
     console.error("❌ Error updating student assignment:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return { 
       success: false, 
       error: true, 
-      message: "Failed to update student assignment. Please try again." 
+      message: `Failed to update student assignment: ${errorMessage}` 
     };
   }
 };

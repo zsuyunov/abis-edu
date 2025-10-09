@@ -5200,6 +5200,8 @@ export const createStudent = async (
       await prisma.studentAttachment.createMany({ data: attachmentsToCreate });
     }
 
+    console.log("✅ Student created successfully:", created.id);
+    revalidatePath("/admin/list/students");
     return { success: true, error: false, message: "Student created successfully" };
   } catch (err) {
     console.error("Student creation error:", err);
@@ -5242,6 +5244,20 @@ export const updateStudent = async (
   }
 
   try {
+    console.log("🔄 Updating student:", data.id, data.firstName, data.lastName);
+
+    // First check if student exists
+    const existingStudent = await prisma.student.findUnique({
+      where: { id: data.id },
+      select: { id: true, studentId: true, firstName: true, lastName: true }
+    });
+
+    if (!existingStudent) {
+      const message = `Student with ID ${data.id} not found. The student may have been deleted.`;
+      console.error("❌", message);
+      return { success: false, error: true, message };
+    }
+
     const updateData: any = {
       firstName: data.firstName,
       lastName: data.lastName,
@@ -5264,9 +5280,11 @@ export const updateStudent = async (
 
     // Only update password if provided
     if (data.password && data.password.trim()) {
+      console.log("🔐 Hashing new password...");
       updateData.password = await AuthService.hashPassword(data.password);
     }
 
+    console.log("📝 Updating student in database...");
     const updated = await prisma.student.update({
       where: {
         id: data.id,
@@ -5295,6 +5313,9 @@ export const updateStudent = async (
       await prisma.studentAttachment.createMany({ data: attachmentsToCreate });
     }
 
+    console.log("✅ Student updated successfully:", updated.id);
+    revalidatePath("/admin/list/students");
+    revalidatePath(`/admin/list/students/${data.id}`);
     return { success: true, error: false, message: "Student updated successfully" };
   } catch (err) {
     console.error("Student update error:", err);
