@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { Eye, EyeOff, Phone, Lock, GraduationCap } from "lucide-react";
 import Image from "next/image";
+import { useCsrfToken, csrfFetch } from "@/hooks/useCsrfToken";
 
 const LoginPage = () => {
   const [phone, setPhone] = useState("");
@@ -13,6 +14,10 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [imageError, setImageError] = useState(false);
   const router = useRouter();
+  
+  // CSRF token for authenticated requests (not needed for login, but good practice)
+  // Note: CSRF token will fail on login page since user isn't authenticated yet
+  const { token: csrfToken, error: csrfError } = useCsrfToken();
 
   // Clear any existing auth tokens on page load
   React.useEffect(() => {
@@ -21,6 +26,8 @@ const LoginPage = () => {
     const errorParam = urlParams.get('error');
     if (errorParam === 'unsupported_role') {
       setError('Your user role is not supported. Please contact administrator.');
+    } else if (errorParam === 'security_upgrade') {
+      setError('Security upgrade required. Please login again with your credentials.');
     }
     
     // Clean URL if it has query parameters (from accidental GET submission)
@@ -52,6 +59,7 @@ const LoginPage = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    console.log("🔐 handleSubmit called with:", { phone, password: password ? "***" : "empty" });
     setIsLoading(true);
     setError("");
 
@@ -96,8 +104,9 @@ const LoginPage = () => {
   }
 
   const togglePassword = () => {
-    console.log("👁️ Toggling password visibility");
+    console.log("👁️ Toggling password visibility, current state:", showPassword);
     setShowPassword(!showPassword);
+    console.log("👁️ New state should be:", !showPassword);
   };
 
   return (
@@ -194,6 +203,7 @@ const LoginPage = () => {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    console.log("👁️ Eye button clicked");
                     togglePassword();
                   }}
                   className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none transition-colors duration-200 cursor-pointer z-20"
@@ -201,9 +211,9 @@ const LoginPage = () => {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
-                    <EyeOff className="w-5 h-5 pointer-events-none" />
+                    <EyeOff className="w-5 h-5" />
                   ) : (
-                    <Eye className="w-5 h-5 pointer-events-none" />
+                    <Eye className="w-5 h-5" />
                   )}
                 </button>
               </div>
@@ -214,6 +224,8 @@ const LoginPage = () => {
               type="button"
               onClick={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                console.log("🔐 Login button clicked");
                 handleSubmit(e as any);
               }}
               disabled={isLoading}

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useMemo, useCallback } from 'react';
-import { FixedSizeList as List } from 'react-window';
+import * as ReactWindow from 'react-window';
+const List = ReactWindow.FixedSizeList;
 import AutoSizer from 'react-virtualized-auto-sizer';
 import { TableSkeleton } from './ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -159,7 +160,7 @@ export default function VirtualizedTable<T>({
       {/* Virtualized Body */}
       <div style={{ height }}>
         <AutoSizer>
-          {({ height: autoHeight, width }) => (
+          {({ height: autoHeight, width }: { height: number; width: number }) => (
             <List
               height={autoHeight}
               width={width}
