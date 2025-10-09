@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: beruniy-school-management
+    env: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 18.x
+    healthCheckPath: /login
+    autoDeploy: true
+    branch: main
