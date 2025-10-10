@@ -39,7 +39,7 @@ export function NonceScript({
   const nonce = useNonce();
   
   return (
-    <script {...props} nonce={nonce}>
+    <script {...props} nonce={nonce || undefined}>
       {children}
     </script>
   );
@@ -58,7 +58,7 @@ export function NonceStyle({
   const nonce = useNonce();
   
   return (
-    <style {...props} nonce={nonce}>
+    <style {...props} nonce={nonce || undefined}>
       {children}
     </style>
   );
