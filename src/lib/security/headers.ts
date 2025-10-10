@@ -5,6 +5,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { generateCSPHeader } from './csp-config';
 // Note: Do not import Node 'crypto' here; middleware runs on Edge runtime
 
 export class SecurityHeaders {
@@ -31,28 +32,13 @@ export class SecurityHeaders {
       connectSrcDomains.push(...options.additionalConnectSrc);
     }
     
-    // Content Security Policy (CSP) - BALANCED VERSION
-    // Allows unsafe-inline for now to ensure admin panel navigation works
-    // TODO: Implement proper nonce integration for all inline scripts
-    const scriptSrc = isDev 
-      ? `script-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://cdn.jsdelivr.net`
-      : `script-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://cdn.jsdelivr.net`;
-    const styleSrc = isDev
-      ? `style-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://fonts.googleapis.com`
-      : `style-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://fonts.googleapis.com`;
-
-    const cspDirectives = [
-      "default-src 'self'",
-      scriptSrc,
-      styleSrc,
-      "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: https: blob:",
-      `connect-src ${connectSrcDomains.join(' ')}`,
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "object-src 'none'",
-    ];
+    // Content Security Policy (CSP) - PRODUCTION-READY VERSION
+    // Uses comprehensive CSP configuration with nonce support
+    const cspDirectives = generateCSPHeader({
+      isDev,
+      nonce,
+      additionalDomains: connectSrcDomains,
+    }).split('; ');
     
     response.headers.set(
       'Content-Security-Policy',
