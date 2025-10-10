@@ -1,9 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useSecureNavigation } from "@/hooks/useSecureNavigation";
+import { useNavigation } from "@/hooks/useNavigation";
 import { InlineGifLoader } from "@/components/ui/CustomGifLoader";
-import { useEffect } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -160,12 +159,7 @@ const adminMenuItems = [
 
 const AdminMenu = () => {
   const pathname = usePathname();
-  const { navigateTo, injectGlobalNonce } = useSecureNavigation();
-
-  // Inject nonce globally for CSP compliance
-  useEffect(() => {
-    injectGlobalNonce();
-  }, [injectGlobalNonce]);
+  const { navigateTo } = useNavigation();
 
   return (
     <div className="flex-1">

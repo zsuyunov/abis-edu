@@ -8,7 +8,6 @@ import QueryProvider from "@/components/providers/QueryProvider";
 import { LoadingProvider } from "@/components/providers/LoadingProvider";
 import GlobalLoadingBar from "@/components/ui/GlobalLoadingBar";
 import { TimetableCacheProvider } from "@/contexts/TimetableCacheContext";
-import CSPNonceWrapper from "@/components/CSPNonceWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -38,19 +37,17 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/logo.png" />
       </head>
       <body className={inter.className}>
-        <CSPNonceWrapper>
-          <QueryProvider>
-            <TimetableCacheProvider>
-              <LoadingProvider>
-                <ImageKitProvider>
-                <GlobalLoadingBar />
-                {children} 
-                <ToastContainer position="bottom-right" theme="dark" />
-                </ImageKitProvider>
-              </LoadingProvider>
-            </TimetableCacheProvider>
-          </QueryProvider>
-        </CSPNonceWrapper>
+        <QueryProvider>
+          <TimetableCacheProvider>
+            <LoadingProvider>
+              <ImageKitProvider>
+              <GlobalLoadingBar />
+              {children} 
+              <ToastContainer position="bottom-right" theme="dark" />
+              </ImageKitProvider>
+            </LoadingProvider>
+          </TimetableCacheProvider>
+        </QueryProvider>
       </body>
     </html>
   );

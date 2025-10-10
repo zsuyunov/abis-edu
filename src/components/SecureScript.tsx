@@ -1,49 +1,58 @@
 /**
- * Secure Script Component
- * Automatically adds nonce to scripts for CSP compliance
+ * CSP-compliant Script component with nonce support
+ * Use this instead of <script> tags for inline scripts
  */
 
-'use client';
+import { useCSPNonce } from '@/lib/security/csp-nonce';
 
-import { useNonce } from '@/lib/security/csp-nonce-provider';
-import Script from 'next/script';
-
-interface SecureScriptProps {
+interface SecureScriptProps extends React.ScriptHTMLAttributes<HTMLScriptElement> {
+  children?: React.ReactNode;
   src?: string;
-  strategy?: 'afterInteractive' | 'lazyOnload' | 'beforeInteractive' | 'worker';
-  children?: string;
-  id?: string;
-  onLoad?: () => void;
-  onError?: () => void;
-  [key: string]: any;
+  strategy?: 'afterInteractive' | 'lazyOnload' | 'beforeInteractive';
 }
 
 export function SecureScript({ 
   children, 
-  nonce: propNonce,
+  src, 
+  strategy = 'afterInteractive',
   ...props 
-}: SecureScriptProps & { nonce?: string }) {
-  const contextNonce = useNonce();
-  const nonce = propNonce || contextNonce;
+}: SecureScriptProps) {
+  const nonce = useCSPNonce();
 
-  if (children) {
-    // Inline script
+  // For external scripts, use Next.js Script component
+  if (src) {
     return (
-      <script {...props} nonce={nonce || undefined}>
-        {children}
-      </script>
+      <script
+        {...props}
+        src={src}
+        nonce={nonce || undefined}
+        data-strategy={strategy}
+      />
     );
   }
 
-  // External script
+  // For inline scripts, use nonce
   return (
-    <Script {...props} nonce={nonce || undefined} />
+    <script
+      {...props}
+      nonce={nonce || undefined}
+      dangerouslySetInnerHTML={children ? { __html: String(children) } : undefined}
+    />
   );
 }
 
 /**
- * Hook to get nonce for manual script injection
+ * CSP-compliant inline script for critical functionality
+ * Only use when absolutely necessary
  */
-export function useSecureNonce(): string | null {
-  return useNonce();
+export function CriticalScript({ children, ...props }: Omit<SecureScriptProps, 'src'>) {
+  const nonce = useCSPNonce();
+
+  return (
+    <script
+      {...props}
+      nonce={nonce || undefined}
+      dangerouslySetInnerHTML={{ __html: String(children) }}
+    />
+  );
 }
