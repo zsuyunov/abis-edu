@@ -1,17 +1,17 @@
 import { headers, cookies } from "next/headers";
+import { unsafeDecodeJwt } from "@/lib/security/verifyJwt";
 
-// Simple JWT decoder for debugging
-function decodeJWT(token: string) {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-    return payload;
-  } catch (error) {
-    console.error('JWT decode error:', error);
-    return null;
-  }
-}
+/**
+ * DEBUG PAGE ONLY - Should be disabled in production!
+ * 
+ * SECURITY NOTE: This page uses unsafeDecodeJwt for debugging display purposes only.
+ * This is acceptable ONLY because:
+ * 1. It's a debug/development page
+ * 2. It's only displaying token contents, not using them for authentication
+ * 3. The middleware has already verified the token before this page loads
+ * 
+ * NEVER use unsafeDecodeJwt for authentication or authorization!
+ */
 
 export default async function DebugAuthPage() {
   const headersList = headers();
@@ -29,8 +29,8 @@ export default async function DebugAuthPage() {
   const authToken = cookieStore.get("auth_token")?.value;
   const userIdFromCookie = cookieStore.get("userId")?.value;
   
-  // Decode JWT token directly
-  const jwtPayload = authToken ? decodeJWT(authToken) : null;
+  // Decode JWT token for display (debug only - NOT for auth!)
+  const jwtPayload = authToken ? unsafeDecodeJwt(authToken) : null;
 
   return (
     <div className="p-8">

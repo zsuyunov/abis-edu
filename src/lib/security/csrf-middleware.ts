@@ -13,20 +13,21 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { CSRFProtection } from './csrf';
+import { verifyJwt } from './verifyJwt';
 
 /**
- * Extract session ID from request (from auth token or session cookie)
+ * Extract session ID from request with JWT signature verification
+ * SECURITY FIX: Now verifies JWT signature instead of just decoding
  */
 function getSessionId(request: NextRequest): string | null {
   // Try to get from auth_token cookie
   const authToken = request.cookies.get('auth_token')?.value;
   if (authToken) {
     try {
-      // Decode JWT to get user ID (without verification, just for session ID)
-      const parts = authToken.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-        return payload.id || null;
+      // SECURITY: Verify JWT signature before extracting session ID
+      const payload = verifyJwt(authToken);
+      if (payload && payload.id) {
+        return payload.id;
       }
     } catch (error) {
       console.error('Failed to extract session ID from token:', error);

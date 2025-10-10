@@ -12,6 +12,12 @@ export { CSRFProtection } from './csrf';
 export { SecurityHeaders } from './headers';
 export { SecurityMonitoring } from './monitoring';
 export { withCSRF, withCSRFLogging, validateCSRF } from './csrf-middleware';
+export { 
+  verifyJwt, 
+  verifyRefreshJwt, 
+  verifyJwtForMiddleware,
+  unsafeDecodeJwt // Only for debugging - NEVER for auth!
+} from './verifyJwt';
 
 // Input validation exports
 export {
@@ -38,6 +44,7 @@ export {
 
 // Re-export types
 export type { TokenPayload, RefreshTokenPayload } from './tokens';
+export type { JwtPayload, RefreshTokenPayload as RefreshJwtPayload } from './verifyJwt';
 export type { RateLimitConfig } from './rate-limit';
 export type { SecurityLogData } from './logger';
 export type { SecurityAlert } from './monitoring';

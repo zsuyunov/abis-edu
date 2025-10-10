@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { SecurityHeaders } from "@/lib/security/headers";
+import { verifyJwtForMiddleware } from "@/lib/security/verifyJwt";
 
 // Define public routes that don't require authentication
 const publicRoutes = [
@@ -45,39 +46,18 @@ const roleRoutes = {
 };
 
 /**
- * Decode JWT without verification (for middleware only)
- * SECURITY NOTE: This is a lightweight check for routing purposes.
- * Full verification with DB tokenVersion check happens in API routes via TokenService.verifyAccessToken()
- * The middleware only checks:
- * - Token structure and expiry
- * - Presence of tokenVersion field (rejects legacy tokens)
- * The actual tokenVersion value is validated against DB in API routes
+ * SECURITY FIX: Now using proper JWT signature verification
+ * 
+ * Previously: Insecure manual decoding without signature verification
+ * Now: Uses verifyJwtForMiddleware which:
+ * - Verifies JWT signature with secret
+ * - Validates issuer and audience
+ * - Checks expiry automatically
+ * - Rejects tokens with alg: none or invalid signatures
+ * - Rejects legacy tokens without tokenVersion
+ * 
+ * Full tokenVersion validation against DB happens in API routes via TokenService
  */
-function decodeJWT(token: string) {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], "base64").toString());
-
-    // Check if token is expired
-    if (payload.exp && Date.now() >= payload.exp * 1000) {
-      return null;
-    }
-
-    return payload as {
-      id: string;
-      phone: string;
-      role: string;
-      name?: string;
-      surname?: string;
-      branchId?: any;
-      tokenVersion?: number;
-      exp?: number;
-    };
-  } catch (error) {
-    return null;
-  }
-}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -93,10 +73,10 @@ export function middleware(request: NextRequest) {
                          request.headers.get('content-type')?.includes('multipart/form-data');
   
   if (isServerAction) {
-    // Server actions need the user context, so we still decode the token
+    // Server actions need the user context - verify token with signature check
     const token = request.cookies.get("auth_token")?.value;
     if (token) {
-      const user = decodeJWT(token);
+      const user = verifyJwtForMiddleware(token);
       if (user && user.tokenVersion !== undefined) {
         // Add user info to headers for server actions
         response.headers.set("x-user-id", user.id);
@@ -148,11 +128,11 @@ export function middleware(request: NextRequest) {
     );
   }
 
-  // Decode and verify token
-  const user = decodeJWT(token);
+  // Verify token with signature check (SECURITY FIX)
+  const user = verifyJwtForMiddleware(token);
 
   if (!user) {
-    // Token is invalid or expired
+    // Token is invalid, expired, or has invalid signature
     const redirectResponse = pathname.startsWith("/api")
       ? NextResponse.json(
           { error: "Invalid or expired token" },
@@ -166,22 +146,8 @@ export function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  // SECURITY: Reject tokens without tokenVersion (old tokens from before security update)
-  if (user.tokenVersion === undefined || user.tokenVersion === null) {
-    console.log(`⚠️ Rejecting legacy token without tokenVersion for user ${user.id}`);
-    
-    const redirectResponse = pathname.startsWith("/api")
-      ? NextResponse.json(
-          { error: "Security upgrade required. Please login again." },
-          { status: 401 }
-        )
-      : NextResponse.redirect(new URL("/login?error=security_upgrade", request.url));
-
-    // Clear old token
-    redirectResponse.cookies.delete("auth_token");
-    redirectResponse.cookies.delete("refresh_token");
-    return redirectResponse;
-  }
+  // Note: tokenVersion check is already done in verifyJwtForMiddleware
+  // It rejects tokens without tokenVersion or with invalid signatures
 
   // Check if token is near expiry (less than 5 minutes remaining)
   // Suggest refresh to client via header

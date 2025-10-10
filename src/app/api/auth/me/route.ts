@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers, cookies } from "next/headers";
+import { verifyJwt } from "@/lib/security/verifyJwt";
 
-function decodeJwt(token: string | undefined) {
-  if (!token) return null;
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), "base64").toString("utf8"));
-    if (payload.exp && Date.now() >= payload.exp * 1000) return null;
-    return payload as { id: string; phone: string; role: string; name?: string; surname?: string };
-  } catch {
-    return null;
-  }
-}
+/**
+ * SECURITY FIX: Removed insecure decodeJwt function
+ * Now using verifyJwt which checks JWT signature
+ */
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,23 +36,25 @@ export async function GET(request: NextRequest) {
       return response;
     }
 
-    // Try reading from auth cookie directly (ensures correct role even if headers missing)
+    // Try reading from auth cookie with signature verification (SECURITY FIX)
     const authToken = cookies().get("auth_token")?.value;
-    const payload = decodeJwt(authToken);
-    if (payload) {
-      const response = NextResponse.json({
-        success: true,
-        user: {
-          id: payload.id,
-          phone: payload.phone || "",
-          role: payload.role,
-          name: payload.name || "User",
-          surname: payload.surname || "User",
-          branchId: (payload as any).branchId ?? undefined,
-        },
-      });
-      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
-      return response;
+    if (authToken) {
+      const payload = verifyJwt(authToken);
+      if (payload) {
+        const response = NextResponse.json({
+          success: true,
+          user: {
+            id: payload.id,
+            phone: payload.phone || "",
+            role: payload.role,
+            name: payload.name || "User",
+            surname: payload.surname || "User",
+            branchId: payload.branchId ?? undefined,
+          },
+        });
+        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+        return response;
+      }
     }
 
     // Fallback data for development/testing

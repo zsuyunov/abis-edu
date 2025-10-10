@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { CSRFProtection } from '@/lib/security/csrf';
+import { verifyJwt } from '@/lib/security/verifyJwt';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,24 +27,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Decode JWT to get user ID
-    let sessionId: string;
-    try {
-      const parts = authToken.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-        sessionId = payload.id;
-        console.log(`✅ Generating CSRF token for session: ${sessionId}`);
-      } else {
-        throw new Error('Invalid token format');
-      }
-    } catch (error) {
-      console.error('❌ Invalid token format:', error);
+    // Verify JWT signature and get user ID (SECURITY FIX)
+    const payload = verifyJwt(authToken);
+    if (!payload || !payload.id) {
+      console.error('❌ Invalid token or signature verification failed');
       return NextResponse.json(
         { error: 'Invalid authentication token' },
         { status: 401 }
       );
     }
+
+    const sessionId = payload.id;
+    console.log(`✅ Generating CSRF token for session: ${sessionId}`);
 
     // Generate CSRF token
     const csrfToken = await CSRFProtection.generateToken(sessionId);

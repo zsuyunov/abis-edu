@@ -9,12 +9,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { withCSRF } from '@/lib/security';
+import { withCSRF, verifyJwt } from '@/lib/security';
 import { SecurityMonitoring } from '@/lib/security/monitoring';
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Add admin authentication check
+    // SECURITY FIX: Admin authentication with signature verification
     const authToken = request.cookies.get('auth_token')?.value;
     if (!authToken) {
       return NextResponse.json(
@@ -23,22 +23,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Decode and verify admin role
-    try {
-      const parts = authToken.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-        if (payload.role !== 'admin') {
-          return NextResponse.json(
-            { error: 'Admin access required' },
-            { status: 403 }
-          );
-        }
-      }
-    } catch (error) {
+    // Verify JWT signature and check admin role
+    const payload = verifyJwt(authToken);
+    if (!payload) {
       return NextResponse.json(
-        { error: 'Invalid token' },
+        { error: 'Invalid token or signature' },
         { status: 401 }
+      );
+    }
+
+    if (payload.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Admin access required' },
+        { status: 403 }
       );
     }
 
@@ -79,7 +76,7 @@ export async function GET(request: NextRequest) {
 // Manual trigger for scheduled scan
 async function postHandler(request: NextRequest) {
   try {
-    // Admin auth check (same as GET)
+    // SECURITY FIX: Admin auth with signature verification
     const authToken = request.cookies.get('auth_token')?.value;
     if (!authToken) {
       return NextResponse.json(
@@ -88,15 +85,19 @@ async function postHandler(request: NextRequest) {
       );
     }
 
-    const parts = authToken.split('.');
-    if (parts.length === 3) {
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-      if (payload.role !== 'admin') {
-        return NextResponse.json(
-          { error: 'Admin access required' },
-          { status: 403 }
-        );
-      }
+    const payload = verifyJwt(authToken);
+    if (!payload) {
+      return NextResponse.json(
+        { error: 'Invalid token or signature' },
+        { status: 401 }
+      );
+    }
+
+    if (payload.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Admin access required' },
+        { status: 403 }
+      );
     }
 
     // Run scheduled scan

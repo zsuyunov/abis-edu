@@ -1,19 +1,13 @@
 import { cookies } from "next/headers";
+import { verifyJwt } from "@/lib/security/verifyJwt";
 
-// Simple JWT decoder for server-side use
-function decodeJWT(token: string) {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-    return payload;
-  } catch (error) {
-    console.error('JWT decode error:', error);
-    return null;
-  }
-}
+/**
+ * SECURITY FIX: Now uses proper JWT signature verification
+ * Previously: Used insecure decodeJWT without signature verification
+ * Now: Uses verifyJwt which validates signatures before trusting payload
+ */
 
-// Get user info from JWT token directly (bypassing middleware)
+// Get user info from JWT token with signature verification
 export async function getUserFromToken() {
   try {
     const cookieStore = cookies();
@@ -30,8 +24,10 @@ export async function getUserFromToken() {
       };
     }
     
-    const payload = decodeJWT(authToken);
+    // SECURITY: Verify JWT signature before trusting payload
+    const payload = verifyJwt(authToken);
     if (!payload) {
+      console.warn('⚠️ Invalid JWT signature in getUserFromToken');
       return {
         id: null,
         role: null,

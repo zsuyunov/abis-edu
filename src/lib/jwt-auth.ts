@@ -18,7 +18,11 @@ export function getAuthUser(request: NextRequest): AuthUser | null {
       return null;
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    // SECURITY FIX: Specify algorithms to prevent 'alg: none' attacks
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'], // Only allow HMAC SHA-256
+    }) as any;
+    
     return {
       userId: decoded.userId,
       role: decoded.role,
