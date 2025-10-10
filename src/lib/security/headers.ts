@@ -31,11 +31,14 @@ export class SecurityHeaders {
       connectSrcDomains.push(...options.additionalConnectSrc);
     }
     
-    // Content Security Policy (CSP)
-    // TEMPORARY FIX: Allow unsafe-inline in production until nonce is properly integrated
-    // TODO: Implement proper nonce-based CSP after login is working
-    const scriptSrc = `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net`;
-    const styleSrc = `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`;
+    // Content Security Policy (CSP) - SECURE VERSION
+    // Uses nonce-based CSP to eliminate unsafe-inline and unsafe-eval
+    const scriptSrc = isDev 
+      ? `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net`
+      : `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net`;
+    const styleSrc = isDev
+      ? `style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com`
+      : `style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com`;
 
     const cspDirectives = [
       "default-src 'self'",
