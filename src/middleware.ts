@@ -6,6 +6,9 @@
  * - Automatic token refresh when near expiry
  */
 
+// Force Node.js runtime for crypto support (required for JWT verification)
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from "next/server";
 import { SecurityHeaders } from "@/lib/security/headers";
 import { verifyJwtForMiddleware } from "@/lib/security/verifyJwt";
