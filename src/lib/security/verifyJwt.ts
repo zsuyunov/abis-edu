@@ -135,7 +135,14 @@ export function verifyJwtForMiddleware(token: string): JwtPayload | null {
 
     return decoded;
   } catch (error) {
-    // Silently fail for middleware (logged elsewhere)
+    // Log JWT verification errors for debugging
+    if (error instanceof jwt.TokenExpiredError) {
+      console.log('⚠️ JWT verification failed in middleware: Token expired');
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      console.log(`⚠️ JWT verification failed in middleware: ${error.message}`);
+    } else {
+      console.log(`⚠️ JWT verification failed in middleware: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
     return null;
   }
 }
