@@ -17,10 +17,11 @@ export async function GET(request: NextRequest) {
     // Get session ID from auth token
     const authToken = request.cookies.get('auth_token')?.value;
     
+    // For login page, we don't have auth token yet, so return a simple response
     if (!authToken) {
       return NextResponse.json(
-        { error: 'Authentication required to generate CSRF token' },
-        { status: 401 }
+        { error: 'No authentication token found' },
+        { status: 200 } // Changed from 401 to 200 to prevent login page errors
       );
     }
 

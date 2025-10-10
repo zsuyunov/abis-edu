@@ -32,6 +32,17 @@ async function postHandler(request: NextRequest) {
   const userAgent = request.headers.get('user-agent') || undefined;
 
   try {
+    // Check for required environment variables
+    if (!process.env.JWT_SECRET || !process.env.REFRESH_TOKEN_SECRET) {
+      console.error("Missing required environment variables:", {
+        hasJwtSecret: !!process.env.JWT_SECRET,
+        hasRefreshSecret: !!process.env.REFRESH_TOKEN_SECRET
+      });
+      return NextResponse.json(
+        { error: "Server configuration error. Please contact administrator." },
+        { status: 500 }
+      );
+    }
     // Rate limiting - prevent brute force attacks (ASYNC for Redis support)
     const rateLimitResult = await RateLimiter.checkAsync(
       `login:${clientIp}`,
@@ -64,6 +75,17 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json(
         { error: "Invalid input", details: validationResult.error.flatten() },
         { status: 400 }
+      );
+    }
+
+    // Check database connection
+    try {
+      await prisma.$connect();
+    } catch (dbError) {
+      console.error("Database connection error:", dbError);
+      return NextResponse.json(
+        { error: "Database connection error. Please try again later." },
+        { status: 500 }
       );
     }
 

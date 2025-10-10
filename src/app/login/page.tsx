@@ -18,6 +18,13 @@ const LoginPage = () => {
   // CSRF token for authenticated requests (not needed for login, but good practice)
   // Note: CSRF token will fail on login page since user isn't authenticated yet
   const { token: csrfToken, error: csrfError } = useCsrfToken();
+  
+  // Log CSRF errors for debugging but don't show them to user
+  React.useEffect(() => {
+    if (csrfError) {
+      console.log("CSRF token error (expected on login page):", csrfError);
+    }
+  }, [csrfError]);
 
   // Clear any existing auth tokens on page load
   React.useEffect(() => {
