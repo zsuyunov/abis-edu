@@ -1,57 +1,16 @@
 /**
  * Enhanced Security Middleware
- * - Lightweight JWT validation (structure and expiry only)
+ * - Verifies JWT tokens with tokenVersion validation (Edge Runtime compatible)
  * - Applies security headers (HSTS, CSP, etc.)
  * - Role-based access control
+ * - Automatic token refresh when near expiry
  * 
- * SECURITY NOTE: Edge Runtime doesn't support crypto module.
- * - Middleware does lightweight checks (structure, expiry, tokenVersion presence)
- * - Full signature verification happens in API routes via TokenService.verifyAccessToken()
- * - This is secure because API routes verify signatures before any sensitive operations
+ * SECURITY: Uses jose library for Edge Runtime compatibility (no Node.js crypto dependency)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { SecurityHeaders } from "@/lib/security/headers";
-
-/**
- * Lightweight JWT decoder for Edge Runtime (no signature verification)
- * SECURITY: This only checks structure and expiry. 
- * Full signature verification happens in API routes.
- */
-function decodeJWTForEdge(token: string) {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    
-    // Decode payload (Edge Runtime compatible)
-    const base64Url = parts[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const payload = JSON.parse(atob(base64));
-
-    // Check expiry
-    if (payload.exp && Date.now() >= payload.exp * 1000) {
-      return null;
-    }
-
-    // Require tokenVersion (reject legacy tokens)
-    if (payload.tokenVersion === undefined || payload.tokenVersion === null) {
-      return null;
-    }
-
-    return payload as {
-      id: string;
-      phone: string;
-      role: string;
-      name?: string;
-      surname?: string;
-      branchId?: any;
-      tokenVersion: number;
-      exp?: number;
-    };
-  } catch (error) {
-    return null;
-  }
-}
+import { verifyJwtEdge } from "@/lib/security/verifyJwtEdge";
 
 // Define public routes that don't require authentication
 const publicRoutes = [
@@ -89,11 +48,10 @@ const roleRoutes = {
 };
 
 /**
- * SECURITY FIX: Now using proper JWT signature verification
+ * SECURITY: Edge Runtime JWT verification using jose library
  * 
- * Previously: Insecure manual decoding without signature verification
- * Now: Uses verifyJwtForMiddleware which:
- * - Verifies JWT signature with secret
+ * Uses verifyJwtEdge which:
+ * - Verifies JWT signature with secret (Edge Runtime compatible)
  * - Validates issuer and audience
  * - Checks expiry automatically
  * - Rejects tokens with alg: none or invalid signatures
@@ -102,7 +60,7 @@ const roleRoutes = {
  * Full tokenVersion validation against DB happens in API routes via TokenService
  */
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Create response
@@ -116,10 +74,10 @@ export function middleware(request: NextRequest) {
                          request.headers.get('content-type')?.includes('multipart/form-data');
   
   if (isServerAction) {
-    // Server actions need the user context
+    // Server actions need the user context - verify token with Edge-compatible verification
     const token = request.cookies.get("auth_token")?.value;
     if (token) {
-      const user = decodeJWTForEdge(token);
+      const user = await verifyJwtEdge(token);
       if (user && user.tokenVersion !== undefined) {
         // Add user info to headers for server actions
         response.headers.set("x-user-id", user.id);
@@ -171,11 +129,11 @@ export function middleware(request: NextRequest) {
     );
   }
 
-  // Decode token (Edge Runtime compatible)
-  const user = decodeJWTForEdge(token);
+  // Verify token with Edge-compatible signature check
+  const user = await verifyJwtEdge(token);
 
   if (!user) {
-    // Token is invalid or expired
+    // Token is invalid, expired, or has invalid signature
     const redirectResponse = pathname.startsWith("/api")
       ? NextResponse.json(
           { error: "Invalid or expired token" },
@@ -189,8 +147,8 @@ export function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  // Note: Middleware does lightweight validation only
-  // Full JWT signature verification happens in API routes via TokenService.verifyAccessToken()
+  // Note: tokenVersion check is already done in verifyJwtEdge
+  // It rejects tokens without tokenVersion or with invalid signatures
 
   // Check if token is near expiry (less than 5 minutes remaining)
   // Suggest refresh to client via header

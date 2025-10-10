@@ -19,6 +19,13 @@ export {
   unsafeDecodeJwt // Only for debugging - NEVER for auth!
 } from './verifyJwt';
 
+// Edge Runtime JWT verification (uses jose library)
+export { 
+  verifyJwtEdge,
+  verifyRefreshJwtEdge,
+  type EdgeJwtPayload
+} from './verifyJwtEdge';
+
 // Input validation exports
 export {
   sanitizeSQL,
