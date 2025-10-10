@@ -83,24 +83,70 @@ export function useCsrfToken(): UseCsrfTokenReturn {
   };
 }
 
+// Cache CSRF token in memory to avoid fetching a new one every time
+let cachedCsrfToken: string | null = null;
+let tokenFetchPromise: Promise<string> | null = null;
+
 /**
  * Utility function to get CSRF token directly (for one-off requests)
+ * Uses cached token if available, otherwise fetches a new one
  * 
  * @returns Promise<string> The CSRF token
  * @throws Error if token fetch fails
  */
 export async function getCsrfToken(): Promise<string> {
-  const response = await fetch('/api/auth/csrf-token', {
-    method: 'GET',
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch CSRF token');
+  // Return cached token if available
+  if (cachedCsrfToken) {
+    console.log('🔐 Using cached CSRF token');
+    return cachedCsrfToken;
   }
 
-  const data = await response.json();
-  return data.token;
+  // If fetch is already in progress, wait for it
+  if (tokenFetchPromise) {
+    console.log('⏳ Waiting for ongoing CSRF token fetch');
+    return tokenFetchPromise;
+  }
+
+  // Fetch new token
+  console.log('🔄 Fetching new CSRF token');
+  tokenFetchPromise = (async () => {
+    try {
+      const response = await fetch('/api/auth/csrf-token', {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch CSRF token');
+      }
+
+      const data = await response.json();
+      
+      if (!data.token) {
+        throw new Error('No token in response');
+      }
+
+      // Cache the token
+      cachedCsrfToken = data.token;
+      console.log('✅ CSRF token cached successfully');
+      
+      return data.token;
+    } finally {
+      // Clear the promise after fetch completes
+      tokenFetchPromise = null;
+    }
+  })();
+
+  return tokenFetchPromise;
+}
+
+/**
+ * Clear the cached CSRF token (call this on logout or token expiry)
+ */
+export function clearCsrfToken(): void {
+  cachedCsrfToken = null;
+  tokenFetchPromise = null;
+  console.log('🗑️ CSRF token cache cleared');
 }
 
 /**
