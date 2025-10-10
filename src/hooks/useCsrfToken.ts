@@ -46,15 +46,25 @@ export function useCsrfToken(): UseCsrfTokenReturn {
       });
 
       if (!response.ok) {
+        console.warn('CSRF token fetch failed with status:', response.status);
         throw new Error('Failed to fetch CSRF token');
       }
 
       const data = await response.json();
-      setToken(data.token);
+      
+      // Check if we got a valid token
+      if (data.token) {
+        setToken(data.token);
+        console.log('✅ CSRF token fetched successfully');
+      } else if (data.error) {
+        console.warn('⚠️ CSRF token endpoint returned error:', data.error);
+        // Don't throw error for unauthenticated state
+        setToken(null);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch CSRF token';
       setError(errorMessage);
-      console.error('CSRF token fetch error:', err);
+      console.error('❌ CSRF token fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -117,12 +127,18 @@ export async function csrfFetch(url: string, options: RequestInit = {}): Promise
   );
 
   if (needsCsrf) {
-    const token = await getCsrfToken();
-    
-    options.headers = {
-      ...options.headers,
-      'x-csrf-token': token,
-    };
+    try {
+      const token = await getCsrfToken();
+      console.log(`🔐 Adding CSRF token to ${options.method} ${url}`);
+      
+      options.headers = {
+        ...options.headers,
+        'x-csrf-token': token,
+      };
+    } catch (error) {
+      console.error(`❌ Failed to get CSRF token for ${options.method} ${url}:`, error);
+      // Continue anyway - the server will reject if CSRF is required
+    }
   }
 
   // Always include credentials for cookies

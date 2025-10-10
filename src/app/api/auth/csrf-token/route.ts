@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     
     // For login page, we don't have auth token yet, so return a simple response
     if (!authToken) {
+      console.log('⚠️ No auth token found for CSRF token generation');
       return NextResponse.json(
         { error: 'No authentication token found' },
         { status: 200 } // Changed from 401 to 200 to prevent login page errors
@@ -32,10 +33,12 @@ export async function GET(request: NextRequest) {
       if (parts.length === 3) {
         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
         sessionId = payload.id;
+        console.log(`✅ Generating CSRF token for session: ${sessionId}`);
       } else {
         throw new Error('Invalid token format');
       }
     } catch (error) {
+      console.error('❌ Invalid token format:', error);
       return NextResponse.json(
         { error: 'Invalid authentication token' },
         { status: 401 }
@@ -44,8 +47,9 @@ export async function GET(request: NextRequest) {
 
     // Generate CSRF token
     const csrfToken = await CSRFProtection.generateToken(sessionId);
+    console.log(`✅ CSRF token generated successfully for session ${sessionId}`);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       token: csrfToken,
       expiresIn: 3600, // 1 hour in seconds
       usage: {
@@ -53,6 +57,17 @@ export async function GET(request: NextRequest) {
         queryParam: 'csrf_token',
       },
     });
+
+    // Also set CSRF token in a cookie for easier access
+    response.cookies.set('csrf_token', csrfToken, {
+      httpOnly: false, // Allow JavaScript access
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 3600, // 1 hour
+      path: '/',
+    });
+
+    return response;
   } catch (error) {
     console.error('CSRF token generation error:', error);
     return NextResponse.json(
