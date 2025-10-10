@@ -454,7 +454,7 @@ async function postHandler(request: NextRequest) {
     response.cookies.set('auth_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
       maxAge: 15 * 60, // 15 minutes
       path: '/',
     });
@@ -463,7 +463,7 @@ async function postHandler(request: NextRequest) {
     response.cookies.set('refresh_token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/api/auth',
     });
