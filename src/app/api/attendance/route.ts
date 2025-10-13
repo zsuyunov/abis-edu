@@ -192,9 +192,8 @@ async function postHandler(request: NextRequest) {
       } else {
         console.log(`➕ Creating new attendance record for student ${studentId}`);
         
-        // Try to find a valid timetable for this class and subject, but don't require it
-        // Find a valid timetable ID to use
-        const validTimetable = await prisma.timetable.findFirst({
+        // Try to find an active timetable; if none, create a lightweight one so attendance isn't blocked
+        let timetable = await prisma.timetable.findFirst({
           where: {
             isActive: true,
             classId: parseInt(classId),
@@ -203,16 +202,34 @@ async function postHandler(request: NextRequest) {
           select: { id: true }
         });
 
-        if (!validTimetable) {
-          console.log('❌ No valid timetable found for class and subject');
-          return NextResponse.json({ 
-            error: "No valid timetable found for the specified class and subject" 
-          }, { status: 400 });
+        // Fetch class to derive branch and academic year
+        const cls = await prisma.class.findUnique({
+          where: { id: parseInt(classId) },
+          select: { id: true, branchId: true, academicYearId: true }
+        });
+
+        if (!timetable) {
+          timetable = await prisma.timetable.create({
+            data: {
+              branchId: cls?.branchId || 0,
+              classId: parseInt(classId),
+              academicYearId: cls?.academicYearId || 0,
+              subjectId: parseInt(subjectId),
+              dayOfWeek: null,
+              startTime: new Date('1970-01-01T08:00:00Z'),
+              endTime: new Date('1970-01-01T09:00:00Z'),
+              isActive: true,
+              roomNumber: null,
+              buildingName: 'virtual'
+            },
+            select: { id: true }
+          });
+          console.log('🆕 Created virtual timetable for attendance:', timetable.id);
         }
 
-        console.log('✅ Using timetable ID:', validTimetable.id);
+        console.log('✅ Using timetable ID:', timetable.id);
 
-        // Create attendance record with valid timetable ID
+        // Create attendance record
         attendanceRecord = await prisma.attendance.create({
           data: {
             studentId: studentId.toString(),
@@ -222,9 +239,9 @@ async function postHandler(request: NextRequest) {
             status: status.toUpperCase(),
             notes: notes || null,
             teacherId: teacherId,
-            timetableId: validTimetable.id, // Use actual timetable ID
-            academicYearId: 1, // Default academic year
-            branchId: 1 // Default branch
+            timetableId: timetable.id,
+            academicYearId: cls?.academicYearId || 0,
+            branchId: cls?.branchId || 0
           },
           include: {
             student: {
