@@ -90,17 +90,31 @@ async function postHandler(request: NextRequest) {
     }
 
     const { phone, password /*, mfaCode */ } = validationResult.data; // MFA disabled for now
-    
-    console.log(`\n🔐 Login attempt for phone: ${phone}`);
+
+    // Normalize phone formats to tolerate variations from spreadsheets
+    const normalizedPhone = phone.trim();
+    const digitsOnly = normalizedPhone.replace(/\D/g, '');
+    const withPlus = normalizedPhone.startsWith('+') ? normalizedPhone : `+${normalizedPhone}`;
+    const withoutPlus = normalizedPhone.startsWith('+') ? normalizedPhone.slice(1) : normalizedPhone;
+
+    console.log(`\n🔐 Login attempt for phone: ${normalizedPhone}`);
 
     // Find user across all user tables
     let user: any = null; // Using 'any' to handle different user types with security fields
     let userRole: string | null = null;
     let userTable: string | null = null;
 
-    // Check Admin
-    const admin = await prisma.admin.findUnique({ 
-      where: { phone },
+    // Prioritize Student accounts when multiple roles share the same phone number
+    // Check Student FIRST
+    const student = await prisma.student.findFirst({ 
+      where: {
+        OR: [
+          { phone: normalizedPhone },
+          { phone: withPlus },
+          { phone: withoutPlus },
+          { phone: digitsOnly },
+        ],
+      },
       select: {
         id: true,
         phone: true,
@@ -111,20 +125,55 @@ async function postHandler(request: NextRequest) {
         lastLoginAt: true,
         lastLoginIp: true,
         lastPasswordChange: true,
-        // mfaEnabled: true, // Uncomment when enabling MFA
-        // mfaSecret: true,  // Uncomment when enabling MFA
       } as any // Type assertion until Prisma client is regenerated after migration
     });
-    if (admin) {
-      user = admin;
-      userRole = "admin";
-      userTable = "admin";
+    if (student) {
+      user = student;
+      userRole = "student";
+      userTable = "student";
     }
 
-    // Check Teacher
+    // Then check Parent
     if (!user) {
-      const teacher = await prisma.teacher.findUnique({ 
-        where: { phone },
+      const parent = await prisma.parent.findFirst({ 
+        where: {
+          OR: [
+            { phone: normalizedPhone },
+            { phone: withPlus },
+            { phone: withoutPlus },
+            { phone: digitsOnly },
+          ],
+        },
+        select: {
+          id: true,
+          phone: true,
+          password: true,
+          tokenVersion: true,
+          failedLoginAttempts: true,
+          accountLockedUntil: true,
+          lastLoginAt: true,
+          lastLoginIp: true,
+          lastPasswordChange: true,
+        } as any // Type assertion until Prisma client is regenerated after migration
+      });
+      if (parent) {
+        user = parent;
+        userRole = "parent";
+        userTable = "parent";
+      }
+    }
+
+    // Then check Teacher
+    if (!user) {
+      const teacher = await prisma.teacher.findFirst({ 
+        where: {
+          OR: [
+            { phone: normalizedPhone },
+            { phone: withPlus },
+            { phone: withoutPlus },
+            { phone: digitsOnly },
+          ],
+        },
         select: {
           id: true,
           phone: true,
@@ -146,10 +195,17 @@ async function postHandler(request: NextRequest) {
       }
     }
 
-    // Check Student
+    // Then check Admin
     if (!user) {
-      const student = await prisma.student.findFirst({ 
-        where: { phone },
+      const admin = await prisma.admin.findFirst({ 
+        where: {
+          OR: [
+            { phone: normalizedPhone },
+            { phone: withPlus },
+            { phone: withoutPlus },
+            { phone: digitsOnly },
+          ],
+        },
         select: {
           id: true,
           phone: true,
@@ -160,42 +216,28 @@ async function postHandler(request: NextRequest) {
           lastLoginAt: true,
           lastLoginIp: true,
           lastPasswordChange: true,
+          // mfaEnabled: true, // Uncomment when enabling MFA
+          // mfaSecret: true,  // Uncomment when enabling MFA
         } as any // Type assertion until Prisma client is regenerated after migration
       });
-      if (student) {
-        user = student;
-        userRole = "student";
-        userTable = "student";
+      if (admin) {
+        user = admin;
+        userRole = "admin";
+        userTable = "admin";
       }
     }
 
-    // Check Parent
+    // Finally, check User table for staff positions
     if (!user) {
-      const parent = await prisma.parent.findUnique({ 
-        where: { phone },
-        select: {
-          id: true,
-          phone: true,
-          password: true,
-          tokenVersion: true,
-          failedLoginAttempts: true,
-          accountLockedUntil: true,
-          lastLoginAt: true,
-          lastLoginIp: true,
-          lastPasswordChange: true,
-        } as any // Type assertion until Prisma client is regenerated after migration
-      });
-      if (parent) {
-        user = parent;
-        userRole = "parent";
-        userTable = "parent";
-      }
-    }
-
-    // Check User table for staff positions
-    if (!user) {
-      const staffUser: any = await prisma.user.findUnique({ 
-        where: { phone },
+      const staffUser: any = await prisma.user.findFirst({ 
+        where: {
+          OR: [
+            { phone: normalizedPhone },
+            { phone: withPlus },
+            { phone: withoutPlus },
+            { phone: digitsOnly },
+          ],
+        },
         select: {
           id: true,
           phone: true,
