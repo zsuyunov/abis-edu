@@ -1043,18 +1043,22 @@ const FormModal = ({
             toast.error("Failed to remove assignment");
           }
         } else {
-          // Use server action for other unassign types
-          unassignFormAction();
+          // Non-teacher cases submit via form action attribute; nothing to do here
         }
       };
 
       return (
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          const formData = new FormData(e.currentTarget);
-          formData.append("currentUserId", currentUserId || "");
-          handleSubmit(formData);
-        }} className="p-4 flex flex-col gap-4">
+        <form 
+          {...(isTeacherAssignment 
+            ? { onSubmit: (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                formData.append("currentUserId", currentUserId || "");
+                handleSubmit(formData);
+              }} 
+            : { action: unassignFormAction as any })}
+          className="p-4 flex flex-col gap-4"
+        >
           {/* Hidden fields for different table types */}
           {isTeacherAssignment ? (
             <>
@@ -1074,6 +1078,9 @@ const FormModal = ({
               <input type="hidden" name="academicYearId" value={data?.academicYearId || data?.academicYear?.id || ""} />
             </>
           ) : null}
+          {!isTeacherAssignment && (
+            <input type="hidden" name="currentUserId" value={currentUserId || ""} />
+          )}
           
           <span className="text-center font-medium">
             Are you sure you want to unassign this {table}?
@@ -1087,6 +1094,7 @@ const FormModal = ({
               className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
               rows={3}
               placeholder="Please provide a reason for unassignment..."
+              minLength={10}
               required
             />
           </div>

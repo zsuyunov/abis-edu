@@ -55,7 +55,7 @@ interface Timetable {
   branchId: number;
   classId: number;
   academicYearId: number;
-  dayOfWeek: string;
+  dayOfWeek: string | null;
   subjectId: number | null;
   subjectIds: number[];
   teacherIds: string[];
@@ -367,8 +367,10 @@ const TimetableManagementPage: React.FC = () => {
     }
   };
 
-  const convertDayOfWeek = (day: string) => {
-    // Convert database format (TUESDAY) to grid format (Tuesday)
+  const convertDayOfWeek = (day: string | null | undefined) => {
+    // Handle null/undefined safely and default to Monday to avoid UI crash
+    if (!day || typeof day !== 'string') return 'Monday';
+    const upper = day.toUpperCase();
     const dayMap: { [key: string]: string } = {
       'MONDAY': 'Monday',
       'TUESDAY': 'Tuesday', 
@@ -376,7 +378,7 @@ const TimetableManagementPage: React.FC = () => {
       'THURSDAY': 'Thursday',
       'FRIDAY': 'Friday'
     };
-    return dayMap[day.toUpperCase()] || day;
+    return dayMap[upper] || 'Monday';
   };
 
   const getSubjectNames = (subjectIds: number[] | null) => {
