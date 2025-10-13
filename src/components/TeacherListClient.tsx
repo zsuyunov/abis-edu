@@ -12,7 +12,7 @@ import Pagination from "@/components/Pagination";
 import AssignmentStatusFilter from "@/components/AssignmentStatusFilter";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 interface TeacherListClientProps {
   initialData: any[];
@@ -34,12 +34,67 @@ export default function TeacherListClient({
   const [data, setData] = useState(initialData);
   const [count, setCount] = useState(totalCount);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // Branch selection state for export
+  const [branches, setBranches] = useState<any[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>(searchParams.get("branchId") || "");
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Update state when props change (e.g., when page changes)
   useEffect(() => {
     setData(initialData);
     setCount(totalCount);
   }, [initialData, totalCount]);
+
+  // Load branches for the selector
+  useEffect(() => {
+    const loadBranches = async () => {
+      try {
+        const res = await fetch("/api/branches");
+        const json = await res.json();
+        const list = Array.isArray(json)
+          ? json
+          : json.branches || json.data || [];
+        setBranches(list);
+      } catch (e) {
+        // ignore fetch error for UI
+      }
+    };
+    loadBranches();
+  }, []);
+
+  const handleDownload = async () => {
+    if (!selectedBranch) return;
+    // Only allow when assigned filter is active
+    // Button visibility is already gated, but guard again
+    try {
+      setIsDownloading(true);
+      const params = new URLSearchParams({ branchId: selectedBranch });
+      const response = await fetch(`/api/teacher-assignments/export?${params.toString()}`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to download");
+      }
+      const cd = response.headers.get("content-disposition");
+      const filename = cd ? cd.split("filename=")[1]?.replace(/"/g, "") : `Teachers_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'teachers.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      // basic notification
+      alert(e instanceof Error ? e.message : 'Download failed');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const columns = [
     {
@@ -110,8 +165,20 @@ export default function TeacherListClient({
         />
         <div className="flex flex-col">
           <h3 className="font-semibold">{item.firstName} {item.lastName}</h3>
-          <p className="text-xs text-gray-500">{item.email || 'No email'}</p>
-          <p className="text-xs text-gray-500">Born: {item.dateOfBirth ? item.dateOfBirth.toLocaleDateString() : 'Not provided'}</p>
+          <p className="text-xs text-gray-500">
+            {item.TeacherAssignment && item.TeacherAssignment.length > 0
+              ? (() => {
+                  const branchNames = Array.from(
+                    new Set(
+                      item.TeacherAssignment
+                        .map((assignment: any) => assignment?.Branch?.shortName)
+                        .filter((name: string | undefined) => Boolean(name))
+                    )
+                  );
+                  return `Branch: ${branchNames.join(', ') || 'Unknown'}`;
+                })()
+              : 'No branch assigned'}
+          </p>
         </div>
       </td>
       <td className="hidden md:table-cell">
@@ -198,8 +265,40 @@ export default function TeacherListClient({
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             <TableSearch />
+            {/* Branch Selector (for export) */}
+            <select
+              className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm bg-white text-gray-900"
+              value={selectedBranch}
+              onChange={(e) => {
+                const value = e.target.value;
+                setSelectedBranch(value);
+                const params = new URLSearchParams(searchParams);
+                if (value) {
+                  params.set("branchId", value);
+                } else {
+                  params.delete("branchId");
+                }
+                router.replace(`${pathname}?${params.toString()}`);
+              }}
+            >
+              <option value="">Select Branch</option>
+              {branches.map((b: any) => (
+                <option key={b.id} value={b.id}>{b.shortName}</option>
+              ))}
+            </select>
             <AssignmentStatusFilter />
             <div className="flex items-center gap-4 self-end">
+              {/* Conditional Download Button: visible only when branch selected and Assigned filter chosen */}
+              {selectedBranch && (searchParams.get('assignmentStatus') === 'assigned') && (
+                <button
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                  className="px-3 h-8 flex items-center justify-center rounded-md bg-green-500 text-white text-sm disabled:opacity-50"
+                  title="Download assigned teachers in selected branch"
+                >
+                  {isDownloading ? 'Downloading…' : 'Download Excel'}
+                </button>
+              )}
               <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
                 <Image src="/filter.png" alt="" width={14} height={14} />
               </button>

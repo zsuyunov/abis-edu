@@ -24,6 +24,13 @@ const TeacherListPage = async ({
     for (const [key, value] of Object.entries(queryParams)) {
       if (value !== undefined) {
         switch (key) {
+          case "branchId":
+            query.TeacherAssignment = {
+              some: {
+                branchId: parseInt(value),
+              },
+            };
+            break;
           case "classId":
             query.TeacherAssignment = {
               some: {
@@ -61,7 +68,11 @@ const TeacherListPage = async ({
       include: {
         passport: true,
         education: true,
-        TeacherAssignment: true,
+        TeacherAssignment: {
+          include: {
+            Branch: true,
+          },
+        },
       },
       take: ITEM_PER_PAGE,
       skip: ITEM_PER_PAGE * (p - 1),

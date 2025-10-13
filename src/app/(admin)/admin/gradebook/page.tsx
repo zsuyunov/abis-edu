@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useLoading } from "@/components/providers/LoadingProvider";
 import { useErrorToast, useSuccessToast } from "@/components/ui/Toast";
 import { TableSkeleton, CardSkeleton, ChartSkeleton } from "@/components/ui/GlobalLoader";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
+import { ChevronLeft, ChevronRight, Users, BookOpen, GraduationCap } from 'lucide-react';
 
 interface GradeData {
   id: string;
@@ -15,21 +17,32 @@ interface GradeData {
   };
   student: {
     id: string;
-    name: string;
-    surname: string;
-    class: {
-      id: string;
-      name: string;
-      level: number;
-    };
+    firstName: string;
+    lastName: string;
+    studentId: string;
   };
   teacher: {
     id: string;
-    name: string;
-    surname: string;
+    firstName: string;
+    lastName: string;
   };
   date: string;
   comment?: string;
+  timetable?: {
+    id: number;
+    startTime: string;
+    endTime: string;
+    subject: {
+      name: string;
+    };
+  };
+}
+
+interface Student {
+  id: string;
+  firstName: string;
+  lastName: string;
+  studentId: string;
 }
 
 interface Branch {
@@ -59,10 +72,12 @@ interface Subject {
 
 export default function GradebookPage() {
   const [grades, setGrades] = useState<GradeData[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [filteredSubjects, setFilteredSubjects] = useState<Subject[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,11 +87,16 @@ export default function GradebookPage() {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
-  const [gradeType, setGradeType] = useState("");
-  const [dateRange, setDateRange] = useState({ from: "", to: "" });
+  
+  // Calendar view state
+  const [currentDate, setCurrentDate] = useState(new Date());
   
   // Statistics
   const [statistics, setStatistics] = useState<any>(null);
+
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   const { showLoader, hideLoader } = useLoading();
   const errorToast = useErrorToast();
@@ -89,14 +109,15 @@ export default function GradebookPage() {
 
   // Fetch grades when filters change
   useEffect(() => {
-    if (branches.length > 0) {
+    if (selectedBranch && selectedAcademicYear && selectedClass && selectedSubject) {
       fetchGrades();
     }
-  }, [selectedBranch, selectedAcademicYear, selectedClass, selectedSubject, gradeType, dateRange]);
+  }, [selectedBranch, selectedAcademicYear, selectedClass, selectedSubject, currentDate]);
 
   const fetchInitialData = async () => {
     try {
       setLoading(true);
+      console.log("Starting to fetch initial data...");
       
       const [branchesRes, academicYearsRes, subjectsRes] = await Promise.all([
         fetch("/api/branches"),
@@ -104,24 +125,23 @@ export default function GradebookPage() {
         fetch("/api/subjects"),
       ]);
 
+      if (!branchesRes.ok || !academicYearsRes.ok || !subjectsRes.ok) {
+        throw new Error(`API calls failed: ${branchesRes.status}, ${academicYearsRes.status}, ${subjectsRes.status}`);
+      }
+
       const [branchesData, academicYearsData, subjectsData] = await Promise.all([
         branchesRes.json(),
         academicYearsRes.json(),
         subjectsRes.json(),
       ]);
 
-      setBranches(branchesData.branches || []);
-      setAcademicYears(academicYearsData.academicYears || []);
-      setSubjects(subjectsData.subjects || []);
+      // Handle different response formats
+      setBranches(Array.isArray(branchesData) ? branchesData : []);
+      setAcademicYears(Array.isArray(academicYearsData) ? academicYearsData : []);
+      setSubjects(Array.isArray(subjectsData) ? subjectsData : []);
+      setFilteredSubjects([]); // Start with empty filtered subjects
 
-      // Set default selections
-      if (branchesData.branches?.length > 0) {
-        setSelectedBranch(branchesData.branches[0].id);
-      }
-      if (academicYearsData.academicYears?.length > 0) {
-        const activeYear = academicYearsData.academicYears.find((y: any) => y.status === "ACTIVE");
-        setSelectedAcademicYear(activeYear?.id || academicYearsData.academicYears[0].id);
-      }
+      // Don't set default selections - keep all as "All" options
     } catch (error) {
       console.error("Error fetching initial data:", error);
       errorToast("Error", "Failed to load initial data");
@@ -137,48 +157,112 @@ export default function GradebookPage() {
     }
   }, [selectedBranch, selectedAcademicYear]);
 
+  // Fetch students when class changes
+  useEffect(() => {
+    if (selectedClass) {
+      fetchStudents();
+      fetchSubjectsForClass();
+      setSelectedSubject(""); // Reset subject selection
+    }
+  }, [selectedClass]);
+
   const fetchClasses = async () => {
     try {
       const response = await fetch(
         `/api/classes?branchId=${selectedBranch}&academicYearId=${selectedAcademicYear}`
       );
       const data = await response.json();
-      setClasses(data.classes || []);
+      setClasses(Array.isArray(data) ? data : []);
       setSelectedClass(""); // Reset class selection
     } catch (error) {
       console.error("Error fetching classes:", error);
     }
   };
 
+  const fetchStudents = async () => {
+    try {
+      const response = await fetch(`/api/students/by-class?classId=${selectedClass}`);
+      if (response.ok) {
+        const data = await response.json();
+        setStudents(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    }
+  };
+
+  const fetchSubjectsForClass = async () => {
+    try {
+      console.log("Fetching subjects for class:", selectedClass);
+      const response = await fetch(`/api/subjects/by-class?classId=${selectedClass}`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Fetched subjects for class:", data);
+        setFilteredSubjects(Array.isArray(data) ? data : []);
+      } else {
+        console.log("API failed, showing all subjects");
+        // If API fails, show all subjects as fallback
+        setFilteredSubjects(subjects);
+      }
+    } catch (error) {
+      console.error("Error fetching subjects for class:", error);
+      // If API fails, show all subjects as fallback
+      setFilteredSubjects(subjects);
+    }
+  };
+
   const fetchGrades = async () => {
     try {
       setError(null);
+      console.log("Fetching grades with params:", {
+        selectedBranch,
+        selectedAcademicYear,
+        selectedClass,
+        selectedSubject,
+        currentDate: format(currentDate, 'yyyy-MM')
+      });
       
       const params = new URLSearchParams({
         ...(selectedBranch && { branchId: selectedBranch }),
         ...(selectedAcademicYear && { academicYearId: selectedAcademicYear }),
         ...(selectedClass && { classId: selectedClass }),
         ...(selectedSubject && { subjectId: selectedSubject }),
-        ...(gradeType && { gradeType }),
-        ...(dateRange.from && { startDate: dateRange.from }),
-        ...(dateRange.to && { endDate: dateRange.to }),
-        limit: "50",
+        month: format(currentDate, 'yyyy-MM'),
       });
 
-      const [gradesRes, statsRes] = await Promise.all([
-        fetch(`/api/grades?${params}`),
-        fetch(`/api/grades/statistics?${params}`),
-      ]);
+      console.log("API URL:", `/api/admin/grades?${params}`);
+      const gradesRes = await fetch(`/api/admin/grades?${params}`);
 
+      console.log("Grades response status:", gradesRes.status);
+      
       if (!gradesRes.ok) {
-        throw new Error("Failed to fetch grades");
+        const errorText = await gradesRes.text();
+        console.error("Grades API error:", errorText);
+        throw new Error(`Failed to fetch grades: ${gradesRes.status} ${errorText}`);
       }
 
       const gradesData = await gradesRes.json();
-      const statsData = await statsRes.json();
+      console.log("Fetched grades data:", gradesData);
 
-      setGrades(gradesData.data?.grades || []);
-      setStatistics(statsData.data || null);
+      if (gradesData.success && gradesData.data) {
+        setGrades(gradesData.data.grades || []);
+        console.log("Set grades:", gradesData.data.grades?.length || 0, "grades");
+      } else {
+        console.log("No grades data found");
+        setGrades([]);
+      }
+      
+      // Try to fetch statistics, but don't fail if it doesn't work
+      try {
+        const statsRes = await fetch(`/api/grades/statistics?${params}`);
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setStatistics(statsData.data || null);
+        }
+      } catch (statsError) {
+        console.log("Statistics fetch failed, continuing without stats:", statsError);
+        setStatistics(null);
+      }
     } catch (error) {
       console.error("Error fetching grades:", error);
       setError("Failed to fetch grades");
@@ -209,6 +293,54 @@ export default function GradebookPage() {
       default:
         return "bg-gray-100 text-gray-800";
     }
+  };
+
+  // Calendar navigation
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setCurrentDate(prev => 
+      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
+    );
+  };
+
+  // Grade helper functions
+  const getGradesForStudentAndDate = (studentId: string, date: Date) => {
+    if (!Array.isArray(grades)) {
+      console.log("Grades is not an array:", grades);
+      return [];
+    }
+    const filtered = grades.filter(record => 
+      record.student.id === studentId && 
+      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+    );
+    console.log(`Grades for student ${studentId} on ${format(date, 'yyyy-MM-dd')}:`, filtered);
+    return filtered;
+  };
+
+  const getStudentAverage = (studentId: string) => {
+    const studentGrades = grades.filter(grade => grade.student.id === studentId);
+    if (studentGrades.length === 0) return 0;
+    const sum = studentGrades.reduce((acc, grade) => acc + grade.value, 0);
+    return Math.round(sum / studentGrades.length);
+  };
+
+  const getClassAverage = () => {
+    if (grades.length === 0) return 0;
+    const sum = grades.reduce((acc, grade) => acc + grade.value, 0);
+    return Math.round(sum / grades.length);
+  };
+
+  // Grade color functions for calendar cells - EXACT colors from legend
+  const getGradeCellColor = (value: number) => {
+    if (value >= 90) return "bg-green-500 border-green-500"; // Green like legend
+    if (value >= 80) return "bg-blue-500 border-blue-500"; // Blue like legend
+    if (value >= 70) return "bg-teal-500 border-teal-500"; // Teal like legend
+    if (value >= 60) return "bg-orange-500 border-orange-500"; // Orange like legend
+    if (value >= 40) return "bg-red-500 border-red-500"; // Red like legend
+    return "bg-red-700 border-red-700"; // Dark red like legend
+  };
+
+  const getGradeTextColor = (value: number) => {
+    return "text-white"; // All text is white like in legend
   };
 
   if (loading) {
@@ -317,16 +449,18 @@ export default function GradebookPage() {
         </div>
       )}
 
+
       {/* Filters */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={loading}
             >
               <option value="">All Branches</option>
               {branches.map((branch) => (
@@ -343,6 +477,7 @@ export default function GradebookPage() {
               value={selectedAcademicYear}
               onChange={(e) => setSelectedAcademicYear(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={loading}
             >
               <option value="">All Years</option>
               {academicYears.map((year) => (
@@ -359,11 +494,12 @@ export default function GradebookPage() {
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={loading || !selectedBranch || !selectedAcademicYear}
             >
               <option value="">All Classes</option>
               {classes.map((cls) => (
                 <option key={cls.id} value={cls.id}>
-                  {cls.name} (Level {cls.level})
+                  {cls.name}
                 </option>
               ))}
             </select>
@@ -373,142 +509,219 @@ export default function GradebookPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
             <select
               value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
+              onChange={(e) => {
+                console.log("Subject selected:", e.target.value);
+                setSelectedSubject(e.target.value);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={loading || !selectedClass}
             >
-              <option value="">All Subjects</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
+              <option value="">
+                {!selectedClass ? "Select Class First" : 
+                 filteredSubjects.length === 0 ? "No Subjects Assigned" : 
+                 "Select Subject"}
+              </option>
+              {filteredSubjects.map((subject) => (
+                <option key={subject.id} value={subject.id.toString()}>
                   {subject.name}
                 </option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Grade Type</label>
-            <select
-              value={gradeType}
-              onChange={(e) => setGradeType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">All Types</option>
-              <option value="EXAM">Exam</option>
-              <option value="QUIZ">Quiz</option>
-              <option value="HOMEWORK">Homework</option>
-              <option value="PROJECT">Project</option>
-              <option value="PARTICIPATION">Participation</option>
-            </select>
-          </div>
+        </div>
+      </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-            <div className="space-y-2">
-              <input
-                type="date"
-                value={dateRange.from}
-                onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                placeholder="From"
-              />
-              <input
-                type="date"
-                value={dateRange.to}
-                onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                placeholder="To"
-              />
+      {/* Selection Message */}
+      {(!selectedBranch || !selectedAcademicYear || !selectedClass || !selectedSubject) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+          <div className="text-blue-600">
+            <svg className="mx-auto h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <h3 className="text-lg font-medium text-blue-900 mb-2">Select Filters to View Grades</h3>
+            <p className="text-blue-700">
+              Please select a Branch, Academic Year, Class, and Subject to view the grade calendar.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Grade Calendar */}
+      {selectedBranch && selectedAcademicYear && selectedClass && selectedSubject && (
+        <div className="bg-white rounded-lg shadow-sm border">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900">Grade Calendar</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigateMonth('prev')}
+                  className="flex items-center gap-2 px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                
+                <h4 className="text-lg font-semibold text-gray-900 px-4">
+                  {format(currentDate, 'MMMM yyyy')}
+                </h4>
+                
+                <button
+                  onClick={() => navigateMonth('next')}
+                  className="flex items-center gap-2 px-3 py-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Grades Table */}
-      <div className="bg-white rounded-lg shadow-sm border">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Recent Grades</h3>
+          {/* Statistics for Calendar View */}
+          {students.length > 0 && grades.length > 0 && (
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200 shadow-sm">
+                  <h4 className="text-sm font-medium text-blue-700 mb-1">Total Students</h4>
+                  <p className="text-2xl font-bold text-blue-900">{students.length}</p>
+                </div>
+                <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200 shadow-sm">
+                  <h4 className="text-sm font-medium text-green-700 mb-1">Total Grades</h4>
+                  <p className="text-2xl font-bold text-green-900">{grades.length}</p>
+                </div>
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl border border-orange-200 shadow-sm">
+                  <h4 className="text-sm font-medium text-orange-700 mb-1">Class Average</h4>
+                  <p className="text-2xl font-bold text-orange-900">{getClassAverage()}%</p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl border border-purple-200 shadow-sm">
+                  <h4 className="text-sm font-medium text-purple-700 mb-1">Subject</h4>
+                  <p className="text-lg font-bold text-purple-900">
+                    {(() => {
+                      console.log("Selected subject ID:", selectedSubject);
+                      console.log("Filtered subjects:", filteredSubjects);
+                      console.log("All subjects:", subjects);
+                      
+                      const filteredSubject = filteredSubjects.find(s => s.id.toString() === selectedSubject);
+                      const allSubject = subjects.find(s => s.id.toString() === selectedSubject);
+                      
+                      console.log("Found in filtered:", filteredSubject);
+                      console.log("Found in all:", allSubject);
+                      
+                      return filteredSubject?.name || allSubject?.name || 'N/A';
+                    })()}
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-4 rounded-xl border border-indigo-200 shadow-sm">
+                  <h4 className="text-sm font-medium text-indigo-700 mb-1">Teacher</h4>
+                  <p className="text-lg font-bold text-indigo-900">
+                    {grades.length > 0 ? `${grades[0].teacher.firstName} ${grades[0].teacher.lastName}` : 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Grade Calendar Grid - EXACT COPY FROM TEACHER GRADEBOOK */}
+          {students.length > 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="max-h-80 sm:max-h-96 overflow-auto">
+                <table className="min-w-full">
+                  <thead className="bg-white sticky top-0 z-10">
+                    <tr>
+                      <th className="sticky left-0 z-20 bg-white px-4 sm:px-8 py-3 sm:py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[180px] sm:min-w-[220px] border-r border-gray-200">
+                        Student Name
+                      </th>
+                      {monthDays.map(day => (
+                        <th key={day.toISOString()} className="px-2 sm:px-3 py-3 sm:py-4 text-center text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[50px] sm:min-w-[60px]">
+                          <div className="text-sm sm:text-base font-bold">{format(day, 'dd')}</div>
+                          <div className="text-xs text-gray-500 font-normal">{format(day, 'EEE')}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {students.map((student, index) => (
+                      <tr 
+                        key={student.id} 
+                        id={`student-${student.id}`}
+                        className={`hover:bg-gray-50 transition-colors duration-200 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
+                      >
+                        <td className="sticky left-0 z-20 bg-white px-4 sm:px-8 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-gray-900 min-w-[180px] sm:min-w-[220px] border-r border-gray-200">
+                          <div className="font-bold text-gray-900">{student.lastName}, {student.firstName}</div>
+                        </td>
+                        {monthDays.map(day => {
+                          const grades = getGradesForStudentAndDate(student.id, day);
+                          return (
+                            <td 
+                              key={day.toISOString()} 
+                              className="px-2 sm:px-3 py-3 sm:py-4 text-center min-w-[50px] sm:min-w-[60px]"
+                            >
+                              {grades.length > 0 ? (
+                                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform border ${getGradeCellColor(grades[0].value)}`}>
+                                  <span className={`font-bold text-sm ${getGradeTextColor(grades[0].value)}`}>{grades[0].value}%</span>
+                                </div>
+                              ) : (
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform bg-gray-100 border border-gray-200">
+                                  <span className="text-gray-500 font-medium text-sm">-</span>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 text-center text-gray-500">
+              {!selectedClass || !selectedSubject ? (
+                "Please select both a class and subject to view the grade calendar."
+              ) : (
+                "No students found for the selected class."
+              )}
+            </div>
+          )}
+
+          {/* Legend - EXACT colors from image */}
+          {students.length > 0 && (
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="flex items-center justify-center gap-8 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-green-500 rounded text-white text-xs font-bold flex items-center justify-center">95</div>
+                  <span className="text-gray-600">90-100%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-blue-500 rounded text-white text-xs font-bold flex items-center justify-center">85</div>
+                  <span className="text-gray-600">80-89%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-teal-500 rounded text-white text-xs font-bold flex items-center justify-center">75</div>
+                  <span className="text-gray-600">70-79%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-orange-500 rounded text-white text-xs font-bold flex items-center justify-center">65</div>
+                  <span className="text-gray-600">60-69%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-red-500 rounded text-white text-xs font-bold flex items-center justify-center">50</div>
+                  <span className="text-gray-600">40-59%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-red-700 rounded text-white text-xs font-bold flex items-center justify-center">35</div>
+                  <span className="text-gray-600">Below 40%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-gray-400 rounded text-white text-xs font-bold flex items-center justify-center">-</div>
+                  <span className="text-gray-600">No Grade</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-        
-        {error ? (
-          <div className="p-6 text-center">
-            <div className="text-red-600 mb-2">Error loading grades</div>
-            <button
-              onClick={fetchGrades}
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              Try again
-            </button>
-          </div>
-        ) : grades.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">
-            No grades found for the selected filters
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Student
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Subject
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Grade
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Teacher
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {grades.map((grade) => (
-                  <tr key={grade.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {grade.student.name} {grade.student.surname}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {grade.student.class.name} (Level {grade.student.class.level})
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {grade.subject.name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getGradeColor(grade.value)}`}>
-                        {grade.value}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getGradeTypeColor(grade.type)}`}>
-                        {grade.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {grade.teacher.name} {grade.teacher.surname}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(grade.date).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      )}
+
     </div>
   );
 }
