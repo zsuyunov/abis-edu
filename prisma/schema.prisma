@@ -398,7 +398,7 @@ model Attendance {
   notes           String?
   restoredAt      DateTime?
   status          AttendanceStatus @default(PRESENT)
-  timetableId     Int
+  timetableId     Int?
   updatedAt       DateTime         @updatedAt
   academicYearId  Int
   branchId        Int
@@ -412,9 +412,9 @@ model Attendance {
   student         Student          @relation(fields: [studentId], references: [id])
   subject         Subject          @relation(fields: [subjectId], references: [id])
   teacher         Teacher          @relation(fields: [teacherId], references: [id])
-  timetable       Timetable        @relation(fields: [timetableId], references: [id])
+  timetable       Timetable?       @relation(fields: [timetableId], references: [id])
 
-  @@unique([studentId, timetableId, date])
+  @@unique([studentId, classId, subjectId, date])
   @@index([branchId, classId, date])
   @@index([branchId, academicYearId, date])
   @@index([teacherId, date])
