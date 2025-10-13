@@ -263,11 +263,7 @@ async function postHandler(request: NextRequest) {
       });
     }
 
-    // Bulk attendance (legacy support)
-    if (!timetableId) {
-      console.log('❌ Missing timetableId');
-      return NextResponse.json({ error: "Missing required field: timetableId" }, { status: 400 });
-    }
+    // Bulk attendance (timetable optional)
     if (!classId) {
       console.log('❌ Missing classId');
       return NextResponse.json({ error: "Missing required field: classId" }, { status: 400 });
@@ -323,7 +319,7 @@ async function postHandler(request: NextRequest) {
     }
 
     console.log('💾 Saving attendance for:', {
-      timetableId,
+      timetableId: timetableId || '(auto)',
       classId,
       subjectId,
       date,
@@ -334,6 +330,42 @@ async function postHandler(request: NextRequest) {
     const attendanceRecords = [];
     const errors = [];
     
+    // Prepare class meta and reusable timetable id
+    const cls = await prisma.class.findUnique({
+      where: { id: parseInt(classId) },
+      select: { id: true, branchId: true, academicYearId: true }
+    });
+    let reusableTimetableId: number;
+    if (timetableId) {
+      reusableTimetableId = parseInt(timetableId);
+    } else {
+      const existingTT = await prisma.timetable.findFirst({
+        where: { isActive: true, classId: parseInt(classId), subjectId: parseInt(subjectId) },
+        select: { id: true }
+      });
+      if (existingTT) {
+        reusableTimetableId = existingTT.id;
+      } else {
+        const created = await prisma.timetable.create({
+          data: {
+            branchId: cls?.branchId || 0,
+            classId: parseInt(classId),
+            academicYearId: cls?.academicYearId || 0,
+            subjectId: parseInt(subjectId),
+            dayOfWeek: null,
+            startTime: new Date('1970-01-01T08:00:00Z'),
+            endTime: new Date('1970-01-01T09:00:00Z'),
+            isActive: true,
+            roomNumber: null,
+            buildingName: 'virtual'
+          },
+          select: { id: true }
+        });
+        reusableTimetableId = created.id;
+        console.log('🆕 Created virtual timetable for bulk attendance:', reusableTimetableId);
+      }
+    }
+
     for (let i = 0; i < validAttendance.length; i++) {
       const record = validAttendance[i];
       console.log(`💾 Processing record ${i + 1}/${validAttendance.length}:`, record);
@@ -341,11 +373,12 @@ async function postHandler(request: NextRequest) {
       
       try {
         // First, try to find existing record
-        console.log(`🔍 Looking for existing attendance for student ${record.studentId} with timetableId ${timetableId} on date ${date}...`);
+        console.log(`🔍 Looking for existing attendance for student ${record.studentId} on date ${date}...`);
         const existing = await prisma.attendance.findFirst({
           where: {
             studentId: record.studentId.toString(),
-            timetableId: parseInt(timetableId),
+            classId: parseInt(classId),
+            subjectId: parseInt(subjectId),
             date: new Date(date)
           }
         });
@@ -378,9 +411,9 @@ async function postHandler(request: NextRequest) {
               status: record.status,
               notes: record.notes || null,
               teacherId: teacherId,
-              timetableId: parseInt(timetableId),
-              academicYearId: 1, // Default academic year
-              branchId: 1 // Default branch
+              timetableId: reusableTimetableId,
+              academicYearId: cls?.academicYearId || 0,
+              branchId: cls?.branchId || 0
             }
           });
           console.log(`✅ Created attendance for student ${record.studentId}`);

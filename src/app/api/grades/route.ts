@@ -76,33 +76,49 @@ async function postHandler(request: NextRequest) {
       } else {
         console.log(`➕ Creating new grade record for student ${studentId}`);
         
-        // Grades no longer depend on timetables - can be created independently
-
         // Get current year and month for grade record
         const currentDate = new Date(date);
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth() + 1;
-
-        // Find a valid timetable ID to use
-        const validTimetable = await prisma.timetable.findFirst({
+        
+        // Find or create a lightweight timetable so grades are not blocked
+        let timetable = await prisma.timetable.findFirst({
           where: {
             isActive: true,
             classId: parseInt(classId),
             subjectId: parseInt(subjectId)
           },
-          select: { id: true }
+          select: { id: true, branchId: true, academicYearId: true }
         });
 
-        if (!validTimetable) {
-          console.log('❌ No valid timetable found for class and subject');
-          return NextResponse.json({ 
-            error: "No valid timetable found for the specified class and subject" 
-          }, { status: 400 });
+        // Load class meta for branch/year
+        const cls = await prisma.class.findUnique({
+          where: { id: parseInt(classId) },
+          select: { id: true, branchId: true, academicYearId: true }
+        });
+
+        if (!timetable) {
+          timetable = await prisma.timetable.create({
+            data: {
+              branchId: cls?.branchId || 0,
+              classId: parseInt(classId),
+              academicYearId: cls?.academicYearId || 0,
+              subjectId: parseInt(subjectId),
+              dayOfWeek: null,
+              startTime: new Date('1970-01-01T08:00:00Z'),
+              endTime: new Date('1970-01-01T09:00:00Z'),
+              isActive: true,
+              roomNumber: null,
+              buildingName: 'virtual'
+            },
+            select: { id: true, branchId: true, academicYearId: true }
+          });
+          console.log('🆕 Created virtual timetable for grade:', timetable.id);
         }
 
-        console.log('✅ Using timetable ID for grade:', validTimetable.id);
+        console.log('✅ Using timetable ID for grade:', timetable.id);
 
-        // Create grade record with valid timetable ID
+        // Create grade record with timetable ID (real or virtual)
         gradeRecord = await prisma.grade.create({
           data: {
             studentId: studentId.toString(),
@@ -112,9 +128,9 @@ async function postHandler(request: NextRequest) {
             value: value,
             description: description || null,
             teacherId: teacherId,
-            timetableId: validTimetable.id, // Use actual timetable ID
-            academicYearId: 1, // Default academic year
-            branchId: 1, // Default branch
+            timetableId: timetable.id,
+            academicYearId: cls?.academicYearId || 0,
+            branchId: cls?.branchId || 0,
             year: year,
             month: month,
             type: 'DAILY' // Default grade type
@@ -139,11 +155,11 @@ async function postHandler(request: NextRequest) {
       });
     }
 
-    // Bulk grades (legacy support)
+    // Bulk grades (timetable optional)
     const { timetableId, classId: bulkClassId, subjectId: bulkSubjectId, date: bulkDate, grades: bulkGrades } = body;
 
-    // Validate required fields for bulk
-    if (!timetableId || !bulkClassId || !bulkSubjectId || !bulkDate || !bulkGrades || !Array.isArray(bulkGrades)) {
+    // Validate required fields for bulk (without strict timetable)
+    if (!bulkClassId || !bulkSubjectId || !bulkDate || !bulkGrades || !Array.isArray(bulkGrades)) {
       console.log("Validation failed:", { timetableId, bulkClassId, bulkSubjectId, bulkDate, grades: Array.isArray(bulkGrades) });
       return NextResponse.json({ 
         error: "Missing required fields", 
@@ -165,14 +181,40 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized access to this class/subject" }, { status: 403 });
     }
 
-    // Get timetable details for additional fields
-    const timetable = await prisma.timetable.findUnique({
-      where: { id: parseInt(timetableId) },
-      select: { academicYearId: true, branchId: true }
+    // Resolve branch/year via class and create/reuse a timetable if needed
+    const cls = await prisma.class.findUnique({
+      where: { id: parseInt(bulkClassId) },
+      select: { id: true, branchId: true, academicYearId: true }
     });
-
-    if (!timetable) {
-      return NextResponse.json({ error: "Timetable not found" }, { status: 404 });
+    let resolvedTimetableId: number;
+    if (timetableId) {
+      resolvedTimetableId = parseInt(timetableId);
+    } else {
+      const existingTT = await prisma.timetable.findFirst({
+        where: { isActive: true, classId: parseInt(bulkClassId), subjectId: parseInt(bulkSubjectId) },
+        select: { id: true }
+      });
+      if (existingTT) {
+        resolvedTimetableId = existingTT.id;
+      } else {
+        const created = await prisma.timetable.create({
+          data: {
+            branchId: cls?.branchId || 0,
+            classId: parseInt(bulkClassId),
+            academicYearId: cls?.academicYearId || 0,
+            subjectId: parseInt(bulkSubjectId),
+            dayOfWeek: null,
+            startTime: new Date('1970-01-01T08:00:00Z'),
+            endTime: new Date('1970-01-01T09:00:00Z'),
+            isActive: true,
+            roomNumber: null,
+            buildingName: 'virtual'
+          },
+          select: { id: true }
+        });
+        resolvedTimetableId = created.id;
+        console.log('🆕 Created virtual timetable for bulk grades:', resolvedTimetableId);
+      }
     }
 
     // Get current year and month for grade record
@@ -217,7 +259,7 @@ async function postHandler(request: NextRequest) {
               data: {
                 value: record.points,
                 description: record.comments || null,
-                timetableId: parseInt(timetableId),
+                timetableId: resolvedTimetableId,
                 updatedAt: new Date()
               }
             });
@@ -232,9 +274,9 @@ async function postHandler(request: NextRequest) {
                 value: record.points,
                 description: record.comments || null,
                 teacherId: teacherId,
-                timetableId: parseInt(timetableId),
-                academicYearId: timetable.academicYearId,
-                branchId: timetable.branchId,
+                timetableId: resolvedTimetableId,
+                academicYearId: cls?.academicYearId || 0,
+                branchId: cls?.branchId || 0,
                 year: year,
                 month: month,
                 type: 'DAILY' // Default grade type
