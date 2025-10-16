@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar, BookOpen, Filter } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Subject {
   id: string;
@@ -14,6 +15,7 @@ interface GradeRecord {
   date: string;
   grade: number;
   notes?: string;
+  lessonNumber?: number;
   subject: {
     id: string;
     name: string;
@@ -36,6 +38,10 @@ const StudentGradebook: React.FC<StudentGradebookProps> = ({ studentId }) => {
   const [gradeData, setGradeData] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Animation state for lesson swapping
+  const [showingLesson, setShowingLesson] = useState<1 | 2>(1);
+  const [isSwapping, setIsSwapping] = useState(false);
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -47,6 +53,45 @@ const StudentGradebook: React.FC<StudentGradebookProps> = ({ studentId }) => {
   useEffect(() => {
     fetchGradeData();
   }, [studentId, selectedSubject, currentDate]);
+
+  // Check if lesson 2 exists for swap animation
+  const hasLesson2 = () => {
+    if (!Array.isArray(gradeData) || gradeData.length === 0) return false;
+    return gradeData.some(r => r.lessonNumber === 2);
+  };
+
+  // Auto-swap between lesson 1 and 2 every 3 seconds ONLY if at least one record has both lessons
+  useEffect(() => {
+    setIsSwapping(false);
+    setShowingLesson(1);
+    
+    // Check if ANY record has BOTH lesson 1 and lesson 2 records
+    const anyRecordHasBothLessons = gradeData.some(record => {
+      const dateStr = format(new Date(record.date), 'yyyy-MM-dd');
+      const recordsForDate = gradeData.filter(r => 
+        format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+      );
+      
+      const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+      const hasLesson2 = recordsForDate.some(r => r.lessonNumber === 2);
+      
+      return hasLesson1 && hasLesson2;
+    });
+    
+    // If NO record has both lessons, DO NOT start any animation
+    if (!anyRecordHasBothLessons) {
+      return; // Exit early, no timer created
+    }
+
+    // If at least one record has both lessons, start the swap animation
+    const timer = setInterval(() => {
+      setShowingLesson(prev => prev === 1 ? 2 : 1);
+      setIsSwapping(true);
+      setTimeout(() => setIsSwapping(false), 300);
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [gradeData]);
 
   const fetchSubjects = async () => {
     try {
@@ -114,6 +159,38 @@ const StudentGradebook: React.FC<StudentGradebookProps> = ({ studentId }) => {
     const lowest = Math.min(...grades);
 
     return { average, highest, lowest, count: grades.length };
+  };
+
+  // Get grade for specific subject, date, and lesson
+  const getGradeForSubjectAndDateAndLesson = (subjectId: string, date: Date, lessonNum: number = 1) => {
+    if (!Array.isArray(gradeData)) return null;
+    return gradeData.find(record => 
+      record.subject.id === subjectId &&
+      isSameDay(new Date(record.date), date) &&
+      (record.lessonNumber === lessonNum || (!record.lessonNumber && lessonNum === 1))
+    );
+  };
+
+  // Get grade to display based on showing lesson (for swap animation)
+  const getDisplayGrade = (subjectId: string, date: Date) => {
+    // Only use swap animation if this specific subject/date has both lessons
+    const hasBothLessonsForThisDate = hasBothLessonsForDate(date);
+    const lessonToShow = hasBothLessonsForThisDate ? showingLesson : 1;
+    return getGradeForSubjectAndDateAndLesson(subjectId, date, lessonToShow);
+  };
+
+  // Check if there are both lessons on a date
+  const hasBothLessonsForDate = (date: Date): boolean => {
+    if (!Array.isArray(gradeData)) return false;
+    
+    const recordsForDate = gradeData.filter(r => 
+      isSameDay(new Date(r.date), date)
+    );
+    
+    const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2Records = recordsForDate.some(r => r.lessonNumber === 2);
+    
+    return hasLesson1 && hasLesson2Records;
   };
 
   const stats = getSubjectStats();
@@ -223,23 +300,63 @@ const StudentGradebook: React.FC<StudentGradebookProps> = ({ studentId }) => {
                 
                 {dayGrades.length > 0 && (
                   <div className="space-y-1">
-                    {dayGrades.map(record => (
-                      <div
-                        key={record.id}
-                        className={`text-xs px-2 py-1 rounded-full border ${getGradeColor(record.grade)}`}
-                        title={`${record.subject.name}: ${record.grade}%${record.notes ? ` - ${record.notes}` : ''}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{record.subject.name}</span>
-                          <span className="font-bold">{record.grade}%</span>
-                        </div>
-                        {record.notes && (
-                          <div className="text-xs opacity-75 mt-1 truncate">
-                            {record.notes}
+                    {dayGrades.map(record => {
+                      const hasBothLessons = hasBothLessonsForDate(day);
+                      const displayRecord = getDisplayGrade(record.subject.id, day);
+                      
+                      return (
+                        <div
+                          key={record.id}
+                          className={`text-xs px-2 py-1 rounded-full border ${getGradeColor(record.grade)} ${
+                            hasLesson2() && isSwapping ? 'scale-95 opacity-70' : ''
+                          }`}
+                          title={`${record.subject.name}: ${record.grade}%${record.notes ? ` - ${record.notes}` : ''}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{record.subject.name}</span>
+                            <div className="flex items-center gap-1">
+                              <AnimatePresence mode="wait">
+                                <motion.span
+                                  key={displayRecord?.grade || 'none'}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -10 }}
+                                  transition={{
+                                    duration: 0.2,
+                                    ease: "easeInOut"
+                                  }}
+                                  className="font-bold"
+                                >
+                                  {displayRecord?.grade || record.grade}%
+                                </motion.span>
+                              </AnimatePresence>
+                              {hasBothLessons && hasLesson2() && (
+                                <AnimatePresence mode="wait">
+                                  <motion.span 
+                                    key={showingLesson}
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    transition={{
+                                      duration: 0.2,
+                                      ease: "easeInOut"
+                                    }}
+                                    className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center"
+                                  >
+                                    L{showingLesson}
+                                  </motion.span>
+                                </AnimatePresence>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          {record.notes && (
+                            <div className="text-xs opacity-75 mt-1 truncate">
+                              {record.notes}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

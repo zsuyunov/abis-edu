@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { csrfFetch } from '@/hooks/useCsrfToken';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Users, BookOpen, Calendar, Check, X, Clock, Shield, Save, Edit3, MessageSquare } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, BookOpen, Calendar, Check, X, Clock, Shield, Edit3, MessageSquare } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -19,6 +19,7 @@ interface GradeRecord {
   value: number;
   description?: string;
   studentId: string;
+  lessonNumber?: number;
   student?: {
     firstName: string;
     lastName: string;
@@ -36,13 +37,6 @@ interface TeacherSubject {
   name: string;
 }
 
-interface PendingGrade {
-  studentId: string;
-  date: string;
-  value: number;
-  comment: string;
-  isNoRecord?: boolean;
-}
 
 interface TeacherGradebookGridProps {
   teacherClasses: TeacherClass[];
@@ -63,17 +57,58 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
   const [students, setStudents] = useState<Student[]>([]);
   const [gradeData, setGradeData] = useState<GradeRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [pendingGrades, setPendingGrades] = useState<PendingGrade[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{ student: Student; date: Date } | null>(null);
   const [showGradeModal, setShowGradeModal] = useState(false);
   const [currentGrade, setCurrentGrade] = useState<number>(0);
   const [currentComment, setCurrentComment] = useState<string>('');
   const [customGradeInput, setCustomGradeInput] = useState<string>('');
+  const [currentLessonForm, setCurrentLessonForm] = useState<1 | 2>(1);
+  const [showingLesson, setShowingLesson] = useState<1 | 2>(1);
+  const [isSwapping, setIsSwapping] = useState(false);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+  // Check if lesson 2 exists for swap animation
+  const hasLesson2 = () => {
+    if (!Array.isArray(gradeData) || gradeData.length === 0) return false;
+    return gradeData.some(r => r.lessonNumber === 2);
+  };
+
+  // Auto-swap between lesson 1 and 2 every 3 seconds ONLY if at least one student has both lessons
+  useEffect(() => {
+    setIsSwapping(false);
+    setShowingLesson(1);
+    
+    // Check if ANY student has BOTH lesson 1 and lesson 2 records
+    const anyStudentHasBothLessons = gradeData.some(record => {
+      const dateStr = format(new Date(record.date), 'yyyy-MM-dd');
+      const recordsForDate = gradeData.filter(r => 
+        r.studentId === record.studentId && 
+        format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+      );
+      
+      const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+      const hasLesson2 = recordsForDate.some(r => r.lessonNumber === 2);
+      
+      return hasLesson1 && hasLesson2;
+    });
+    
+    // If NO student has both lessons, DO NOT start any animation
+    if (!anyStudentHasBothLessons) {
+      return; // Exit early, no timer created
+    }
+
+    // If at least one student has both lessons, start the swap animation
+    const timer = setInterval(() => {
+      setShowingLesson(prev => prev === 1 ? 2 : 1);
+      setIsSwapping(true);
+      setTimeout(() => setIsSwapping(false), 300);
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [gradeData]);
 
   const fetchStudents = async () => {
     if (!selectedClass) return;
@@ -121,27 +156,40 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
     fetchGradeData();
   }, [selectedClass, selectedSubject, currentDate, refreshTrigger]);
 
-  const getPendingGradeForStudentAndDate = (studentId: string, date: Date) => {
-    const dateString = format(date, 'yyyy-MM-dd');
-    return pendingGrades.find(pending => 
-      pending.studentId === studentId && pending.date === dateString
-    );
-  };
 
-  const getGradeForStudentAndDate = (studentId: string, date: Date) => {
-    // Check pending grade first
-    const pending = getPendingGradeForStudentAndDate(studentId, date);
-    if (pending) {
-      return pending.isNoRecord ? 'NO_RECORD' : pending.value;
-    }
-
-    // Check existing grade
+  const getGradeForStudentAndDate = (studentId: string, date: Date, lessonNum: number = 1) => {
+    // Check existing grade for specific lesson
     const existing = gradeData.find(record => 
       record.studentId === studentId && 
-      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') &&
+      (record.lessonNumber === lessonNum || (!record.lessonNumber && lessonNum === 1))
     );
     
     return existing ? existing.value : null;
+  };
+
+  // Get grade to display based on showing lesson (for swap animation)
+  const getDisplayGrade = (studentId: string, date: Date) => {
+    // Only use swap animation if this specific student has both lessons on this date
+    const hasBothLessonsForThisStudent = studentHasBothLessons(studentId, date);
+    const lessonToShow = hasBothLessonsForThisStudent ? showingLesson : 1;
+    return getGradeForStudentAndDate(studentId, date, lessonToShow);
+  };
+
+  // Check if student has both lessons on a date
+  const studentHasBothLessons = (studentId: string, date: Date): boolean => {
+    if (!Array.isArray(gradeData)) return false;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    const studentRecords = gradeData.filter(r => 
+      r.studentId === studentId && 
+      format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    const hasLesson1 = studentRecords.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2Records = studentRecords.some(r => r.lessonNumber === 2);
+    
+    return hasLesson1 && hasLesson2Records;
   };
 
   const getGradeColor = (value: number | null | string) => {
@@ -163,24 +211,25 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
 
   const handleCellClick = (student: Student, date: Date) => {
     setSelectedCell({ student, date });
-    
-    // Check if there's existing grade data for this student and date
-    const existingGrade = getGradeForStudentAndDate(student.id, date);
-    const pendingGrade = getPendingGradeForStudentAndDate(student.id, date);
+    loadGradeForCurrentLesson(student, date, currentLessonForm);
+    setShowGradeModal(true);
+  };
+
+  // Load grade data for specific lesson
+  const loadGradeForCurrentLesson = (student: Student, date: Date, lessonNum: 1 | 2) => {
+    // Check if there's existing grade data for this student, date, and lesson
+    const existingGrade = getGradeForStudentAndDate(student.id, date, lessonNum);
     
     // Find the existing grade record to get the comment
     const existingGradeRecord = gradeData.find(record => 
       record.studentId === student.id && 
-      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') &&
+      (record.lessonNumber === lessonNum || (!record.lessonNumber && lessonNum === 1))
     );
     
     // Set the current grade and comment
-    if (pendingGrade) {
-      setCurrentGrade(pendingGrade.value);
-      setCurrentComment(pendingGrade.comment);
-      setCustomGradeInput(pendingGrade.value.toString());
-    } else if (existingGrade !== null && existingGrade !== 'NO_RECORD') {
-      setCurrentGrade(existingGrade as number);
+    if (existingGrade !== null && typeof existingGrade === 'number') {
+      setCurrentGrade(existingGrade);
       setCurrentComment(existingGradeRecord?.description || '');
       setCustomGradeInput(existingGrade.toString());
     } else {
@@ -188,12 +237,17 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
       setCurrentComment('');
       setCustomGradeInput('');
     }
-    
-    setShowGradeModal(true);
   };
 
+  // Update grade when lesson form changes
+  useEffect(() => {
+    if (selectedCell && showGradeModal) {
+      loadGradeForCurrentLesson(selectedCell.student, selectedCell.date, currentLessonForm);
+    }
+  }, [currentLessonForm]);
 
-  const handleGradeSubmit = () => {
+
+  const handleGradeSubmit = async () => {
     if (!selectedCell) return;
 
     const gradeValue = parseInt(customGradeInput);
@@ -205,130 +259,86 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
     const { student, date } = selectedCell;
     const dateString = format(date, 'yyyy-MM-dd');
     
-    // Remove existing pending grade for this student and date
-    setPendingGrades(prev => 
-      prev.filter(pending => !(pending.studentId === student.id && pending.date === dateString))
-    );
+    try {
+      // Save grade immediately
+      const response = await csrfFetch('/api/grades', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId,
+        },
+        body: JSON.stringify({
+          studentId: student.id,
+          classId: selectedClass,
+          subjectId: selectedSubject,
+          date: dateString,
+          value: gradeValue,
+          description: currentComment,
+          lessonNumber: currentLessonForm
+        })
+      });
 
-    // Add new pending grade
-    setPendingGrades(prev => [
-      ...prev,
-      {
-        studentId: student.id,
-        date: dateString,
-        value: gradeValue,
-        comment: currentComment
+      if (response.ok) {
+        console.log(`✅ Grade saved for student ${student.id}`);
+        // Refresh data immediately
+        fetchGradeData();
+      } else {
+        console.error('Failed to save grade:', await response.json());
       }
-    ]);
+    } catch (error) {
+      console.error('Error saving grade:', error);
+    }
 
     setShowGradeModal(false);
     setSelectedCell(null);
     setCurrentGrade(0);
     setCurrentComment('');
     setCustomGradeInput('');
+    setCurrentLessonForm(1);
   };
 
-  const handleNoRecord = () => {
+  const handleNoRecord = async () => {
     if (!selectedCell) return;
 
     const { student, date } = selectedCell;
     const dateString = format(date, 'yyyy-MM-dd');
     
-    // Remove existing pending grade for this student and date
-    setPendingGrades(prev => 
-      prev.filter(pending => !(pending.studentId === student.id && pending.date === dateString))
-    );
+    try {
+      // Delete grade immediately
+      const response = await csrfFetch('/api/grades', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId,
+        },
+        body: JSON.stringify({
+          studentId: student.id,
+          classId: selectedClass,
+          subjectId: selectedSubject,
+          date: dateString,
+          lessonNumber: currentLessonForm
+        })
+      });
 
-    // Add new pending grade with No Record status
-    setPendingGrades(prev => [
-      ...prev,
-      {
-        studentId: student.id,
-        date: dateString,
-        value: 0,
-        comment: '',
-        isNoRecord: true
+      if (response.ok) {
+        console.log(`✅ Grade deleted for student ${student.id}`);
+        // Refresh data immediately
+        fetchGradeData();
+      } else {
+        console.error('Failed to delete grade:', await response.json());
       }
-    ]);
+    } catch (error) {
+      console.error('Error deleting grade:', error);
+    }
 
     setShowGradeModal(false);
     setSelectedCell(null);
     setCurrentGrade(0);
     setCurrentComment('');
     setCustomGradeInput('');
+    setCurrentLessonForm(1);
   };
 
-  const handleBulkSave = async () => {
-    if (pendingGrades.length === 0) return;
-
-    setIsSaving(true);
-    try {
-      // Filter out No Record entries and handle deletions separately
-      const recordsToSave = pendingGrades.filter(pending => !pending.isNoRecord);
-      const recordsToDelete = pendingGrades.filter(pending => pending.isNoRecord);
-
-      // Save grade records
-      const savePromises = recordsToSave.map(async (pending) => {
-        const response = await csrfFetch('/api/grades', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': teacherId,
-          },
-          body: JSON.stringify({
-            studentId: pending.studentId,
-            classId: selectedClass,
-            subjectId: selectedSubject,
-            date: pending.date,
-            value: pending.value,
-            description: pending.comment,
-          }),
-        });
-
-        if (response.ok) {
-          return await response.json();
-        }
-        throw new Error(`Failed to save grade for student ${pending.studentId}`);
-      });
-
-      // Delete grade records (No Record)
-      const deletePromises = recordsToDelete.map(async (pending) => {
-        const response = await csrfFetch('/api/grades', {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': teacherId,
-          },
-          body: JSON.stringify({
-            studentId: pending.studentId,
-            classId: selectedClass,
-            subjectId: selectedSubject,
-            date: pending.date,
-          }),
-        });
-
-        if (response.ok) {
-          return await response.json();
-        }
-        throw new Error(`Failed to delete grade for student ${pending.studentId}`);
-      });
-
-      await Promise.all([...savePromises, ...deletePromises]);
-      
-      // Clear pending grades
-      setPendingGrades([]);
-      
-      // Refresh grade data
-      fetchGradeData();
-      
-      alert(`✅ Successfully processed ${recordsToSave.length} saves and ${recordsToDelete.length} deletions!`);
-    } catch (error) {
-      console.error('Error saving grades:', error);
-      alert('❌ Error saving grades. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => 
@@ -410,30 +420,6 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
         </div>
 
         {/* Pending Grades */}
-        {pendingGrades.length > 0 && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Save className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                </div>
-                <div>
-                  <span className="text-blue-800 font-semibold text-base sm:text-lg">
-                    {pendingGrades.length} grade record(s) pending save
-                  </span>
-                  <p className="text-blue-600 text-xs sm:text-sm mt-1">Review your changes before saving</p>
-                </div>
-              </div>
-              <button
-                onClick={handleBulkSave}
-                disabled={isSaving}
-                className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg font-medium text-sm sm:text-base"
-              >
-                {isSaving ? 'Saving...' : 'Save All'}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Content */}
         <AnimatePresence mode="wait">
@@ -474,18 +460,53 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
                           <div className="font-bold text-gray-900">{student.lastName}, {student.firstName}</div>
                         </td>
                         {monthDays.map(day => {
-                          const grade = getGradeForStudentAndDate(student.id, day);
+                          const hasBothLessons = studentHasBothLessons(student.id, day);
+                          const grade = getDisplayGrade(student.id, day);
                           return (
                             <td 
                               key={day.toISOString()} 
                               className="px-2 sm:px-3 py-3 sm:py-4 text-center min-w-[50px] sm:min-w-[60px]"
                             >
-                              <button
-                                onClick={() => handleCellClick(student, day)}
-                                className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform ${getGradeColor(grade)}`}
-                              >
-                                {getGradeIcon(grade)}
-                              </button>
+                              <div className="relative">
+                                <motion.button
+                                  onClick={() => handleCellClick(student, day)}
+                                  className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center ${getGradeColor(grade)}`}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                >
+                                  <AnimatePresence mode="wait">
+                                    <motion.div
+                                      key={grade}
+                                      initial={{ opacity: 0, y: 10 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: -10 }}
+                                      transition={{
+                                        duration: 0.2,
+                                        ease: "easeInOut"
+                                      }}
+                                    >
+                                      {getGradeIcon(grade)}
+                                    </motion.div>
+                                  </AnimatePresence>
+                                </motion.button>
+                                {hasBothLessons && (
+                                  <AnimatePresence mode="wait">
+                                    <motion.span 
+                                      key={showingLesson}
+                                      initial={{ opacity: 0, scale: 0.8 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      exit={{ opacity: 0, scale: 0.8 }}
+                                      transition={{
+                                        duration: 0.2,
+                                        ease: "easeInOut"
+                                      }}
+                                      className="absolute -top-1 -right-1 bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[10px] font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-lg"
+                                    >
+                                      L{showingLesson}
+                                    </motion.span>
+                                  </AnimatePresence>
+                                )}
+                              </div>
                             </td>
                           );
                         })}
@@ -564,7 +585,10 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
             <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 w-full max-w-xs sm:max-w-sm shadow-xl max-h-[85vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Mark Grade</h3>
+                <div>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Mark Grade</h3>
+                  <span className="text-xs font-semibold text-blue-600">Lesson {currentLessonForm}</span>
+                </div>
                 <div className="flex items-center gap-1 sm:gap-2">
                   <button
                     onClick={handleNoRecord}
@@ -634,6 +658,26 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
                 >
                   Add Grade
                 </button>
+              </div>
+
+              {/* Lesson Navigation */}
+              <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                {currentLessonForm === 2 && (
+                  <button
+                    onClick={() => setCurrentLessonForm(1)}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all duration-200"
+                  >
+                    ← Back to Lesson 1
+                  </button>
+                )}
+                {currentLessonForm === 1 && (
+                  <button
+                    onClick={() => setCurrentLessonForm(2)}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-purple-700 transition-all duration-200 shadow-md"
+                  >
+                    Extra → Lesson 2
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -50,10 +50,16 @@ interface Teacher {
   teacherId: string;
 }
 
+interface SubjectTeacherPair {
+  subjectId: number;
+  teacherIds: string[];
+}
+
 interface TimetableSlot {
   dayOfWeek: string;
   subjectIds: number[];
   teacherIds: string[];
+  subjectTeacherPairs: SubjectTeacherPair[];  // New structured format
   startTime: string;
   endTime: string;
   roomNumber: string;
@@ -126,7 +132,6 @@ const TimetableCreationForm: React.FC = () => {
   useEffect(() => {
     const currentSlot = timetableSlots[currentDay]?.[0]; // Check first slot for subjects
     if (currentSlot && currentSlot.subjectIds.length > 0 && selectedClass && selectedAcademicYear) {
-      console.log('🔄 Auto-filtering teachers due to class/academic year change');
       // @ts-ignore - TypeScript is not recognizing the updated function signature
       fetchTeachersForSubjects(currentSlot.subjectIds, selectedClass, selectedAcademicYear);
     }
@@ -234,8 +239,13 @@ const TimetableCreationForm: React.FC = () => {
       const response = await fetch('/api/subjects');
       if (response.ok) {
         const data = await response.json();
+        console.log('Subjects fetched:', data);
+        if (Array.isArray(data) && data.length === 0) {
+          console.warn('No subjects found in database. Please add subjects first.');
+        }
         setSubjects(Array.isArray(data) ? data : []);
       } else {
+        console.error('Failed to fetch subjects. Status:', response.status);
         setSubjects([]);
       }
     } catch (error) {
@@ -268,31 +278,25 @@ const TimetableCreationForm: React.FC = () => {
   };
 
   const fetchTeachersForSubjects = async (subjectIds: number[], classId?: number, academicYearId?: number | null | undefined) => {
-    console.log('🔍 fetchTeachersForSubjects called with:', { subjectIds, classId, academicYearId });
 
     if (subjectIds.length === 0) {
-      console.log('📝 No subjects selected, showing all teachers');
       setFilteredTeachers(teachers);
       return;
     }
 
     // If we don't have classId or academicYearId, we can't filter by assignments
     if (!classId || !academicYearId) {
-      console.log('⚠️ Missing classId or academicYearId, showing all teachers');
       setFilteredTeachers(teachers);
       return;
     }
 
     try {
       const url = `/api/teachers/by-subjects?subjectIds=${subjectIds.join(',')}&classId=${classId}&academicYearId=${academicYearId}`;
-      console.log('🌐 Fetching teachers from:', url);
 
       const response = await fetch(url);
-      console.log('📡 Response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('👥 Teachers found:', data.length);
         
         if (data.length === 0) {
           // Check if any of the subjects have no assigned teachers
@@ -377,6 +381,7 @@ const TimetableCreationForm: React.FC = () => {
       dayOfWeek: day,
       subjectIds: [],
       teacherIds: [],
+      subjectTeacherPairs: [],
       startTime: '',
       endTime: '',
       roomNumber: '',
@@ -431,17 +436,38 @@ const TimetableCreationForm: React.FC = () => {
             return;
           }
           
-          // Add subject to current selection
+          // Add subject WITHOUT auto-assigning teachers
           const currentSlot = timetableSlots[day]?.[index];
-          const currentSubjects = currentSlot?.subjectIds || [];
-          const newSubjects = [...currentSubjects, subjectId];
           
-          updateTimetableSlot(day, index, 'subjectIds', newSubjects);
+          // Build subject-teacher pair with EMPTY teachers array
+          const newPair: SubjectTeacherPair = { 
+            subjectId, 
+            teacherIds: []  // Empty - teachers will be added manually
+          };
+          const newPairs = [...(currentSlot?.subjectTeacherPairs || []), newPair];
           
-          // Immediately update filtered teachers with the new teachers
+          // Also update old structure for UI compatibility
+          const newSubjectIds = [...(currentSlot?.subjectIds || []), subjectId];
+          
+          // Update both structures
+          const updatedSlots = timetableSlots[day]?.map((slot, i) => 
+            i === index ? { 
+              ...slot, 
+              subjectIds: newSubjectIds,
+              subjectTeacherPairs: newPairs
+            } : slot
+          ) || [];
+          
+          setTimetableSlots(prev => ({
+            ...prev,
+            [day]: updatedSlots
+          }));
+          
+          // Update filtered teachers to show available teachers for this subject
           setFilteredTeachers(teachers);
           
-          setSuccess(`Subject "${subjects.find(s => s.id === subjectId)?.name}" added successfully!`);
+          const subject = subjects.find(s => s.id === subjectId);
+          setSuccess(`Subject "${subject?.name}" added! Now select teacher(s) from the list.`);
           setTimeout(() => setSuccess(null), 3000);
         }
       } catch (error) {
@@ -483,19 +509,52 @@ const TimetableCreationForm: React.FC = () => {
   const handleIndividualTeacherSelection = (day: string, index: number, teacherId: string) => {
     setCurrentSlotIndex(index);
     
-    // Add teacher to current selection
     const currentSlot = timetableSlots[day]?.[index];
-    const currentTeachers = currentSlot?.teacherIds || [];
-    const newTeachers = [...currentTeachers, teacherId];
+    const teacher = filteredTeachers.find(t => t.id === teacherId);
     
-    updateTimetableSlot(day, index, 'teacherIds', newTeachers);
+    // Find the last added subject (most recent) to assign this teacher to
+    const lastSubjectPair = currentSlot?.subjectTeacherPairs?.[currentSlot.subjectTeacherPairs.length - 1];
+    
+    if (!lastSubjectPair) {
+      setError('Please add a subject first before adding teachers');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+    
+    // Add teacher to the last subject's teacherIds
+    const updatedPairs = currentSlot.subjectTeacherPairs.map((pair, idx) => {
+      if (idx === currentSlot.subjectTeacherPairs.length - 1) {
+        return {
+          ...pair,
+          teacherIds: [...pair.teacherIds, teacherId]
+        };
+      }
+      return pair;
+    });
+    
+    // Also update old structure for compatibility
+    const newTeachers = [...(currentSlot?.teacherIds || []), teacherId];
+    
+    // Update both structures
+    const updatedSlots = timetableSlots[day]?.map((slot, i) => 
+      i === index ? { 
+        ...slot, 
+        teacherIds: newTeachers,
+        subjectTeacherPairs: updatedPairs
+      } : slot
+    ) || [];
+    
+    setTimetableSlots(prev => ({
+      ...prev,
+      [day]: updatedSlots
+    }));
     
     // Remove the selected teacher from the filtered list to prevent re-selection
     const updatedFilteredTeachers = filteredTeachers.filter(t => t.id !== teacherId);
     setFilteredTeachers(updatedFilteredTeachers);
     
-    const teacher = filteredTeachers.find(t => t.id === teacherId);
-    setSuccess(`Teacher "${teacher?.firstName} ${teacher?.lastName}" added successfully!`);
+    const lastSubject = subjects.find(s => s.id === lastSubjectPair.subjectId);
+    setSuccess(`Teacher "${teacher?.firstName} ${teacher?.lastName}" added to "${lastSubject?.name}"!`);
     setTimeout(() => setSuccess(null), 3000);
   };
 
@@ -514,10 +573,28 @@ const TimetableCreationForm: React.FC = () => {
 
   const removeSubject = async (day: string, index: number, subjectId: number) => {
     const currentSlot = timetableSlots[day]?.[index];
-    const currentSubjects = currentSlot?.subjectIds || [];
-    const newSubjects = currentSubjects.filter(id => id !== subjectId);
     
-    updateTimetableSlot(day, index, 'subjectIds', newSubjects);
+    // Remove from both old and new structures
+    const newSubjects = (currentSlot?.subjectIds || []).filter(id => id !== subjectId);
+    const newPairs = (currentSlot?.subjectTeacherPairs || []).filter(pair => pair.subjectId !== subjectId);
+    
+    // Collect teacherIds from remaining pairs for old structure
+    const remainingTeacherIds = newPairs.flatMap(pair => pair.teacherIds);
+    
+    // Update both structures
+    const updatedSlots = timetableSlots[day]?.map((slot, i) => 
+      i === index ? { 
+        ...slot, 
+        subjectIds: newSubjects,
+        teacherIds: remainingTeacherIds,
+        subjectTeacherPairs: newPairs
+      } : slot
+    ) || [];
+    
+    setTimetableSlots(prev => ({
+      ...prev,
+      [day]: updatedSlots
+    }));
     
     // Re-filter teachers based on remaining subjects
     if (newSubjects.length > 0 && selectedClass && selectedAcademicYear) {
@@ -537,10 +614,34 @@ const TimetableCreationForm: React.FC = () => {
 
   const removeTeacher = (day: string, index: number, teacherId: string) => {
     const currentSlot = timetableSlots[day]?.[index];
-    const currentTeachers = currentSlot?.teacherIds || [];
-    const newTeachers = currentTeachers.filter(id => id !== teacherId);
     
-    updateTimetableSlot(day, index, 'teacherIds', newTeachers);
+    // Remove teacher from subjectTeacherPairs (from the last subject that has this teacher)
+    const updatedPairs = (currentSlot?.subjectTeacherPairs || []).map(pair => {
+      if (pair.teacherIds.includes(teacherId)) {
+        return {
+          ...pair,
+          teacherIds: pair.teacherIds.filter(id => id !== teacherId)
+        };
+      }
+      return pair;
+    });
+    
+    // Remove from old structure
+    const newTeachers = (currentSlot?.teacherIds || []).filter(id => id !== teacherId);
+    
+    // Update both structures
+    const updatedSlots = timetableSlots[day]?.map((slot, i) => 
+      i === index ? { 
+        ...slot, 
+        teacherIds: newTeachers,
+        subjectTeacherPairs: updatedPairs
+      } : slot
+    ) || [];
+    
+    setTimetableSlots(prev => ({
+      ...prev,
+      [day]: updatedSlots
+    }));
     
     // Add the teacher back to the filtered list
     const teacher = teachers.find(t => t.id === teacherId);
@@ -611,13 +712,18 @@ const TimetableCreationForm: React.FC = () => {
       // Collect all slots from all days
       Object.entries(timetableSlots).forEach(([day, slots]) => {
         slots.forEach(slot => {
-          if (slot.startTime && slot.endTime && slot.subjectIds && slot.subjectIds.length > 0) {
+          // Use subjectTeacherPairs if available, otherwise fall back to old structure
+          const hasSubjectTeacherPairs = slot.subjectTeacherPairs && slot.subjectTeacherPairs.length > 0;
+          const hasSubjectIds = slot.subjectIds && slot.subjectIds.length > 0;
+          
+          if (slot.startTime && slot.endTime && (hasSubjectTeacherPairs || hasSubjectIds)) {
             allSlots.push({
               branchId: selectedBranch,
               classId: selectedClass,
               academicYearId: selectedAcademicYear,
               dayOfWeek: day,
-              subjectIds: slot.subjectIds,
+              subjectTeacherPairs: hasSubjectTeacherPairs ? slot.subjectTeacherPairs : undefined,
+              subjectIds: hasSubjectIds ? slot.subjectIds : undefined,
               teacherIds: slot.teacherIds || [],
               startTime: slot.startTime,
               endTime: slot.endTime,
@@ -635,7 +741,6 @@ const TimetableCreationForm: React.FC = () => {
       }
 
       // Save all slots
-      console.log('💾 Saving timetable slots:', allSlots);
       
       const promises = allSlots.map(slot => 
         fetch('/api/admin/timetables', {
@@ -646,7 +751,6 @@ const TimetableCreationForm: React.FC = () => {
       );
 
       const results = await Promise.all(promises);
-      console.log('📡 API responses:', results.map(r => ({ status: r.status, ok: r.ok })));
       
       const failed = results.filter(r => !r.ok);
 
@@ -1029,54 +1133,73 @@ const TimetableCreationForm: React.FC = () => {
                       )}
                       
                       {/* Subject Selection Grid */}
-                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
-                        {subjects.map(subject => {
-                          const isSelected = slot.subjectIds.includes(subject.id);
-                          return (
-                            <div
-                              key={subject.id}
-                              className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
-                                isSelected
-                                  ? 'bg-blue-50 border-blue-200'
-                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                              }`}
+                      <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2 bg-white">
+                        {loading ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                            <p className="text-sm">Loading subjects...</p>
+                          </div>
+                        ) : subjects.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No subjects available</p>
+                            <button
+                              onClick={() => fetchSubjects(true)}
+                              className="mt-2 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 mx-auto"
                             >
-                              <span className="text-sm font-medium text-gray-700">
-                                {subject.name}
-                              </span>
-                              <motion.button
-                                onClick={() => handleIndividualSubjectSelection(currentDay, index, subject.id)}
-                                disabled={isSelected || isProcessingSubject === subject.id}
-                                whileHover={!isSelected && isProcessingSubject !== subject.id ? { scale: 1.05 } : {}}
-                                whileTap={!isSelected && isProcessingSubject !== subject.id ? { scale: 0.95 } : {}}
-                                className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full transition-all duration-200 ${
+                              <RefreshCw className="w-3 h-3" />
+                              Retry
+                            </button>
+                          </div>
+                        ) : (
+                          subjects.map(subject => {
+                            const isSelected = slot.subjectIds.includes(subject.id);
+                            return (
+                              <div
+                                key={subject.id}
+                                className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
                                   isSelected
-                                    ? 'bg-green-100 text-green-700 cursor-not-allowed'
-                                    : isProcessingSubject === subject.id
-                                    ? 'bg-gray-400 text-white cursor-not-allowed'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
+                                    ? 'bg-blue-50 border-blue-200'
+                                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                                 }`}
                               >
-                                {isSelected ? (
-                                  <>
-                                    <BookCheck className="w-3 h-3" />
-                                    Added
-                                  </>
-                                ) : isProcessingSubject === subject.id ? (
-                                  <>
-                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                                    Loading...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus className="w-3 h-3" />
-                                    Add
-                                  </>
-                                )}
-                              </motion.button>
-                            </div>
-                          );
-                        })}
+                                <span className="text-sm font-medium text-gray-700">
+                                  {subject.name}
+                                </span>
+                                <motion.button
+                                  onClick={() => handleIndividualSubjectSelection(currentDay, index, subject.id)}
+                                  disabled={isSelected || isProcessingSubject === subject.id}
+                                  whileHover={!isSelected && isProcessingSubject !== subject.id ? { scale: 1.05 } : {}}
+                                  whileTap={!isSelected && isProcessingSubject !== subject.id ? { scale: 0.95 } : {}}
+                                  className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full transition-all duration-200 ${
+                                    isSelected
+                                      ? 'bg-green-100 text-green-700 cursor-not-allowed'
+                                      : isProcessingSubject === subject.id
+                                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
+                                  }`}
+                                >
+                                  {isSelected ? (
+                                    <>
+                                      <BookCheck className="w-3 h-3" />
+                                      Added
+                                    </>
+                                  ) : isProcessingSubject === subject.id ? (
+                                    <>
+                                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                      Loading...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="w-3 h-3" />
+                                      Add
+                                    </>
+                                  )}
+                                </motion.button>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
                     </div>
 

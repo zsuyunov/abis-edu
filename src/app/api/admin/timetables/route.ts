@@ -11,7 +11,6 @@ export async function GET(request: NextRequest) {
     const academicYearId = searchParams.get('academicYearId');
     const isActive = searchParams.get('isActive');
 
-    console.log('GET /api/admin/timetables called with params:', { branchId, classId, academicYearId, isActive });
 
     // Build where clause for database query
     const whereClause: any = {};
@@ -32,9 +31,9 @@ export async function GET(request: NextRequest) {
       whereClause.isActive = isActive === 'true';
     }
 
-    // Fetch timetables from database
+    // Fetch timetables from database (exclude legacy virtual)
     const timetables = await prisma.timetable.findMany({
-      where: whereClause,
+      where: { ...whereClause, buildingName: { not: 'virtual' } },
       include: {
         subject: true,
         class: true,
@@ -68,7 +67,6 @@ export async function GET(request: NextRequest) {
     // Create a map for quick teacher lookup
     const teacherMap = new Map(teachers.map(teacher => [teacher.id, teacher]));
 
-    console.log('Timetables found:', timetables.length);
 
     // Group timetables by time slot and day to combine multiple subjects/teachers
     const groupedTimetables = new Map();
@@ -83,13 +81,8 @@ export async function GET(request: NextRequest) {
 
       const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
       
-      console.log(`Processing timetable ID ${timetable.id}:`);
-      console.log(`  Subject: ${timetable.subject?.name} (ID: ${timetable.subjectId})`);
-      console.log(`  Teachers: [${timetable.teacherIds.join(', ')}]`);
-      console.log(`  Time Key: ${timeKey}`);
       
       if (!groupedTimetables.has(timeKey)) {
-        console.log(`  Creating new group for time key: ${timeKey}`);
         groupedTimetables.set(timeKey, {
           id: timetable.id, // Use first timetable ID as primary
           branchId: timetable.branchId,
@@ -119,7 +112,6 @@ export async function GET(request: NextRequest) {
       if (timetable.subject && !grouped.subjectIds.includes(timetable.subject.id)) {
         grouped.subjectIds.push(timetable.subject.id);
         grouped.subjects.push(timetable.subject);
-        console.log(`  Added subject: ${timetable.subject.name} to group`);
       }
       
       // Add teachers if not already present
@@ -131,7 +123,6 @@ export async function GET(request: NextRequest) {
             const teacher = teacherMap.get(teacherId);
             if (teacher) {
               grouped.teachers.push(teacher);
-              console.log(`  Added teacher: ${teacher.firstName} ${teacher.lastName} to group`);
             }
           }
         });
@@ -145,15 +136,6 @@ export async function GET(request: NextRequest) {
       return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
     });
 
-    console.log('Grouped timetables:', formattedTimetables.length);
-    
-    // Log each grouped timetable
-    formattedTimetables.forEach((timetable, index) => {
-      console.log(`Grouped Timetable ${index + 1}:`);
-      console.log(`  Subjects: [${timetable.subjects.map((s: any) => s.name).join(', ')}]`);
-      console.log(`  Teachers: [${timetable.teachers.map((t: any) => `${t.firstName} ${t.lastName}`).join(', ')}]`);
-      console.log(`  Day: ${timetable.dayOfWeek}, Time: ${timetable.startTime}-${timetable.endTime}`);
-    });
 
     return NextResponse.json({
       timetables: formattedTimetables,
@@ -170,7 +152,6 @@ export async function GET(request: NextRequest) {
 async function postHandler(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('Received timetable data:', body);
     
     // Validate required fields
     if (!body.branchId || !body.classId || !body.academicYearId) {
@@ -199,51 +180,47 @@ async function postHandler(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Handle both single subject and multiple subjects
-    const subjectIds = body.subjectIds || (body.subjectId ? [body.subjectId] : []);
-
-    if (subjectIds.length === 0) {
+    // Handle subject-teacher pairs structure
+    const subjectTeacherPairs = body.subjectTeacherPairs || [];
+    
+    // For backward compatibility, also handle old structure
+    if (subjectTeacherPairs.length === 0) {
+      const subjectIds = body.subjectIds || (body.subjectId ? [body.subjectId] : []);
+      const teacherIds = body.teacherIds || [];
+      
+      if (subjectIds.length === 0) {
+        return NextResponse.json({
+          error: 'At least one subject must be specified'
+        }, { status: 400 });
+      }
+      
+      // Convert old structure to new structure
+      subjectIds.forEach((subjectId: number) => {
+        subjectTeacherPairs.push({
+          subjectId,
+          teacherIds: teacherIds
+        });
+      });
+    }
+    
+    if (subjectTeacherPairs.length === 0) {
       return NextResponse.json({
         error: 'At least one subject must be specified'
       }, { status: 400 });
     }
 
     // Validate that all subjects exist
+    const allSubjectIds = subjectTeacherPairs.map((pair: any) => pair.subjectId);
     const subjects = await prisma.subject.findMany({
-      where: { id: { in: subjectIds } }
+      where: { id: { in: allSubjectIds } }
     });
 
-    if (subjects.length !== subjectIds.length) {
+    if (subjects.length !== allSubjectIds.length) {
       const foundIds = subjects.map((s: any) => s.id);
-      const missingIds = subjectIds.filter((id: any) => !foundIds.includes(id));
+      const missingIds = allSubjectIds.filter((id: any) => !foundIds.includes(id));
       return NextResponse.json({
         error: `Subjects with IDs ${missingIds.join(', ')} not found`
       }, { status: 400 });
-    }
-
-    // Auto-assign teachers based on TeacherAssignment records if no teachers specified
-    let teacherIds = body.teacherIds || [];
-    if (teacherIds.length === 0) {
-      console.log('🔍 No teachers specified, auto-assigning based on TeacherAssignment records...');
-
-      // Find teachers assigned to ANY of the selected subjects for this class
-      const teacherAssignments = await prisma.teacherAssignment.findMany({
-        where: {
-          classId: parseInt(body.classId),
-          subjectId: { in: subjectIds }, // Check all selected subjects
-          academicYearId: parseInt(body.academicYearId),
-          status: 'ACTIVE',
-          role: 'TEACHER'
-        },
-        include: {
-          Teacher: true
-        }
-      });
-
-      // Get unique teacher IDs
-      const uniqueTeacherIds = Array.from(new Set(teacherAssignments.map(ta => ta.teacherId)));
-      teacherIds = uniqueTeacherIds;
-      console.log(`✅ Auto-assigned ${teacherIds.length} teachers: [${teacherIds.join(', ')}]`);
     }
 
     // Validate that the class exists
@@ -290,17 +267,16 @@ async function postHandler(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Create timetable entries for each subject
+    // Create timetable entries for each subject-teacher pair
     const timetableEntries = [];
     
-    for (const subjectId of subjectIds) {
-      // For each subject, find teachers specifically assigned to that subject
-      let subjectTeacherIds = [];
+    for (const pair of subjectTeacherPairs) {
+      const { subjectId, teacherIds } = pair;
       
-      // If specific teachers were selected, use them for all subjects
-      if (teacherIds.length > 0) {
-        subjectTeacherIds = teacherIds;
-      } else {
+      // Use provided teachers or auto-assign
+      let finalTeacherIds = teacherIds || [];
+      
+      if (finalTeacherIds.length === 0) {
         // Auto-assign teachers specifically for this subject
         const subjectTeacherAssignments = await prisma.teacherAssignment.findMany({
           where: {
@@ -315,8 +291,7 @@ async function postHandler(request: NextRequest) {
           }
         });
         
-        subjectTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
-        console.log(`📚 Subject ${subjectId} assigned teachers: [${subjectTeacherIds.join(', ')}]`);
+        finalTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
       }
 
       const timetableData = {
@@ -325,7 +300,7 @@ async function postHandler(request: NextRequest) {
         academicYearId: parseInt(body.academicYearId),
         dayOfWeek: dayOfWeek,
         subjectId: subjectId,
-        teacherIds: subjectTeacherIds,
+        teacherIds: finalTeacherIds,
         startTime: (() => {
           const [hours, minutes] = body.startTime.split(':').map(Number);
           const utcDate = new Date('1970-01-01T00:00:00.000Z');
@@ -343,7 +318,6 @@ async function postHandler(request: NextRequest) {
         isActive: true,
       };
 
-      console.log(`Creating timetable for subject ${subjectId} with data:`, timetableData);
 
       const timetableEntry = await prisma.timetable.create({
         data: timetableData,
@@ -356,7 +330,6 @@ async function postHandler(request: NextRequest) {
       });
 
       timetableEntries.push(timetableEntry);
-      console.log(`Timetable created successfully for subject ${subjectId} with ID:`, timetableEntry.id);
     }
 
     return NextResponse.json({ 
@@ -434,7 +407,6 @@ async function putHandler(request: NextRequest) {
       });
 
       if (currentTimetable) {
-        console.log('🔍 Auto-assigning teachers for timetable update...');
 
         const teacherAssignments = await prisma.teacherAssignment.findMany({
           where: {
@@ -448,7 +420,6 @@ async function putHandler(request: NextRequest) {
 
         const teacherIds = teacherAssignments.map(ta => ta.teacherId);
         updateData.teacherIds = teacherIds;
-        console.log(`✅ Auto-assigned ${teacherIds.length} teachers for update: [${teacherIds.join(', ')}]`);
       }
     }
 
@@ -463,7 +434,6 @@ async function putHandler(request: NextRequest) {
       }
     });
 
-    console.log('Timetable updated successfully:', updatedTimetable.id);
 
     return NextResponse.json({ 
       message: 'Timetable updated successfully', 
@@ -492,19 +462,11 @@ async function deleteHandler(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // First, delete all related attendance records
-    await prisma.attendance.deleteMany({
-      where: {
-        timetableId: parseInt(id)
-      }
-    });
-
-    // Then delete the timetable
+    // Delete timetable (no need to touch attendance or grades - they're independent)
     await prisma.timetable.delete({
       where: { id: parseInt(id) }
     });
 
-    console.log('Timetable deleted successfully:', id);
 
     return NextResponse.json({ 
       message: 'Timetable deleted successfully' 

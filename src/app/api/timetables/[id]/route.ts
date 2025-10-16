@@ -13,13 +13,7 @@ export async function GET(
         branch: { select: { id: true, shortName: true } },
         class: { select: { id: true, name: true } },
         academicYear: { select: { id: true, name: true } },
-        subject: { select: { id: true, name: true } },
-        Exam: {
-          select: { id: true, name: true, startTime: true, endTime: true }
-        },
-        Attendance: {
-          select: { id: true, date: true, status: true, student: { select: { firstName: true, lastName: true } } }
-        }
+        subject: { select: { id: true, name: true } }
       },
     });
 
@@ -140,15 +134,7 @@ async function deleteHandler(
   try {
     // Check for related records first
     const relatedRecords = await prisma.timetable.findUnique({
-      where: { id: parseInt(params.id) },
-      include: {
-        _count: {
-          select: {
-            Exam: true,
-            Attendance: true,
-          }
-        }
-      }
+      where: { id: parseInt(params.id) }
     });
 
     if (!relatedRecords) {
@@ -158,22 +144,7 @@ async function deleteHandler(
       );
     }
 
-    const { _count } = relatedRecords;
-    if (_count.Exam > 0) {
-      return NextResponse.json(
-        { error: "Cannot delete timetable with associated exams" },
-        { status: 400 }
-      );
-    }
-
-    // First, delete all related attendance records
-    await prisma.attendance.deleteMany({
-      where: {
-        timetableId: parseInt(params.id)
-      }
-    });
-
-    // Then delete the timetable
+    // Delete timetable (attendance and grades are independent)
     await prisma.timetable.delete({
       where: { id: parseInt(params.id) },
     });

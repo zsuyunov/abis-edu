@@ -82,18 +82,6 @@ export async function GET(request: NextRequest) {
             firstName: true,
             lastName: true
           }
-        },
-        timetable: {
-          select: {
-            id: true,
-            startTime: true,
-            endTime: true,
-            subject: {
-              select: {
-                name: true
-              }
-            }
-          }
         }
       },
       orderBy: [
@@ -123,13 +111,7 @@ export async function GET(request: NextRequest) {
         lastName: grade.teacher.lastName
       },
       date: grade.date.toISOString(),
-      comment: grade.description,
-      timetable: grade.timetable ? {
-        id: grade.timetable.id,
-        startTime: grade.timetable.startTime,
-        endTime: grade.timetable.endTime,
-        subject: grade.timetable.subject
-      } : undefined
+      comment: grade.description
     }));
 
     return NextResponse.json({

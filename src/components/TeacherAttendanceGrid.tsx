@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { csrfFetch } from '@/hooks/useCsrfToken';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, getDaysInMonth, getDay } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Users, BookOpen, Calendar, Check, X, Clock, Shield, Save } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, BookOpen, Calendar, Check, X, Clock, Shield } from 'lucide-react';
 import { formatDatabaseTime } from '@/lib/utils';
 
 interface Student {
@@ -20,6 +20,7 @@ interface AttendanceRecord {
   status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
   studentId: string;
   notes?: string;
+  lessonNumber?: number;
 }
 
 interface TeacherClass {
@@ -39,12 +40,6 @@ interface TeacherAttendanceGridProps {
   refreshTrigger?: number;
 }
 
-interface PendingAttendance {
-  studentId: string;
-  date: string;
-  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED' | 'NO_RECORD';
-  comment: string;
-}
 
 const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
   teacherId,
@@ -60,9 +55,16 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
   const [loading, setLoading] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{student: Student, date: Date} | null>(null);
-  const [pendingAttendances, setPendingAttendances] = useState<PendingAttendance[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
   const [currentComment, setCurrentComment] = useState('');
+  const [showBulkDateModal, setShowBulkDateModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [isSavingBulk, setIsSavingBulk] = useState(false);
+  const [currentLessonForm, setCurrentLessonForm] = useState<1 | 2>(1);
+  const [showingLesson, setShowingLesson] = useState<1 | 2>(1);
+  const [isSwapping, setIsSwapping] = useState(false);
+  
+  // Debug: Track if lesson 2 exists
+  const hasLesson2Data = attendanceData.some(r => r.lessonNumber === 2);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -114,20 +116,77 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
     fetchAttendanceData();
   }, [selectedClass, selectedSubject, currentDate, refreshTrigger]);
 
-  const getAttendanceForStudentAndDate = (studentId: string, date: Date) => {
+  const getAttendanceForStudentAndDate = (studentId: string, date: Date, lessonNum: number = 1) => {
     if (!Array.isArray(attendanceData)) return null;
     return attendanceData.find(record => 
       record.studentId === studentId && 
-      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') &&
+      (record.lessonNumber === lessonNum || (!record.lessonNumber && lessonNum === 1))
     );
   };
 
-  const getPendingAttendanceForStudentAndDate = (studentId: string, date: Date) => {
-    return pendingAttendances.find(pending => 
-      pending.studentId === studentId && 
-      pending.date === format(date, 'yyyy-MM-dd')
-    );
+  // Check if there are records for lesson 2 in the current month
+  const hasLesson2 = () => {
+    if (!Array.isArray(attendanceData) || attendanceData.length === 0) return false;
+    
+    // Explicitly check for lesson 2 records (must have lessonNumber === 2)
+    const hasLesson2Records = attendanceData.some(r => r.lessonNumber === 2);
+    
+    console.log('🔍 Checking lessons:', {
+      totalRecords: attendanceData.length,
+      hasLesson2Records,
+      lessonNumbers: attendanceData.map(r => r.lessonNumber),
+      uniqueLessonNumbers: Array.from(new Set(attendanceData.map(r => r.lessonNumber)))
+    });
+    
+    return hasLesson2Records;
   };
+
+  // Auto-swap between lesson 1 and 2 every 3 seconds ONLY if at least one student has both lessons
+  useEffect(() => {
+    // Always reset animation state first
+    setIsSwapping(false);
+    setShowingLesson(1);
+    
+    // Check if ANY student has BOTH lesson 1 and lesson 2 records
+    const anyStudentHasBothLessons = attendanceData.some(record => {
+      const dateStr = format(new Date(record.date), 'yyyy-MM-dd');
+      const recordsForDate = attendanceData.filter(r => 
+        r.studentId === record.studentId && 
+        format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+      );
+      
+      const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+      const hasLesson2 = recordsForDate.some(r => r.lessonNumber === 2);
+      
+      return hasLesson1 && hasLesson2;
+    });
+    
+    console.log('🔍 ANIMATION CHECK:', {
+      totalRecords: attendanceData.length,
+      anyStudentHasBothLessons,
+      lesson2Count: attendanceData.filter(r => r.lessonNumber === 2).length
+    });
+    
+    // If NO student has both lessons, DO NOT start any animation
+    if (!anyStudentHasBothLessons) {
+      console.log('🚫 NO ANIMATION - No student has both lesson 1 and lesson 2');
+      return; // Exit early, no timer created
+    }
+
+    // If at least one student has both lessons, start the swap animation
+    console.log('🔄 STARTING ANIMATION - At least one student has both lessons');
+    const timer = setInterval(() => {
+      setShowingLesson(prev => prev === 1 ? 2 : 1);
+      setIsSwapping(true);
+      setTimeout(() => setIsSwapping(false), 300);
+    }, 3000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [attendanceData]);
+
 
   const getStatusIcon = (status: string | undefined) => {
     switch (status) {
@@ -155,180 +214,226 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
     );
   };
 
+  const handleDateHeaderClick = (date: Date) => {
+    if (!selectedClass || !selectedSubject) {
+      alert('Please select a class and subject first');
+      return;
+    }
+    setSelectedDate(date);
+    setShowBulkDateModal(true);
+  };
+
+  const handleMarkAllPresent = async () => {
+    if (!selectedDate || !selectedClass || !selectedSubject) return;
+    
+    setIsSavingBulk(true);
+    try {
+      const dateString = format(selectedDate, 'yyyy-MM-dd');
+      
+      // Mark all students as present
+      const attendance = students.map(student => ({
+        studentId: student.id,
+        status: 'PRESENT',
+        notes: ''
+      }));
+
+      const response = await csrfFetch('/api/attendance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId
+        },
+        body: JSON.stringify({
+          classId: selectedClass,
+          subjectId: selectedSubject,
+          date: dateString,
+          lessonNumber: currentLessonForm,
+          attendance
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ All students marked present successfully');
+        await fetchAttendanceData(); // Refresh the grid
+        setShowBulkDateModal(false);
+        setSelectedDate(null);
+      } else {
+        const error = await response.json();
+        console.error('Failed to mark all present:', error);
+        alert('Failed to mark attendance. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error marking all present:', error);
+      alert('An error occurred while marking attendance.');
+    } finally {
+      setIsSavingBulk(false);
+    }
+  };
+
   const handleCellClick = (student: Student, date: Date) => {
     setSelectedCell({ student, date });
     
     // Check if there's existing attendance data for this student and date
     const existingAttendance = getAttendanceForStudentAndDate(student.id, date);
-    const pendingAttendance = getPendingAttendanceForStudentAndDate(student.id, date);
     
     // Set the current comment to existing comment if available
-    if (pendingAttendance) {
-      setCurrentComment(pendingAttendance.comment);
-    } else if (existingAttendance) {
+    if (existingAttendance) {
       setCurrentComment(existingAttendance.notes || '');
-      } else {
+    } else {
       setCurrentComment('');
     }
     
     setShowStatusModal(true);
   };
 
-  const handleStatusSelect = (status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED' | 'NO_RECORD') => {
+  const handleStatusSelect = async (status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED' | 'NO_RECORD') => {
     if (!selectedCell) return;
 
     const { student, date } = selectedCell;
     const dateString = format(date, 'yyyy-MM-dd');
     
-    // Remove existing pending attendance for this student and date
-    setPendingAttendances(prev => 
-      prev.filter(pending => !(pending.studentId === student.id && pending.date === dateString))
-    );
+    try {
+      if (status === 'NO_RECORD') {
+        // Delete attendance record immediately
+        const response = await csrfFetch('/api/attendance', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': teacherId
+          },
+          body: JSON.stringify({
+            studentId: student.id,
+            classId: selectedClass,
+            subjectId: selectedSubject,
+            date: dateString
+          })
+        });
 
-    // If NO_RECORD is selected, add it to pending attendances to mark for deletion
-    if (status === 'NO_RECORD') {
-      setPendingAttendances(prev => [
-        ...prev,
-        {
-          studentId: student.id,
-          date: dateString,
-          status: 'NO_RECORD',
-          comment: ''
+        if (response.ok) {
+          console.log(`✅ Attendance deleted for student ${student.id}`);
+          // Refresh data immediately
+          fetchAttendanceData();
+        } else {
+          console.error('Failed to delete attendance:', await response.json());
         }
-      ]);
-      setShowStatusModal(false);
-      setSelectedCell(null);
-      setCurrentComment('');
-      return;
-    }
+      } else {
+        // Save attendance record immediately
+        const response = await csrfFetch('/api/attendance', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': teacherId
+          },
+          body: JSON.stringify({
+            classId: selectedClass,
+            subjectId: selectedSubject,
+            date: dateString,
+            lessonNumber: currentLessonForm,
+            attendance: [{
+              studentId: student.id,
+              status: status,
+              notes: currentComment
+            }]
+          })
+        });
 
-    // Add new pending attendance
-    setPendingAttendances(prev => [
-      ...prev,
-      {
-        studentId: student.id,
-        date: dateString,
-        status,
-        comment: currentComment
+        if (response.ok) {
+          console.log(`✅ Attendance saved for student ${student.id}`);
+          // Refresh data immediately
+          fetchAttendanceData();
+        } else {
+          console.error('Failed to save attendance:', await response.json());
+        }
       }
-    ]);
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+    }
 
     setShowStatusModal(false);
     setSelectedCell(null);
     setCurrentComment('');
   };
 
-  const handleBulkSave = async () => {
-    if (pendingAttendances.length === 0) return;
-
-    setIsSaving(true);
-    try {
-      // Filter out NO_RECORD entries and handle deletions separately
-      const recordsToSave = pendingAttendances.filter(pending => pending.status !== 'NO_RECORD');
-      const recordsToDelete = pendingAttendances.filter(pending => pending.status === 'NO_RECORD');
-
-      // Save attendance records
-      const savePromises = recordsToSave.map(async (pending) => {
-        const response = await csrfFetch('/api/attendance', {
-          method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-          'x-user-id': teacherId,
-        },
-          body: JSON.stringify({
-            studentId: pending.studentId,
-            classId: selectedClass,
-            subjectId: selectedSubject,
-            date: pending.date,
-            status: pending.status,
-            notes: pending.comment,
-          }),
-      });
-
-      if (response.ok) {
-          return await response.json();
-        }
-        throw new Error(`Failed to save attendance for student ${pending.studentId}`);
-      });
-
-      // Delete attendance records (NO_RECORD)
-      const deletePromises = recordsToDelete.map(async (pending) => {
-      const response = await csrfFetch('/api/attendance', {
-          method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': teacherId,
-        },
-        body: JSON.stringify({
-            studentId: pending.studentId,
-            classId: selectedClass,
-            subjectId: selectedSubject,
-            date: pending.date,
-        }),
-      });
-
-      if (response.ok) {
-          return await response.json();
-        }
-        throw new Error(`Failed to delete attendance for student ${pending.studentId}`);
-      });
-
-      await Promise.all([...savePromises, ...deletePromises]);
-      
-      // Clear pending attendances
-      setPendingAttendances([]);
-      
-      // Refresh attendance data
-        fetchAttendanceData();
-      
-      alert(`✅ Successfully processed ${recordsToSave.length} saves and ${recordsToDelete.length} deletions!`);
-    } catch (error) {
-      console.error('Error saving attendance:', error);
-      alert('❌ Error saving attendance. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const getCellStatus = (student: Student, date: Date) => {
-    // Check pending attendance first
-    const pending = getPendingAttendanceForStudentAndDate(student.id, date);
-    if (pending) {
-      return pending.status === 'NO_RECORD' ? null : pending.status;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    // Find all records for this student on this date
+    const studentRecordsForDate = attendanceData.filter(r => 
+      r.studentId === student.id && 
+      format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    if (studentRecordsForDate.length === 0) {
+      return null; // No attendance records
     }
-
-    // Check existing attendance
-    const existing = getAttendanceForStudentAndDate(student.id, date);
-    if (existing) {
-      return existing.status;
+    
+    // Check if student has both lessons
+    const hasLesson1 = studentRecordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2 = studentRecordsForDate.some(r => r.lessonNumber === 2);
+    
+    if (hasLesson1 && hasLesson2) {
+      // Student has BOTH lessons - show based on current swapping state
+      const lesson = showingLesson;
+      const record = studentRecordsForDate.find(r => 
+        (lesson === 1 && (r.lessonNumber === 1 || !r.lessonNumber)) ||
+        (lesson === 2 && r.lessonNumber === 2)
+      );
+      return record?.status || null;
+    } else {
+      // Student has only ONE lesson - show it statically
+      return studentRecordsForDate[0]?.status || null;
     }
-
-    return null;
   };
 
   const getCurrentStatusForModal = (student: Student, date: Date) => {
-    // Check pending attendance first
-    const pending = getPendingAttendanceForStudentAndDate(student.id, date);
-    if (pending) {
-      return pending.status === 'NO_RECORD' ? null : pending.status;
-    }
-
-    // Check existing attendance
-    const existing = getAttendanceForStudentAndDate(student.id, date);
+    // Check existing attendance for current lesson form
+    const existing = getAttendanceForStudentAndDate(student.id, date, currentLessonForm);
     if (existing) {
       return existing.status;
     }
 
     return null;
+  };
+
+  // Check if there are multiple lessons for a given date (both L1 and L2)
+  const hasMultipleLessonsOnDate = (date: Date) => {
+    if (!Array.isArray(attendanceData)) return false;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const lessonsOnDate = new Set(
+      attendanceData
+        .filter(r => format(new Date(r.date), 'yyyy-MM-dd') === dateStr)
+        .map(r => r.lessonNumber || 1)
+    );
+    return lessonsOnDate.has(1) && lessonsOnDate.has(2);
+  };
+
+  // Check if a specific STUDENT has BOTH lesson 1 AND lesson 2 for a specific date
+  const studentHasBothLessons = (studentId: string, date: Date): boolean => {
+    if (!Array.isArray(attendanceData)) return false;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    // Find all records for this student on this date
+    const studentRecords = attendanceData.filter(r => 
+      r.studentId === studentId && 
+      format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    // Check if there's at least one lesson 1 record AND one lesson 2 record
+    const hasLesson1 = studentRecords.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2 = studentRecords.some(r => r.lessonNumber === 2);
+    
+    return hasLesson1 && hasLesson2;
   };
 
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="max-w-7xl mx-auto p-6">
-      {/* Header */}
+        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Attendance</h1>
           <p className="text-gray-600">Track and manage student attendance</p>
+          
         </div>
 
         {/* Filters */}
@@ -395,31 +500,6 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
           </div>
         </div>
 
-        {/* Bulk Save Button */}
-        {pendingAttendances.length > 0 && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6 shadow-sm">
-        <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Save className="w-5 h-5 text-blue-600" />
-                </div>
-          <div>
-                  <span className="text-blue-800 font-semibold text-lg">
-                    {pendingAttendances.length} attendance record(s) pending save
-                  </span>
-                  <p className="text-blue-600 text-sm mt-1">Review your changes before saving</p>
-          </div>
-              </div>
-              <button
-                onClick={handleBulkSave}
-                disabled={isSaving}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg font-medium"
-              >
-                {isSaving ? 'Saving...' : 'Save All'}
-              </button>
-          </div>
-          </div>
-        )}
 
       {/* Content */}
       <AnimatePresence mode="wait">
@@ -443,8 +523,14 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                       </th>
                       {monthDays.map(day => (
                         <th key={day.toISOString()} className="px-3 py-4 text-center text-sm font-bold text-gray-700 uppercase tracking-wider min-w-[60px]">
-                          <div className="text-base font-bold">{format(day, 'dd')}</div>
-                          <div className="text-xs text-gray-500 font-normal">{format(day, 'EEE')}</div>
+                          <button
+                            onClick={() => handleDateHeaderClick(day)}
+                            className="w-full hover:bg-blue-50 rounded-lg p-2 transition-colors duration-200 cursor-pointer"
+                            title="Click to mark attendance for all students on this date"
+                          >
+                            <div className="text-base font-bold">{format(day, 'dd')}</div>
+                            <div className="text-xs text-gray-500 font-normal">{format(day, 'EEE')}</div>
+                          </button>
                         </th>
                       ))}
                     </tr>
@@ -460,18 +546,57 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                             <div className="font-bold text-gray-900">{student.lastName}, {student.firstName}</div>
                           </td>
                           {monthDays.map(day => {
+                            // Check if THIS specific student has BOTH lesson 1 AND lesson 2 for THIS date
+                            const hasBothLessons = studentHasBothLessons(student.id, day);
+                            
+                            // Get the status based on whether this student has both lessons
                             const status = getCellStatus(student, day);
+                            
                             return (
                               <td 
                                 key={day.toISOString()} 
                                 className="px-3 py-4 text-center min-w-[60px]"
                               >
-                                <button
-                                  onClick={() => handleCellClick(student, day)}
-                                  className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform ${getStatusColor(status || undefined)}`}
-                                >
-                                  {getStatusIcon(status || undefined)}
-                                </button>
+                                <div className="relative">
+                                  <motion.button
+                                    onClick={() => handleCellClick(student, day)}
+                                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${getStatusColor(status || undefined)}`}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                  >
+                                    <AnimatePresence mode="wait">
+                                      <motion.div
+                                        key={status}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        transition={{
+                                          duration: 0.2,
+                                          ease: "easeInOut"
+                                        }}
+                                      >
+                                        {getStatusIcon(status || undefined)}
+                                      </motion.div>
+                                    </AnimatePresence>
+                                  </motion.button>
+                                  {hasBothLessons && (
+                                    <AnimatePresence mode="wait">
+                                      <motion.span 
+                                        key={showingLesson}
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        transition={{
+                                          duration: 0.2,
+                                          ease: "easeInOut"
+                                        }}
+                                        className="absolute -top-1 -right-1 bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[10px] font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-lg"
+                                      >
+                                        L{showingLesson}
+                                      </motion.span>
+                                    </AnimatePresence>
+                                  )}
+                                </div>
                               </td>
                             );
                           })}
@@ -539,7 +664,10 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
               <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 w-full max-w-xs sm:max-w-sm shadow-2xl max-h-[85vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="text-base sm:text-lg font-bold text-gray-900">Mark Attendance</h3>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900">Mark Attendance</h3>
+                  <span className="text-xs font-semibold text-blue-600">Lesson {currentLessonForm}</span>
+                </div>
                 <div className="flex items-center gap-1 sm:gap-2">
                   <button
                     onClick={() => handleStatusSelect('NO_RECORD')}
@@ -642,10 +770,115 @@ const TeacherAttendanceGrid: React.FC<TeacherAttendanceGridProps> = ({
                 </div>
               </div>
 
+              {/* Lesson Navigation */}
+              <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                {currentLessonForm === 2 && (
+                  <button
+                    onClick={() => setCurrentLessonForm(1)}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all duration-200"
+                  >
+                    ← Back to Lesson 1
+                  </button>
+                )}
+                {currentLessonForm === 1 && (
+                  <button
+                    onClick={() => setCurrentLessonForm(2)}
+                    className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-purple-700 transition-all duration-200 shadow-md"
+                  >
+                    Extra → Lesson 2
+                  </button>
+                )}
+              </div>
+
                 </div>
                     </div>
                     </div>
                   )}
+        </AnimatePresence>
+
+        {/* Simple Mark All Present Modal */}
+        <AnimatePresence>
+          {showBulkDateModal && selectedDate && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+              >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-2xl font-bold">Mark Attendance - Lesson {currentLessonForm}</h3>
+                      <p className="text-blue-100 mt-1">
+                        {format(selectedDate, 'EEEE, MMMM dd, yyyy')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowBulkDateModal(false);
+                        setSelectedDate(null);
+                        setCurrentLessonForm(1);
+                      }}
+                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6">
+                  <p className="text-gray-600 mb-6 text-center">
+                    Click the button below to mark all {students.length} students as present for <strong>Lesson {currentLessonForm}</strong>.
+                    <br />
+                    <span className="text-sm text-gray-500 mt-2 block">
+                      You can then click on individual cells in the grid to change any student's status.
+                    </span>
+                  </p>
+
+                  <button
+                    onClick={handleMarkAllPresent}
+                    disabled={isSavingBulk}
+                    className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-4 rounded-xl font-bold hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 text-lg mb-4"
+                  >
+                    {isSavingBulk ? (
+                      <>
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                        Marking All Present...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-6 h-6" />
+                        Mark All Present (Lesson {currentLessonForm})
+                      </>
+                    )}
+                  </button>
+
+                  {/* Lesson Navigation */}
+                  <div className="flex gap-2">
+                    {currentLessonForm === 2 && (
+                      <button
+                        onClick={() => setCurrentLessonForm(1)}
+                        className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all duration-200"
+                      >
+                        ← Back to Lesson 1
+                      </button>
+                    )}
+                    {currentLessonForm === 1 && (
+                      <button
+                        onClick={() => setCurrentLessonForm(2)}
+                        className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl font-semibold hover:from-purple-600 hover:to-purple-700 transition-all duration-200 shadow-md"
+                      >
+                        Extra → Lesson 2
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
         </AnimatePresence>
                 </div>
               </div>

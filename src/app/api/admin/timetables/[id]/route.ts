@@ -87,14 +87,7 @@ async function putHandler(
         }
       });
 
-      // First, delete all related attendance records for these timetables
-      await prisma.attendance.deleteMany({
-        where: {
-          timetableId: { in: timeSlotTimetables.map(t => t.id) }
-        }
-      });
-
-      // Then delete all existing timetables in this time slot
+      // Delete all existing timetables in this time slot (attendance and grades are independent)
       await prisma.timetable.deleteMany({
         where: {
           id: { in: timeSlotTimetables.map(t => t.id) }
@@ -203,14 +196,7 @@ async function deleteHandler(
   try {
     const timetableId = parseInt(params.id);
 
-    // First, delete all related attendance records
-    await prisma.attendance.deleteMany({
-      where: {
-        timetableId: timetableId
-      }
-    });
-
-    // Then delete the timetable
+    // Delete the timetable (attendance/grades are independent now)
     await prisma.timetable.delete({
       where: { id: timetableId }
     });

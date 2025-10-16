@@ -120,22 +120,12 @@ const OptimizedStudentScheduleDashboard = ({ studentId, studentData }: StudentSc
     
     const dayOfWeek = getDayOfWeek(selectedDate);
     
-    console.log('🔍 Filtering timetables:', {
-      selectedDate: format(selectedDate, 'yyyy-MM-dd (EEEE)'),
-      dayOfWeek,
-      totalTimetables: weeklyData.length,
-      // ES5-compatible unique list without iterating a Set
-      availableDays: weeklyData
-        .map((t: any) => t.dayOfWeek)
-        .filter((value: any, index: number, self: any[]) => self.indexOf(value) === index)
-    });
     
     // Filter timetables for the selected day
     const dayTimetables = weeklyData.filter((timetable: any) => {
       return timetable.dayOfWeek === dayOfWeek;
     });
     
-    console.log(`📅 Found ${dayTimetables.length} lessons for ${dayOfWeek}`);
     
     // Sort by start time
     return dayTimetables.sort((a: any, b: any) => {

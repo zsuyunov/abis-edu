@@ -157,7 +157,6 @@ const GradeInputForm: React.FC<GradeInputFormProps> = ({
             classId: parseInt(classId),
             subjectId: parseInt(subjectId),
             teacherId,
-            timetableId: parseInt(timetableId),
             date,
             academicYearId: 1, // Default - should be passed from timetable data
             branchId: 1 // Default - should be passed from timetable data

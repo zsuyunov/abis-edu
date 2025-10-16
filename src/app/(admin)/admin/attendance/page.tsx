@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, X, Clock, Shield } from "lucide-react";
 import { useErrorToast } from "@/components/ui/Toast";
 import { TableSkeleton, CardSkeleton } from "@/components/ui/GlobalLoader";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Branch {
   id: string;
@@ -41,6 +42,7 @@ interface AttendanceData {
   id: string;
   status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
   date: string;
+  lessonNumber?: number;
   student: {
     id: string;
     firstName: string;
@@ -81,6 +83,10 @@ export default function AttendancePage() {
   // Statistics
   const [statistics, setStatistics] = useState<any>(null);
 
+  // Animation state for lesson swapping
+  const [showingLesson, setShowingLesson] = useState<1 | 2>(1);
+  const [isSwapping, setIsSwapping] = useState(false);
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -110,6 +116,46 @@ export default function AttendancePage() {
       fetchAttendance();
     }
   }, [selectedBranch, selectedAcademicYear, selectedClass, selectedSubject, currentDate]);
+
+  // Check if lesson 2 exists for swap animation
+  const hasLesson2 = () => {
+    if (!Array.isArray(attendance) || attendance.length === 0) return false;
+    return attendance.some(r => r.lessonNumber === 2);
+  };
+
+  // Auto-swap between lesson 1 and 2 every 3 seconds ONLY if at least one student has both lessons
+  useEffect(() => {
+    setIsSwapping(false);
+    setShowingLesson(1);
+    
+    // Check if ANY student has BOTH lesson 1 and lesson 2 records
+    const anyStudentHasBothLessons = attendance.some(record => {
+      const dateStr = format(new Date(record.date), 'yyyy-MM-dd');
+      const recordsForDate = attendance.filter(r => 
+        r.student.id === record.student.id && 
+        format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+      );
+      
+      const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+      const hasLesson2 = recordsForDate.some(r => r.lessonNumber === 2);
+      
+      return hasLesson1 && hasLesson2;
+    });
+    
+    // If NO student has both lessons, DO NOT start any animation
+    if (!anyStudentHasBothLessons) {
+      return; // Exit early, no timer created
+    }
+
+    // If at least one student has both lessons, start the swap animation
+    const timer = setInterval(() => {
+      setShowingLesson(prev => prev === 1 ? 2 : 1);
+      setIsSwapping(true);
+      setTimeout(() => setIsSwapping(false), 300);
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [attendance]);
 
   const fetchInitialData = async () => {
     try {
@@ -342,6 +388,62 @@ export default function AttendancePage() {
         return "📋";
       default:
         return "-";
+    }
+  };
+
+  // Get attendance for specific student, date, and lesson
+  const getAttendanceForStudentAndDateAndLesson = (studentId: string, date: Date, lessonNum: number = 1) => {
+    if (!Array.isArray(attendance)) return null;
+    return attendance.find(record => 
+      record.student.id === studentId && 
+      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') &&
+      (record.lessonNumber === lessonNum || (!record.lessonNumber && lessonNum === 1))
+    );
+  };
+
+  // Get attendance to display based on showing lesson (for swap animation)
+  const getDisplayAttendance = (studentId: string, date: Date) => {
+    // Only use swap animation if this specific student has both lessons on this date
+    const hasBothLessonsForThisStudent = studentHasBothLessons(studentId, date);
+    const lessonToShow = hasBothLessonsForThisStudent ? showingLesson : 1;
+    return getAttendanceForStudentAndDateAndLesson(studentId, date, lessonToShow);
+  };
+
+  // Check if student has both lessons on a date
+  const studentHasBothLessons = (studentId: string, date: Date): boolean => {
+    if (!Array.isArray(attendance)) return false;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    const studentRecords = attendance.filter(r => 
+      r.student.id === studentId && 
+      format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    const hasLesson1 = studentRecords.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2Records = studentRecords.some(r => r.lessonNumber === 2);
+    
+    return hasLesson1 && hasLesson2Records;
+  };
+
+  // Get status icon component
+  const getStatusIcon = (status: string | undefined) => {
+    switch (status) {
+      case 'PRESENT': return <Check className="w-4 h-4 text-white" />;
+      case 'ABSENT': return <X className="w-4 h-4 text-white" />;
+      case 'LATE': return <Clock className="w-4 h-4 text-white" />;
+      case 'EXCUSED': return <Shield className="w-4 h-4 text-white" />;
+      default: return <span className="text-gray-500 text-sm font-medium">–</span>;
+    }
+  };
+
+  // Get status color
+  const getStatusColor = (status: string | undefined) => {
+    switch (status) {
+      case 'PRESENT': return 'bg-[#34C759] hover:bg-[#228B22] shadow-sm hover:shadow-md';
+      case 'ABSENT': return 'bg-[#FF3B30] hover:bg-[#B22222] shadow-sm hover:shadow-md';
+      case 'LATE': return 'bg-[#FFCC00] hover:bg-[#B8860B] shadow-sm hover:shadow-md';
+      case 'EXCUSED': return 'bg-[#007AFF] hover:bg-[#1E3A8A] shadow-sm hover:shadow-md';
+      default: return 'bg-[#D1D5DB] hover:bg-[#4B5563] shadow-sm hover:shadow-md';
     }
   };
 
@@ -589,23 +691,54 @@ export default function AttendancePage() {
                           <div className="font-bold text-gray-900">{student.lastName}, {student.firstName} {student.patronymic || ''}</div>
                         </td>
                         {monthDays.map(day => {
-                          const attendanceRecords = getAttendanceForStudentAndDate(student.id, day);
+                          const hasBothLessons = studentHasBothLessons(student.id, day);
+                          const attendanceRecord = getDisplayAttendance(student.id, day);
                           return (
                             <td 
                               key={day.toISOString()} 
                               className="px-2 sm:px-3 py-3 sm:py-4 text-center min-w-[50px] sm:min-w-[60px]"
                             >
-                              {attendanceRecords.length > 0 ? (
-                                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform border ${getAttendanceCellColor(attendanceRecords[0].status)}`}>
-                                  <span className={`font-bold text-sm ${getAttendanceTextColor()}`}>
-                                    {getAttendanceIcon(attendanceRecords[0].status)}
-                                  </span>
-                                </div>
-                              ) : (
-                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform bg-gray-100 border border-gray-200">
-                                  <span className="text-gray-500 font-medium text-sm">-</span>
-                                </div>
-                              )}
+                              <div className="relative">
+                                <motion.button
+                                  className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform ${
+                                    hasLesson2() && isSwapping ? 'scale-95 opacity-70' : ''
+                                  } ${getStatusColor(attendanceRecord?.status || undefined)}`}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                >
+                                  <AnimatePresence mode="wait">
+                                    <motion.div
+                                      key={attendanceRecord?.status || 'none'}
+                                      initial={{ opacity: 0, y: 10 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: -10 }}
+                                      transition={{
+                                        duration: 0.2,
+                                        ease: "easeInOut"
+                                      }}
+                                    >
+                                      {getStatusIcon(attendanceRecord?.status || undefined)}
+                                    </motion.div>
+                                  </AnimatePresence>
+                                </motion.button>
+                                {hasBothLessons && hasLesson2() && (
+                                  <AnimatePresence mode="wait">
+                                    <motion.span 
+                                      key={showingLesson}
+                                      initial={{ opacity: 0, scale: 0.8 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      exit={{ opacity: 0, scale: 0.8 }}
+                                      transition={{
+                                        duration: 0.2,
+                                        ease: "easeInOut"
+                                      }}
+                                      className="absolute -top-1 -right-1 bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[10px] font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-lg"
+                                    >
+                                      L{showingLesson}
+                                    </motion.span>
+                                  </AnimatePresence>
+                                )}
+                              </div>
                             </td>
                           );
                         })}

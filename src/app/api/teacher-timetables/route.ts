@@ -77,6 +77,8 @@ export async function GET(request: NextRequest) {
     const whereClause: any = {
       academicYearId: parseInt(targetAcademicYearId),
       isActive: true,
+      // Exclude legacy "virtual" timetables from all teacher views
+      buildingName: { not: 'virtual' }
     };
 
     // Separate assignments into general (no specific subject) and specific (with subject)
@@ -186,13 +188,6 @@ export async function GET(request: NextRequest) {
         academicYear: true,
           },
         },
-        topics: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-          },
-        },
       },
       orderBy: {
         startTime: 'asc',
@@ -228,9 +223,9 @@ export async function GET(request: NextRequest) {
     
     timetables.forEach(timetable => {
       const formatTime = (date: Date) => {
-        // Use UTC methods to avoid timezone conversion issues
-        const hours = date.getUTCHours().toString().padStart(2, '0');
-        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        // Use local time to match stored @db.Time values and keep correct order
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
         return `${hours}:${minutes}`;
       };
 
@@ -239,7 +234,7 @@ export async function GET(request: NextRequest) {
       if (!groupedTimetables.has(timeKey)) {
         // Calculate lesson number based on start time
         const getLessonNumber = (startTime: Date) => {
-          const hours = startTime.getUTCHours();
+          const hours = startTime.getHours();
           if (hours >= 8 && hours < 9) return 1;
           if (hours >= 9 && hours < 10) return 2;
           if (hours >= 10 && hours < 11) return 3;
@@ -278,7 +273,6 @@ export async function GET(request: NextRequest) {
           subjects: [],
           teacherIds: [],
           teachers: [],
-          topics: timetable.topics || [],
           fullDate: timetable.startTime ? new Date(timetable.startTime).toISOString().split('T')[0] : '',
         });
       }

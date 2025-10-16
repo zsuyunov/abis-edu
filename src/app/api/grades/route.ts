@@ -12,7 +12,7 @@ async function postHandler(request: NextRequest) {
 
     const body = await request.json();
     
-    const { studentId, classId, subjectId, date, value, description, timetableId: incomingTimetableId, grades } = body;
+    const { studentId, classId, subjectId, date, value, description, grades, lessonNumber } = body;
 
     // Check if this is a single grade record or bulk grades
     if (studentId && classId && subjectId && date && value !== undefined) {
@@ -42,13 +42,23 @@ async function postHandler(request: NextRequest) {
         return NextResponse.json({ error: "Unauthorized access to this class/subject" }, { status: 403 });
       }
 
-      // Check if grade record already exists
+      // Validate lesson number - only allow 1 or 2
+      const targetLessonNumber = lessonNumber ? parseInt(lessonNumber) : 1;
+      if (targetLessonNumber < 1 || targetLessonNumber > 2) {
+        console.log('❌ Invalid lesson number:', targetLessonNumber);
+        return NextResponse.json({ 
+          error: "Invalid lesson number. Must be 1 or 2" 
+        }, { status: 400 });
+      }
+
+      // Check if grade record already exists for this lesson
       const existing = await prisma.grade.findFirst({
         where: {
           studentId: studentId.toString(),
           classId: parseInt(classId),
           subjectId: parseInt(subjectId),
-          date: new Date(date)
+          date: new Date(date),
+          lessonNumber: targetLessonNumber
         }
       });
 
@@ -101,7 +111,8 @@ async function postHandler(request: NextRequest) {
             branchId: cls?.branchId || 0,
             year: year,
             month: month,
-            type: 'DAILY' // Default grade type
+            type: 'DAILY', // Default grade type
+            lessonNumber: targetLessonNumber
           },
           include: {
             student: {
@@ -124,14 +135,23 @@ async function postHandler(request: NextRequest) {
     }
 
     // Bulk grades (legacy support)
-    const { timetableId, classId: bulkClassId, subjectId: bulkSubjectId, date: bulkDate, grades: bulkGrades } = body;
+    const { classId: bulkClassId, subjectId: bulkSubjectId, date: bulkDate, grades: bulkGrades, lessonNumber: bulkLessonNumber } = body;
+    
+    // Validate lesson number - only allow 1 or 2
+    const validatedBulkLessonNumber = bulkLessonNumber ? parseInt(bulkLessonNumber) : 1;
+    if (validatedBulkLessonNumber < 1 || validatedBulkLessonNumber > 2) {
+      console.log('❌ Invalid bulk lesson number:', validatedBulkLessonNumber);
+      return NextResponse.json({ 
+        error: "Invalid lesson number. Must be 1 or 2" 
+      }, { status: 400 });
+    }
 
     // Validate required fields for bulk (disconnect from timetable)
     if (!bulkClassId || !bulkSubjectId || !bulkDate || !bulkGrades || !Array.isArray(bulkGrades)) {
-      console.log("Validation failed:", { timetableId, bulkClassId, bulkSubjectId, bulkDate, grades: Array.isArray(bulkGrades) });
+      console.log("Validation failed:", { bulkClassId, bulkSubjectId, bulkDate, grades: Array.isArray(bulkGrades) });
       return NextResponse.json({ 
         error: "Missing required fields", 
-        details: { timetableId, bulkClassId, bulkSubjectId, bulkDate, grades: Array.isArray(bulkGrades) }
+        details: { bulkClassId, bulkSubjectId, bulkDate, grades: Array.isArray(bulkGrades) }
       }, { status: 400 });
     }
 
@@ -186,7 +206,7 @@ async function postHandler(request: NextRequest) {
               classId: parseInt(bulkClassId),
               subjectId: parseInt(bulkSubjectId),
               date: new Date(bulkDate),
-              timetableId: parseInt(timetableId)
+              lessonNumber: validatedBulkLessonNumber
             }
           });
 
@@ -197,7 +217,6 @@ async function postHandler(request: NextRequest) {
               data: {
                 value: record.points,
                 description: record.comments || null,
-                timetableId: null,
                 updatedAt: new Date()
               }
             });
@@ -212,12 +231,12 @@ async function postHandler(request: NextRequest) {
                 value: record.points,
                 description: record.comments || null,
                 teacherId: teacherId,
-                timetableId: null,
                 academicYearId: cls?.academicYearId || 0,
                 branchId: cls?.branchId || 0,
                 year: year,
                 month: month,
-                type: 'DAILY' // Default grade type
+                type: 'DAILY', // Default grade type
+                lessonNumber: validatedBulkLessonNumber
               }
             });
           }
@@ -256,8 +275,6 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const timetableId = searchParams.get('timetableId');
-    const date = searchParams.get('date');
     const classId = searchParams.get('classId');
     const subjectId = searchParams.get('subjectId');
     const month = searchParams.get('month');
@@ -269,11 +286,7 @@ export async function GET(request: NextRequest) {
       teacherId: teacherId
     };
 
-    if (timetableId && date) {
-      // Specific timetable and date
-      whereClause.timetableId = parseInt(timetableId);
-      whereClause.date = new Date(date);
-    } else if (classId && subjectId && month) {
+    if (classId && subjectId && month) {
       // Class, subject, and month range
       whereClause.classId = parseInt(classId);
       whereClause.subjectId = parseInt(subjectId);
@@ -290,7 +303,7 @@ export async function GET(request: NextRequest) {
       };
     } else {
       return NextResponse.json({ 
-        error: "Either timetableId+date or classId+subjectId+month are required" 
+        error: "classId+subjectId+month are required" 
       }, { status: 400 });
     }
 
@@ -312,18 +325,6 @@ export async function GET(request: NextRequest) {
             lastName: true,
             studentId: true
           }
-        },
-        timetable: {
-          select: {
-            id: true,
-            startTime: true,
-            endTime: true,
-            subject: {
-              select: {
-                name: true
-              }
-            }
-          }
         }
       },
       orderBy: {
@@ -342,7 +343,7 @@ export async function GET(request: NextRequest) {
         description: grade.description,
         studentId: grade.studentId,
         student: grade.student,
-        timetable: grade.timetable
+        lessonNumber: grade.lessonNumber || 1
       }))
     });
 
@@ -430,7 +431,7 @@ async function deleteHandler(request: NextRequest) {
     const body = await request.json();
     console.log('📋 Delete request body:', JSON.stringify(body, null, 2));
     
-    const { studentId, classId, subjectId, date } = body;
+    const { studentId, classId, subjectId, date, lessonNumber } = body;
 
     if (!studentId || !classId || !subjectId || !date) {
       console.log('❌ Missing required fields: studentId, classId, subjectId, and date are required');
@@ -444,14 +445,17 @@ async function deleteHandler(request: NextRequest) {
     const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
     const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
     
-    console.log('🗑️ Deleting grade for:', {
+    console.log('🗑️ Deleting grade(s) for:', {
       studentId: studentId.toString(),
       classId: parseInt(classId),
       subjectId: parseInt(subjectId),
       dateRange: { startOfDay, endOfDay },
-      teacherId: teacherId
+      teacherId: teacherId,
+      note: 'Deleting ALL lessons (lesson 1 and lesson 2) if they exist'
     });
 
+    // Delete ALL grades for this student/date/class/subject combination
+    // This includes both lesson 1 and lesson 2 if they exist
     const deletedGrade = await prisma.grade.deleteMany({
       where: {
         studentId: studentId.toString(),
@@ -462,13 +466,16 @@ async function deleteHandler(request: NextRequest) {
           lt: endOfDay
         },
         teacherId: teacherId
+        // NOT filtering by lessonNumber - delete all lessons
       }
     });
 
-    console.log('✅ Grade record deleted successfully:', deletedGrade.count);
+    console.log('✅ Grade record(s) deleted successfully:', deletedGrade.count, 'grade(s) removed');
     return NextResponse.json({
       success: true,
-      message: "Grade record deleted successfully",
+      message: deletedGrade.count > 1 
+        ? `All ${deletedGrade.count} lesson grades deleted successfully`
+        : "Grade record deleted successfully",
       deletedCount: deletedGrade.count
     });
 

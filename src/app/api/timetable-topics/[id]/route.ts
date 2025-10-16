@@ -28,12 +28,6 @@ export async function GET(
     const topic = await prisma.timetableTopic.findUnique({
       where: { id: topicId },
       include: {
-        timetable: {
-          include: {
-            class: true,
-            subject: true,
-          },
-        },
         teacher: {
           select: {
             id: true,
@@ -99,13 +93,6 @@ async function putHandler(
     // Get existing topic with permissions check
     const existingTopic = await prisma.timetableTopic.findUnique({
       where: { id: topicId },
-      include: {
-        timetable: {
-          include: {
-            class: true,
-          },
-        },
-      },
     });
 
     if (!existingTopic) {
@@ -130,12 +117,6 @@ async function putHandler(
       where: { id: topicId },
       data: updateData,
       include: {
-        timetable: {
-          include: {
-            class: true,
-            subject: true,
-          },
-        },
         teacher: {
           select: {
             id: true,

@@ -19,6 +19,7 @@ interface GradeRecord {
   value: number;
   description?: string;
   studentId: string;
+  lessonNumber?: number;
   student?: {
     firstName: string;
     lastName: string;
@@ -84,6 +85,8 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
   const [editValue, setEditValue] = useState<number>(0);
   const [editDescription, setEditDescription] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedCellForNewGrade, setSelectedCellForNewGrade] = useState<{student: Student, date: Date} | null>(null);
+  const [currentEditLessonNumber, setCurrentEditLessonNumber] = useState<1 | 2>(1);
   const [showPutGradesModal, setShowPutGradesModal] = useState(false);
   
   // Grades functionality state
@@ -101,6 +104,14 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
   const [isLoadingLessonStudents, setIsLoadingLessonStudents] = useState(false);
   const [isSavingGrades, setIsSavingGrades] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Lesson 1/2 swap states
+  const [currentLessonForm, setCurrentLessonForm] = useState<1 | 2>(1);
+  const [showingLesson, setShowingLesson] = useState<1 | 2>(1);
+  const [isSwapping, setIsSwapping] = useState(false);
+  
+  // Track if lesson 2 data exists
+  const hasLesson2Data = gradeData.some(r => r.lessonNumber === 2);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -231,6 +242,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
           classId: classId,
           subjectId: subjectId,
           date: new Date().toISOString().split('T')[0],
+          lessonNumber: 1,
           grades: gradeRecords,
         }),
       });
@@ -302,6 +314,48 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
     fetchGradeData();
   }, [selectedClass, selectedSubject, selectedAcademicYear, selectedBranch, currentDate, refreshTrigger]);
 
+  // Auto-swap between lesson 1 and 2 every 3 seconds ONLY if at least one student has both lessons
+  useEffect(() => {
+    // Always reset animation state first
+    setIsSwapping(false);
+    setShowingLesson(1);
+    
+    // Ensure gradeData is valid
+    if (!gradeData || !Array.isArray(gradeData) || gradeData.length === 0) {
+      return; // No data, no animation
+    }
+    
+    // Check if ANY student has BOTH lesson 1 and lesson 2 records
+    const anyStudentHasBothLessons = gradeData.some(record => {
+      const dateStr = format(new Date(record.date), 'yyyy-MM-dd');
+      const recordsForDate = gradeData.filter(r => 
+        r.studentId === record.studentId && 
+        format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+      );
+      
+      const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+      const hasLesson2 = recordsForDate.some(r => r.lessonNumber === 2);
+      
+      return hasLesson1 && hasLesson2;
+    });
+    
+    // If NO student has both lessons, DO NOT start any animation
+    if (!anyStudentHasBothLessons) {
+      return; // Exit early, no timer created
+    }
+
+    // If at least one student has both lessons, start the swap animation
+    const timer = setInterval(() => {
+      setShowingLesson(prev => prev === 1 ? 2 : 1);
+      setIsSwapping(true);
+      setTimeout(() => setIsSwapping(false), 300);
+    }, 3000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [gradeData]);
+
   const getGradesForStudentAndDate = (studentId: string, date: Date) => {
     if (!Array.isArray(gradeData)) return [];
     return gradeData.filter(record => 
@@ -311,8 +365,53 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
   };
 
   const getGradeForStudentAndDate = (studentId: string, date: Date) => {
-    const grades = getGradesForStudentAndDate(studentId, date);
-    return grades.length > 0 ? grades[0] : undefined;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    // Find all records for this student on this date
+    const studentRecordsForDate = gradeData.filter(r => 
+      r.studentId === studentId && 
+      format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    if (studentRecordsForDate.length === 0) {
+      return undefined; // No grade records
+    }
+    
+    // Check if student has both lessons
+    const hasLesson1 = studentRecordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2 = studentRecordsForDate.some(r => r.lessonNumber === 2);
+    
+    if (hasLesson1 && hasLesson2) {
+      // Student has BOTH lessons - show based on current swapping state
+      const lesson = showingLesson;
+      const record = studentRecordsForDate.find(r => 
+        (lesson === 1 && (r.lessonNumber === 1 || !r.lessonNumber)) ||
+        (lesson === 2 && r.lessonNumber === 2)
+      );
+      return record;
+    } else {
+      // Student has only ONE lesson - always return the same record regardless of showingLesson
+      // This prevents re-renders when showingLesson changes
+      return studentRecordsForDate[0];
+    }
+  };
+
+  // Check if a specific STUDENT has BOTH lesson 1 AND lesson 2 for a specific date
+  const studentHasBothLessons = (studentId: string, date: Date): boolean => {
+    if (!Array.isArray(gradeData)) return false;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    // Find all records for this student on this date
+    const studentRecords = gradeData.filter(r => 
+      r.studentId === studentId && 
+      format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    // Check if there's at least one lesson 1 record AND one lesson 2 record
+    const hasLesson1 = studentRecords.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2 = studentRecords.some(r => r.lessonNumber === 2);
+    
+    return hasLesson1 && hasLesson2;
   };
 
   const getGradeColor = (value: number | undefined) => {
@@ -345,43 +444,84 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
     setSelectedGrade(grade);
     setEditValue(grade.value);
     setEditDescription(grade.description || '');
+    setCurrentEditLessonNumber((grade.lessonNumber as 1 | 2) || 1);
+    setSelectedCellForNewGrade(null);
+    setShowGradeModal(true);
+  };
+
+  const handleEmptyCellClick = (student: Student, date: Date) => {
+    setSelectedGrade(null);
+    setEditValue(0);
+    setEditDescription('');
+    setCurrentEditLessonNumber(1);
+    setSelectedCellForNewGrade({ student, date });
     setShowGradeModal(true);
   };
 
   const handleUpdateGrade = async () => {
-    if (!selectedGrade || editValue < 1 || editValue > 100) return;
+    if (editValue < 1 || editValue > 100) return;
 
     setIsUpdating(true);
     try {
-      const response = await csrfFetch('/api/grades', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': localStorage.getItem('userId') || ''
-        },
-        body: JSON.stringify({
-          gradeId: selectedGrade.id,
-          value: editValue,
-          description: editDescription
-        })
-      });
+      if (selectedGrade) {
+        // Update existing grade
+        const response = await csrfFetch('/api/grades', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': localStorage.getItem('userId') || ''
+          },
+          body: JSON.stringify({
+            gradeId: selectedGrade.id,
+            value: editValue,
+            description: editDescription
+          })
+        });
 
-      if (response.ok) {
-        // Update the grade in local state
-        setGradeData(prev => prev.map(grade => 
-          grade.id === selectedGrade.id 
-            ? { ...grade, value: editValue, description: editDescription }
-            : grade
-        ));
-        setShowGradeModal(false);
-        alert('✅ Grade updated successfully!');
-      } else {
-        const errorData = await response.json();
-        alert(`Failed to update grade: ${errorData.error || 'Unknown error'}`);
+        if (response.ok) {
+          setGradeData(prev => prev.map(grade => 
+            grade.id === selectedGrade.id 
+              ? { ...grade, value: editValue, description: editDescription }
+              : grade
+          ));
+          setShowGradeModal(false);
+          alert('✅ Grade updated successfully!');
+          fetchGradeData();
+        } else {
+          const errorData = await response.json();
+          alert(`Failed to update grade: ${errorData.error || 'Unknown error'}`);
+        }
+      } else if (selectedCellForNewGrade) {
+        // Create new grade
+        const response = await csrfFetch('/api/grades', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': teacherId
+          },
+          body: JSON.stringify({
+            studentId: selectedCellForNewGrade.student.id,
+            classId: selectedClass,
+            subjectId: selectedSubject,
+            date: format(selectedCellForNewGrade.date, 'yyyy-MM-dd'),
+            value: editValue,
+            description: editDescription,
+            lessonNumber: currentEditLessonNumber
+          })
+        });
+
+        if (response.ok) {
+          setShowGradeModal(false);
+          alert('✅ Grade created successfully!');
+          fetchGradeData();
+        } else {
+          const errorData = await response.json();
+          alert(`Failed to create grade: ${errorData.error || 'Unknown error'}`);
+        }
       }
     } catch (error) {
-      console.error('Error updating grade:', error);
-      alert('Failed to update grade. Please try again.');
+      console.error('Error saving grade:', error);
+      alert('Failed to save grade. Please try again.');
     } finally {
       setIsUpdating(false);
     }
@@ -614,27 +754,76 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
                         {studentAvg > 0 ? `${studentAvg}%` : '-'}
                       </td>
                       {monthDays.map(day => {
-                        const grades = getGradesForStudentAndDate(student.id, day);
+                        const grade = getGradeForStudentAndDate(student.id, day);
+                        const hasBothLessons = studentHasBothLessons(student.id, day);
+                        
                         return (
                           <td 
                             key={day.toISOString()} 
                             className="px-1 sm:px-3 py-2 sm:py-3 text-center text-xs sm:text-sm font-medium border-r border-gray-200 min-w-[40px] sm:min-w-[60px]"
                           >
-                            {grades.length > 0 ? (
-                              <div className="space-y-1">
-                                {grades.map((grade, index) => (
-                                  <div 
-                                    key={index}
-                                    className={`px-1 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${getGradeColor(grade.value)}`}
+                            {grade ? (
+                              <div className="relative inline-block" key={`${student.id}-${format(day, 'yyyy-MM-dd')}`}>
+                                {hasBothLessons ? (
+                                  // BOTH lessons exist - apply swap animation with motion.div
+                                  <>
+                                    <motion.div
+                                      className={`px-1 sm:px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${getGradeColor(grade.value)}`}
+                                      onClick={() => handleGradeClick(grade)}
+                                      title={`Click to edit grade${grade.timetable ? ` (${grade.timetable.startTime} - ${grade.timetable.endTime})` : ''}`}
+                                      whileHover={{ scale: 1.05 }}
+                                      whileTap={{ scale: 0.95 }}
+                                    >
+                                      <AnimatePresence mode="wait">
+                                        <motion.span
+                                          key={grade.value}
+                                          initial={{ opacity: 0, y: 10 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          exit={{ opacity: 0, y: -10 }}
+                                          transition={{
+                                            duration: 0.2,
+                                            ease: "easeInOut"
+                                          }}
+                                        >
+                                          {grade.value}%
+                                        </motion.span>
+                                      </AnimatePresence>
+                                    </motion.div>
+                                    <AnimatePresence mode="wait">
+                                      <motion.span 
+                                        key={showingLesson}
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        transition={{
+                                          duration: 0.2,
+                                          ease: "easeInOut"
+                                        }}
+                                        className="absolute -top-1 -right-1 bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-lg"
+                                      >
+                                        L{showingLesson}
+                                      </motion.span>
+                                    </AnimatePresence>
+                                  </>
+                                ) : (
+                                  // ONLY one lesson - display statically without animation or motion components
+                                  <div
+                                    className={`px-1 sm:px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${getGradeColor(grade.value)}`}
                                     onClick={() => handleGradeClick(grade)}
                                     title={`Click to edit grade${grade.timetable ? ` (${grade.timetable.startTime} - ${grade.timetable.endTime})` : ''}`}
                                   >
-                                    {grade.value}%
+                                    <span>{grade.value}%</span>
                                   </div>
-                                ))}
+                                )}
                               </div>
                             ) : (
-                              <div className="text-gray-400">-</div>
+                              <div 
+                                className="text-gray-400 cursor-pointer hover:text-gray-600 hover:bg-gray-100 rounded p-1 transition-colors"
+                                onClick={() => handleEmptyCellClick(student, day)}
+                                title="Click to add grade"
+                              >
+                                -
+                              </div>
                             )}
                           </td>
                         );
@@ -682,17 +871,22 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
         </div>
       )}
 
-      {/* Grade Edit Modal */}
-      {showGradeModal && selectedGrade && (
+      {/* Grade Edit/Create Modal */}
+      {showGradeModal && (selectedGrade || selectedCellForNewGrade) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-blue-600" />
-                Edit Grade
+                {selectedGrade ? 'Edit Grade' : 'Mark Grade'}
               </h3>
               <button
-                onClick={() => setShowGradeModal(false)}
+                onClick={() => {
+                  setShowGradeModal(false);
+                  setSelectedGrade(null);
+                  setSelectedCellForNewGrade(null);
+                  setCurrentEditLessonNumber(1);
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-5 h-5" />
@@ -702,18 +896,27 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
             {/* Student Info */}
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               <div className="font-medium text-gray-900">
-                {selectedGrade.student?.firstName} {selectedGrade.student?.lastName}
+                {selectedGrade ? 
+                  `${selectedGrade.student?.firstName} ${selectedGrade.student?.lastName}` :
+                  `${selectedCellForNewGrade?.student.firstName} ${selectedCellForNewGrade?.student.lastName}`
+                }
               </div>
               <div className="text-sm text-gray-500">
-                ID: {selectedGrade.student?.studentId}
+                ID: {selectedGrade ? 
+                  selectedGrade.student?.studentId : 
+                  selectedCellForNewGrade?.student.studentId
+                }
               </div>
               <div className="text-sm text-gray-500">
-                Date: {format(new Date(selectedGrade.date), 'MMM dd, yyyy')}
+                Date: {selectedGrade ? 
+                  format(new Date(selectedGrade.date), 'MMM dd, yyyy') :
+                  format(selectedCellForNewGrade?.date || new Date(), 'MMM dd, yyyy')
+                }
               </div>
             </div>
 
             {/* Lesson Time Info */}
-            {selectedGrade.timetable && (
+            {selectedGrade?.timetable && (
               <div className="mb-4 p-3 bg-blue-50 rounded-lg">
                 <div className="flex items-center gap-2 text-blue-800 font-medium mb-1">
                   <Clock className="w-4 h-4" />
@@ -759,10 +962,63 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
               />
             </div>
 
+            {/* Lesson Navigation - Always show for create/edit */}
+            <div className="mb-4 pt-4 border-t border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Select Lesson
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (selectedGrade) {
+                      // Can't change lesson for existing grades
+                      return;
+                    }
+                    setCurrentEditLessonNumber(1);
+                  }}
+                  disabled={selectedGrade !== null}
+                  className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                    (selectedGrade ? selectedGrade.lessonNumber === 1 || !selectedGrade.lessonNumber : currentEditLessonNumber === 1)
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  } ${selectedGrade ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                >
+                  📘 Lesson 1
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedGrade) {
+                      // Can't change lesson for existing grades
+                      return;
+                    }
+                    setCurrentEditLessonNumber(2);
+                  }}
+                  disabled={selectedGrade !== null}
+                  className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                    (selectedGrade ? selectedGrade.lessonNumber === 2 : currentEditLessonNumber === 2)
+                      ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  } ${selectedGrade ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                >
+                  📗 Lesson 2
+                </button>
+              </div>
+              {selectedGrade && (
+                <p className="text-xs text-gray-500 mt-2 italic">
+                  ℹ️ Cannot change lesson for existing grades
+                </p>
+              )}
+            </div>
+
             {/* Action Buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => setShowGradeModal(false)}
+                onClick={() => {
+                  setShowGradeModal(false);
+                  setSelectedGrade(null);
+                  setSelectedCellForNewGrade(null);
+                  setCurrentEditLessonNumber(1);
+                }}
                 className="flex-1 px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
               >
                 Cancel
@@ -772,7 +1028,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
                 disabled={isUpdating || editValue < 1 || editValue > 100}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isUpdating ? 'Updating...' : 'Update Grade'}
+                {isUpdating ? (selectedGrade ? 'Updating...' : 'Adding...') : (selectedGrade ? 'Update Grade' : 'Add Grade')}
               </button>
             </div>
           </div>
@@ -959,7 +1215,9 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
               className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-lg shadow-xl max-h-[70vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Put Grades</h3>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Put Grades</h3>
+                </div>
                 <button
                   onClick={() => {
                     setShowGradesFormModal(false);
@@ -968,6 +1226,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
                     setLessonGradeData({});
                     setLessonGradeComments({});
                     setSearchTerm('');
+                    setCurrentLessonForm(1);
                   }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
@@ -1060,6 +1319,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
                     </div>
                   )}
                 </div>
+                
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={() => {
@@ -1069,6 +1329,7 @@ const TeacherGradeGrid: React.FC<TeacherGradeGridProps> = ({
                       setLessonGradeData({});
                       setLessonGradeComments({});
                       setSearchTerm('');
+                      setCurrentLessonForm(1);
                     }}
                     className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
                   >

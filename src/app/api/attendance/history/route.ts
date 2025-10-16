@@ -66,18 +66,9 @@ export async function GET(request: NextRequest) {
             name: true,
           },
         },
-        timetable: {
-          select: {
-            id: true,
-            startTime: true,
-            endTime: true,
-            dayOfWeek: true,
-          },
-        },
       },
       orderBy: [
         { date: 'asc' },
-        { timetable: { startTime: 'asc' } },
         { student: { firstName: 'asc' } },
       ],
     });

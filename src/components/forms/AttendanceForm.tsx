@@ -186,7 +186,6 @@ const AttendanceForm = ({ type, data, setOpen, onSave }: AttendanceFormProps) =>
           'x-user-id': data?.teacherId || '',
         },
         body: JSON.stringify({
-          timetableId: parseInt(data?.id || '0'),
           classId: parseInt(data?.classId || '0'),
           subjectId: parseInt(data?.subjectId || '0'),
           date: data?.date,

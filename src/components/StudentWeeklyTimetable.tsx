@@ -227,7 +227,7 @@ const StudentWeeklyTimetable = ({
                               <div className="text-xs text-gray-600 flex items-center gap-1">
                                 <MapPin className="w-3 h-3" />
                                 Room {timetable.roomNumber}
-                                {timetable.buildingName && ` (${timetable.buildingName})`}
+                                {timetable.buildingName && timetable.buildingName !== 'virtual' && ` (${timetable.buildingName})`}
                                 </div>
                               )}
                             </div>

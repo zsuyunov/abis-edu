@@ -216,7 +216,6 @@ const AttendanceForm: React.FC<AttendanceFormProps> = ({
           'x-user-id': teacherId,
         },
         body: JSON.stringify({
-          timetableId: parseInt(lessonData.id),
           classId: parseInt(lessonData.classId),
           subjectId: parseInt(lessonData.subjectId),
           date: lessonData.date,

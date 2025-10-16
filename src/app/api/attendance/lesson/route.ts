@@ -34,7 +34,6 @@ export async function GET(request: NextRequest) {
     // Fetch existing attendance records for this specific lesson
     const attendanceRecords = await prisma.attendance.findMany({
       where: {
-        timetableId: parseInt(timetableId),
         date: {
           gte: startOfDay,
           lte: endOfDay

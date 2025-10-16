@@ -6,11 +6,13 @@ import { useErrorToast, useSuccessToast } from "@/components/ui/Toast";
 import { TableSkeleton, CardSkeleton, ChartSkeleton } from "@/components/ui/GlobalLoader";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Users, BookOpen, GraduationCap } from 'lucide-react';
+import { motion, AnimatePresence } from "framer-motion";
 
 interface GradeData {
   id: string;
   value: number;
   type: string;
+  lessonNumber?: number;
   subject: {
     id: string;
     name: string;
@@ -94,6 +96,10 @@ export default function GradebookPage() {
   // Statistics
   const [statistics, setStatistics] = useState<any>(null);
 
+  // Animation state for lesson swapping
+  const [showingLesson, setShowingLesson] = useState<1 | 2>(1);
+  const [isSwapping, setIsSwapping] = useState(false);
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -113,6 +119,46 @@ export default function GradebookPage() {
       fetchGrades();
     }
   }, [selectedBranch, selectedAcademicYear, selectedClass, selectedSubject, currentDate]);
+
+  // Check if lesson 2 exists for swap animation
+  const hasLesson2 = () => {
+    if (!Array.isArray(grades) || grades.length === 0) return false;
+    return grades.some(r => r.lessonNumber === 2);
+  };
+
+  // Auto-swap between lesson 1 and 2 every 3 seconds ONLY if at least one student has both lessons
+  useEffect(() => {
+    setIsSwapping(false);
+    setShowingLesson(1);
+    
+    // Check if ANY student has BOTH lesson 1 and lesson 2 records
+    const anyStudentHasBothLessons = grades.some(record => {
+      const dateStr = format(new Date(record.date), 'yyyy-MM-dd');
+      const recordsForDate = grades.filter(r => 
+        r.student.id === record.student.id && 
+        format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+      );
+      
+      const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+      const hasLesson2 = recordsForDate.some(r => r.lessonNumber === 2);
+      
+      return hasLesson1 && hasLesson2;
+    });
+    
+    // If NO student has both lessons, DO NOT start any animation
+    if (!anyStudentHasBothLessons) {
+      return; // Exit early, no timer created
+    }
+
+    // If at least one student has both lessons, start the swap animation
+    const timer = setInterval(() => {
+      setShowingLesson(prev => prev === 1 ? 2 : 1);
+      setIsSwapping(true);
+      setTimeout(() => setIsSwapping(false), 300);
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [grades]);
 
   const fetchInitialData = async () => {
     try {
@@ -341,6 +387,40 @@ export default function GradebookPage() {
 
   const getGradeTextColor = (value: number) => {
     return "text-white"; // All text is white like in legend
+  };
+
+  // Get grade for specific student, date, and lesson
+  const getGradeForStudentAndDateAndLesson = (studentId: string, date: Date, lessonNum: number = 1) => {
+    if (!Array.isArray(grades)) return null;
+    return grades.find(record => 
+      record.student.id === studentId && 
+      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') &&
+      (record.lessonNumber === lessonNum || (!record.lessonNumber && lessonNum === 1))
+    );
+  };
+
+  // Get grade to display based on showing lesson (for swap animation)
+  const getDisplayGrade = (studentId: string, date: Date) => {
+    // Only use swap animation if this specific student has both lessons on this date
+    const hasBothLessonsForThisStudent = studentHasBothLessons(studentId, date);
+    const lessonToShow = hasBothLessonsForThisStudent ? showingLesson : 1;
+    return getGradeForStudentAndDateAndLesson(studentId, date, lessonToShow);
+  };
+
+  // Check if student has both lessons on a date
+  const studentHasBothLessons = (studentId: string, date: Date): boolean => {
+    if (!Array.isArray(grades)) return false;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    const studentRecords = grades.filter(r => 
+      r.student.id === studentId && 
+      format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    const hasLesson1 = studentRecords.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2Records = studentRecords.some(r => r.lessonNumber === 2);
+    
+    return hasLesson1 && hasLesson2Records;
   };
 
   if (loading) {
@@ -650,21 +730,58 @@ export default function GradebookPage() {
                           <div className="font-bold text-gray-900">{student.lastName}, {student.firstName}</div>
                         </td>
                         {monthDays.map(day => {
-                          const grades = getGradesForStudentAndDate(student.id, day);
+                          const hasBothLessons = studentHasBothLessons(student.id, day);
+                          const grade = getDisplayGrade(student.id, day);
                           return (
                             <td 
                               key={day.toISOString()} 
                               className="px-2 sm:px-3 py-3 sm:py-4 text-center min-w-[50px] sm:min-w-[60px]"
                             >
-                              {grades.length > 0 ? (
-                                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform border ${getGradeCellColor(grades[0].value)}`}>
-                                  <span className={`font-bold text-sm ${getGradeTextColor(grades[0].value)}`}>{grades[0].value}%</span>
-                                </div>
-                              ) : (
-                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform bg-gray-100 border border-gray-200">
-                                  <span className="text-gray-500 font-medium text-sm">-</span>
-                                </div>
-                              )}
+                              <div className="relative">
+                                <motion.button
+                                  className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-105 transform ${
+                                    hasLesson2() && isSwapping ? 'scale-95 opacity-70' : ''
+                                  } ${grade ? getGradeCellColor(grade.value) : 'bg-gray-100 border border-gray-200'}`}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                >
+                                  <AnimatePresence mode="wait">
+                                    <motion.div
+                                      key={grade?.value || 'none'}
+                                      initial={{ opacity: 0, y: 10 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: -10 }}
+                                      transition={{
+                                        duration: 0.2,
+                                        ease: "easeInOut"
+                                      }}
+                                    >
+                                      {grade ? (
+                                        <span className={`font-bold text-sm ${getGradeTextColor(grade.value)}`}>{grade.value}%</span>
+                                      ) : (
+                                        <span className="text-gray-500 font-medium text-sm">-</span>
+                                      )}
+                                    </motion.div>
+                                  </AnimatePresence>
+                                </motion.button>
+                                {hasBothLessons && hasLesson2() && (
+                                  <AnimatePresence mode="wait">
+                                    <motion.span 
+                                      key={showingLesson}
+                                      initial={{ opacity: 0, scale: 0.8 }}
+                                      animate={{ opacity: 1, scale: 1 }}
+                                      exit={{ opacity: 0, scale: 0.8 }}
+                                      transition={{
+                                        duration: 0.2,
+                                        ease: "easeInOut"
+                                      }}
+                                      className="absolute -top-1 -right-1 bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[10px] font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-lg"
+                                    >
+                                      L{showingLesson}
+                                    </motion.span>
+                                  </AnimatePresence>
+                                )}
+                              </div>
                             </td>
                           );
                         })}

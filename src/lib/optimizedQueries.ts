@@ -37,31 +37,6 @@ export const getOptimizedStudentTimetables = async (
           id: true,
           name: true
         }
-      },
-      topics: {
-        select: {
-          id: true,
-          title: true,
-          description: true
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 1
-      },
-      // Optimized attendance lookup
-      Attendance: {
-        where: {
-          studentId: studentId,
-          date: {
-            gte: new Date(startDate),
-            lte: new Date(endDate + 'T23:59:59.999Z')
-          }
-        },
-        select: {
-          status: true,
-          notes: true,
-          date: true
-        },
-        take: 1
       }
     },
     orderBy: [
@@ -149,15 +124,7 @@ export const getOptimizedTeacherTimetables = async (
           shortName: true
         }
       },
-      topics: {
-        select: {
-          id: true,
-          title: true,
-          description: true
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 1
-      },
+      
     },
     orderBy: [
       { startTime: 'asc' }
@@ -221,22 +188,8 @@ export const getOptimizedAttendanceData = async (
       status: true,
       date: true,
       notes: true,
-      timetable: {
-        select: {
-          subject: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          class: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      }
+      subject: { select: { id: true, name: true } },
+      class: { select: { id: true, name: true } }
     },
     orderBy: {
       date: 'desc'

@@ -109,10 +109,9 @@ export async function POST(request: NextRequest) {
 
     // Use transaction to ensure all records are created or none
     const result = await prisma.$transaction(async (tx) => {
-      // Delete existing grades for this date/timetable to avoid duplicates
+      // Delete existing grades for this date to avoid duplicates
       await tx.grade.deleteMany({
         where: {
-          timetableId: parseInt(timetableId),
           date: new Date(date)
         }
       });
@@ -194,13 +193,6 @@ export async function GET(request: NextRequest) {
             name: true
           }
         },
-        timetable: {
-          select: {
-            id: true,
-            startTime: true,
-            endTime: true
-          }
-        }
       },
       orderBy: [
         { date: 'desc' },

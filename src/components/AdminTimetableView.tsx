@@ -29,6 +29,7 @@ import {
   Upload
 } from "lucide-react";
 import { toast } from "sonner";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 import FormModal from "./FormModal";
 import ModernTimetableForm from "./ModernTimetableForm";
 import TimetableRecurrenceForm from "./TimetableRecurrenceForm";
@@ -286,10 +287,9 @@ const AdminTimetableView = ({ role, currentUserId, relatedData }: AdminTimetable
     if (reason === null || reason.trim() === "") return;
 
     try {
-      const response = await fetch(`/api/timetables/${entry.id}`, {
+      const response = await csrfFetch(`/api/timetables/${entry.id}`, {
         method: "DELETE",
         headers: { 
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ reason })

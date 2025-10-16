@@ -68,13 +68,6 @@ const StudentTimetableView: React.FC<StudentTimetableViewProps> = ({ studentId }
       const response = await fetch(`/api/student-timetables?studentId=${studentId}`);
       if (response.ok) {
         const data = await response.json();
-        console.log('Student timetable data:', data);
-        console.log('Timetables array:', data.timetables);
-        if (data.timetables && data.timetables.length > 0) {
-          console.log('First timetable:', data.timetables[0]);
-          console.log('First timetable subjects:', data.timetables[0].subjects);
-          console.log('First timetable teachers:', data.timetables[0].teachers);
-        }
         setTimetables(data.timetables || []);
       } else {
         throw new Error('Failed to fetch timetables');
@@ -294,7 +287,7 @@ const StudentTimetableView: React.FC<StudentTimetableViewProps> = ({ studentId }
                                   <div className="text-xs text-gray-500 mb-1 flex items-center gap-1">
                                     <MapPin className="w-3 h-3" />
                                     {timetable.roomNumber}
-                                    {timetable.buildingName && ` (${timetable.buildingName})`}
+                                    {timetable.buildingName && timetable.buildingName !== 'virtual' && ` (${timetable.buildingName})`}
                                   </div>
                                 )}
                               </motion.div>
@@ -379,7 +372,7 @@ const StudentTimetableView: React.FC<StudentTimetableViewProps> = ({ studentId }
                             </div>
                           )}
                           
-                          {timetable.buildingName && (
+                          {timetable.buildingName && timetable.buildingName !== 'virtual' && (
                             <div className="flex items-center gap-2">
                               <Building className="w-4 h-4" />
                               Building: {timetable.buildingName}

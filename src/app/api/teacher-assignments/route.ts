@@ -213,7 +213,6 @@ async function deleteHandler(request: NextRequest) {
           classId: Number(classId),
           subjectId: subjectId ? Number(subjectId) : null,
           academicYearId: Number(academicYearId),
-          timetableId: null,
           comment: `Teacher assignment removed: ${comment.trim()}`,
           action: "DELETE",
           createdBy: currentUserId,

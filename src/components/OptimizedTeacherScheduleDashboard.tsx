@@ -69,7 +69,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const [loadingAction, setLoadingAction] = useState<string>("");
   const [students, setStudents] = useState<any[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
-  const [attendanceData, setAttendanceData] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused'>>({});
+  const [attendanceData, setAttendanceData] = useState<Record<string, 'present' | 'absent' | 'late' | 'excused' | 'no_record'>>({});
   const [attendanceComments, setAttendanceComments] = useState<Record<string, string>>({});
   const [gradeData, setGradeData] = useState<Record<string, number>>({});
   const [gradeComments, setGradeComments] = useState<Record<string, string>>({});
@@ -497,33 +497,9 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
     });
   }, [selectedTimetable, newTopic, topicMutation]);
 
-  // Save attendance handler
-  const handleSaveAttendance = useCallback(async () => {
-    
-    if (!selectedTimetable || students.length === 0) {
-      return;
-    }
-
-    // Force refresh of comment state by getting current values
-    const currentComments = { ...attendanceComments };
-
-    // Debug: Check each student's comment
-    students.forEach(student => {
-      console.log(`Student ${student.id} (${student.firstName} ${student.lastName}): comment = "${currentComments[student.id]}"`);
-    });
-
-    const attendanceArray = Object.entries(attendanceData)
-      .filter(([studentId, status]) => studentId && status)
-      .map(([studentId, status]) => {
-        const comment = currentComments[studentId] || '';
-        console.log(`Processing student ${studentId}: status=${status}, comment="${comment}"`);
-        return {
-          studentId: studentId, // Keep as string
-          status: status.toUpperCase(),
-          notes: comment
-        };
-      });
-
+  // Auto-save attendance when status changes
+  const handleAttendanceStatusChange = useCallback(async (studentId: string, status: string, comment: string = '') => {
+    if (!selectedTimetable) return;
 
     try {
       const response = await csrfFetch('/api/attendance', {
@@ -533,82 +509,66 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           'x-user-id': teacherId
         },
         body: JSON.stringify({
-          timetableId: parseInt(selectedTimetable.id),
           classId: parseInt(selectedTimetable.class.id),
           subjectId: parseInt(selectedTimetable.subject.id),
           date: selectedTimetable.fullDate,
-          attendance: attendanceArray
+          attendance: [{
+            studentId: studentId,
+            status: status.toUpperCase(),
+            notes: comment
+          }]
         })
       });
 
       if (response.ok) {
-        const result = await response.json();
-        setShowAttendanceModal(false);
-        setAttendanceData({});
-        // Show success message or refresh data
-        alert(`✅ Attendance saved successfully! Saved ${result.savedRecords || attendanceArray.length} records.`);
+        console.log(`✅ Attendance auto-saved for student ${studentId}`);
       } else {
-        const errorData = await response.json();
-        console.error('OptimizedTeacherScheduleDashboard - Failed to save attendance:', errorData);
-        alert(`❌ Failed to save attendance: ${errorData.error || 'Unknown error'}`);
+        console.error('Failed to auto-save attendance:', await response.json());
       }
     } catch (error) {
-      console.error('OptimizedTeacherScheduleDashboard - Error saving attendance:', error);
-      alert(`💥 Error saving attendance: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error auto-saving attendance:', error);
     }
-  }, [selectedTimetable, students, attendanceData, attendanceComments, teacherId]);
+  }, [selectedTimetable, teacherId]);
 
-  // Save grades handler
-  const handleSaveGrades = useCallback(async () => {
-    if (!selectedTimetable || students.length === 0) return;
-    
-    
-    // Force refresh of comment state by getting current values
-    const currentGradeComments = { ...gradeComments };
-    
-    // Debug: Check each student's comment
-    students.forEach(student => {
-      console.log(`Student ${student.id} (${student.firstName} ${student.lastName}): grade comment = "${currentGradeComments[student.id]}"`);
-    });
-    
-    const requestData = {
-      timetableId: selectedTimetable.id,
-      classId: selectedTimetable.class.id,
-      subjectId: selectedTimetable.subject.id,
-      date: selectedTimetable.fullDate,
-      grades: Object.entries(gradeData)
-        .filter(([studentId, points]) => {
-          const isValid = studentId && points !== null && points !== undefined && points > 0;
-          console.log(`Filtering student ${studentId}: points=${points}, type=${typeof points}, isValid=${isValid}`);
-          return isValid;
+  // Delete attendance when "No Record" is selected
+  const handleDeleteAttendance = useCallback(async (studentId: string) => {
+    if (!selectedTimetable) return;
+
+    try {
+      const response = await csrfFetch('/api/attendance', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId
+        },
+        body: JSON.stringify({
+          studentId: studentId,
+          classId: parseInt(selectedTimetable.class.id),
+          subjectId: parseInt(selectedTimetable.subject.id),
+          date: selectedTimetable.fullDate
         })
-        .map(([studentId, points]) => {
-          const comment = currentGradeComments[studentId] || '';
-          console.log(`Processing grade for student ${studentId}: points=${points}, comment="${comment}"`);
-          return {
-            studentId: studentId,
-            points: points,
-            comments: comment
-          };
-        })
-    };
-    
-    console.log("Sending grades data:", requestData);
-    console.log("Grade data state:", gradeData);
-    console.log("Grade data entries:", Object.entries(gradeData));
-    console.log("Grade comments state:", gradeComments);
-    console.log("Students data:", students);
-    console.log("Student IDs from students:", students.map(s => s.id));
-    console.log("Student IDs from gradeData keys:", Object.keys(gradeData));
-    
-    if (requestData.grades.length === 0) {
-      console.log("No valid grades found. Showing all grade data for debugging:");
-      console.log("All grade entries:", Object.entries(gradeData));
-      console.log("All grade comments:", Object.entries(gradeComments));
-      alert('Please enter at least one grade with a score greater than 0.');
-      return;
+      });
+
+      if (response.ok) {
+        console.log(`✅ Attendance deleted for student ${studentId}`);
+        // Remove from local state
+        setAttendanceData(prev => {
+          const newData = { ...prev };
+          delete newData[studentId];
+          return newData;
+        });
+      } else {
+        console.error('Failed to delete attendance:', await response.json());
+      }
+    } catch (error) {
+      console.error('Error deleting attendance:', error);
     }
-    
+  }, [selectedTimetable, teacherId]);
+
+  // Auto-save grade when grade is entered
+  const handleGradeChange = useCallback(async (studentId: string, points: number, comment: string = '') => {
+    if (!selectedTimetable || points <= 0) return;
+
     try {
       const response = await csrfFetch('/api/grades', {
         method: 'POST',
@@ -616,28 +576,62 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           'Content-Type': 'application/json',
           'x-user-id': teacherId
         },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify({
+          studentId: studentId,
+          classId: parseInt(selectedTimetable.class.id),
+          subjectId: parseInt(selectedTimetable.subject.id),
+          date: selectedTimetable.fullDate,
+          value: points,
+          description: comment
+        })
       });
 
       if (response.ok) {
-        setShowGradeModal(false);
-        setGradeData({});
-        setGradeComments({});
-        // Show success message
-        alert('✅ Grades saved successfully!');
-        console.log('Grades saved successfully');
-        
+        console.log(`✅ Grade auto-saved for student ${studentId}`);
         // Trigger refresh of Grade Tracker
         window.dispatchEvent(new CustomEvent('gradeSaved'));
       } else {
-        const errorData = await response.json();
-        console.error('Failed to save grades:', errorData);
-        alert(`Failed to save grades: ${errorData.error || 'Unknown error'}`);
+        console.error('Failed to auto-save grade:', await response.json());
       }
     } catch (error) {
-      console.error('Error saving grades:', error);
+      console.error('Error auto-saving grade:', error);
     }
-  }, [selectedTimetable, students, gradeData, gradeComments, teacherId]);
+  }, [selectedTimetable, teacherId]);
+
+  // Delete grade when "No Record" is selected
+  const handleDeleteGrade = useCallback(async (studentId: string) => {
+    if (!selectedTimetable) return;
+
+    try {
+      const response = await csrfFetch('/api/grades', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': teacherId
+        },
+        body: JSON.stringify({
+          studentId: studentId,
+          classId: parseInt(selectedTimetable.class.id),
+          subjectId: parseInt(selectedTimetable.subject.id),
+          date: selectedTimetable.fullDate
+        })
+      });
+
+      if (response.ok) {
+        console.log(`✅ Grade deleted for student ${studentId}`);
+        // Remove from local state
+        setGradeData(prev => {
+          const newData = { ...prev };
+          delete newData[studentId];
+          return newData;
+        });
+      } else {
+        console.error('Failed to delete grade:', await response.json());
+      }
+    } catch (error) {
+      console.error('Error deleting grade:', error);
+    }
+  }, [selectedTimetable, teacherId]);
 
   const currentAssignments = useMemoizedSelector(
     teacherData.TeacherAssignment,
@@ -1144,7 +1138,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                                 min="1"
                                 max="100"
                                 value={gradeData[student.id] ?? ''}
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                   const value = e.target.value;
                                   const numericValue = value ? parseInt(value) : null;
                                   const newGradeData = {
@@ -1153,12 +1147,31 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                                   };
                                   console.log("Updating grade data:", newGradeData, "for student:", student.id, "value:", value, "numericValue:", numericValue);
                                   setGradeData(newGradeData);
+                                  
+                                  // Auto-save when grade is entered
+                                  if (numericValue && numericValue > 0) {
+                                    const comment = gradeComments[student.id] || '';
+                                    await handleGradeChange(student.id, numericValue, comment);
+                                  }
                                 }}
                                 className="w-16 sm:w-20 px-2 py-1 border border-gray-300 rounded-md text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center"
                                 placeholder="1-100"
                               />
                               <span className="text-xs sm:text-sm text-gray-500">/100</span>
                             </div>
+                            <button
+                              onClick={async () => {
+                                await handleDeleteGrade(student.id);
+                                setGradeData(prev => {
+                                  const newData = { ...prev };
+                                  delete newData[student.id];
+                                  return newData;
+                                });
+                              }}
+                              className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                            >
+                              No Record
+                            </button>
                           </div>
                           
                           {/* Comments Section */}
@@ -1166,13 +1179,19 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                             <label className="block text-xs text-gray-600 mb-1">Comments (Optional)</label>
                             <textarea
                               value={gradeComments[student.id] || ''}
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const newValue = e.target.value;
                                 const newComments = {
                                   ...gradeComments,
                                   [student.id]: newValue
                                 };
                                 setGradeComments(newComments);
+                                
+                                // Auto-save with updated comment
+                                const grade = gradeData[student.id];
+                                if (grade && grade > 0) {
+                                  await handleGradeChange(student.id, grade, newValue);
+                                }
                               }}
                               placeholder="Add comments about this student's performance..."
                               rows={2}
@@ -1195,12 +1214,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
                   >
                     Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveGrades}
-                    className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors"
-                  >
-                    Save Grades
                   </button>
                 </div>
               </div>
@@ -1296,16 +1309,28 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                             </div>
                             <select
                               value={attendanceData[student.id] || 'present'}
-                              onChange={(e) => setAttendanceData(prev => ({
-                                ...prev,
-                                [student.id]: e.target.value as 'present' | 'absent' | 'late' | 'excused'
-                              }))}
+                              onChange={async (e) => {
+                                const status = e.target.value as 'present' | 'absent' | 'late' | 'excused' | 'no_record';
+                                setAttendanceData(prev => ({
+                                  ...prev,
+                                  [student.id]: status
+                                }));
+                                
+                                // Auto-save immediately
+                                if (status === 'no_record') {
+                                  await handleDeleteAttendance(student.id);
+                                } else {
+                                  const comment = attendanceComments[student.id] || '';
+                                  await handleAttendanceStatusChange(student.id, status, comment);
+                                }
+                              }}
                               className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent flex-shrink-0"
                             >
                               <option value="present">Present</option>
                               <option value="absent">Absent</option>
                               <option value="late">Late</option>
                               <option value="excused">Excused</option>
+                              <option value="no_record">No Record</option>
                             </select>
                           </div>
                           <div className="space-y-1">
@@ -1313,7 +1338,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                             <textarea
                               placeholder="Add a comment about this student's attendance..."
                               value={attendanceComments[student.id] || ''}
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const newValue = e.target.value;
                                 setAttendanceComments(prev => {
                                   const updated = {
@@ -1324,6 +1349,12 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                                 });
                                 // Also update the ref to preserve comments
                                 commentsRef.current[student.id] = newValue;
+                                
+                                // Auto-save with updated comment
+                                const status = attendanceData[student.id] || 'present';
+                                if (status !== 'no_record') {
+                                  await handleAttendanceStatusChange(student.id, status, newValue);
+                                }
                               }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
                               rows={2}
@@ -1348,12 +1379,6 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
                     className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
                   >
                     Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveAttendance}
-                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"
-                  >
-                    Save Attendance
                   </button>
                 </div>
               </div>

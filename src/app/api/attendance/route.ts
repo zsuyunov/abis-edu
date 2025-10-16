@@ -142,7 +142,7 @@ async function postHandler(request: NextRequest) {
 
     const body = await request.json();
     
-    const { studentId, classId, subjectId, date, status, notes, timetableId, attendance } = body;
+    const { studentId, classId, subjectId, date, status, notes, attendance, lessonNumber } = body;
 
     // Check if this is a single attendance record or bulk attendance
     if (studentId && classId && subjectId && date && status) {
@@ -158,13 +158,23 @@ async function postHandler(request: NextRequest) {
         }, { status: 400 });
       }
 
-      // Check if attendance record already exists
+      // Check if attendance record already exists for this lesson
+      const targetLessonNumber = lessonNumber ? parseInt(lessonNumber) : 1;
+      
+      // Validate lesson number - only allow 1 or 2
+      if (targetLessonNumber < 1 || targetLessonNumber > 2) {
+        console.log('❌ Invalid lesson number:', targetLessonNumber);
+        return NextResponse.json({ 
+          error: "Invalid lesson number. Must be 1 or 2" 
+        }, { status: 400 });
+      }
       const existing = await prisma.attendance.findFirst({
         where: {
           studentId: studentId.toString(),
           classId: parseInt(classId),
           subjectId: parseInt(subjectId),
-          date: new Date(date)
+          date: new Date(date),
+          lessonNumber: targetLessonNumber
         }
       });
 
@@ -192,44 +202,15 @@ async function postHandler(request: NextRequest) {
       } else {
         console.log(`➕ Creating new attendance record for student ${studentId}`);
         
-        // Try to find an active timetable; if none, create a lightweight one so attendance isn't blocked
-        let timetable = await prisma.timetable.findFirst({
-          where: {
-            isActive: true,
-            classId: parseInt(classId),
-            subjectId: parseInt(subjectId)
-          },
-          select: { id: true }
-        });
-
-        // Fetch class to derive branch and academic year
+        // Attendance is completely independent of timetables
+        
+        // Resolve class meta for branch/year
         const cls = await prisma.class.findUnique({
           where: { id: parseInt(classId) },
           select: { id: true, branchId: true, academicYearId: true }
         });
 
-        if (!timetable) {
-          timetable = await prisma.timetable.create({
-            data: {
-              branchId: cls?.branchId || 0,
-              classId: parseInt(classId),
-              academicYearId: cls?.academicYearId || 0,
-              subjectId: parseInt(subjectId),
-              dayOfWeek: null,
-              startTime: new Date('1970-01-01T08:00:00Z'),
-              endTime: new Date('1970-01-01T09:00:00Z'),
-              isActive: true,
-              roomNumber: null,
-              buildingName: 'virtual'
-            },
-            select: { id: true }
-          });
-          console.log('🆕 Created virtual timetable for attendance:', timetable.id);
-        }
-
-        console.log('✅ Using timetable ID:', timetable.id);
-
-        // Create attendance record
+        // Create attendance record (no timetable connection)
         attendanceRecord = await prisma.attendance.create({
           data: {
             studentId: studentId.toString(),
@@ -239,7 +220,7 @@ async function postHandler(request: NextRequest) {
             status: status.toUpperCase(),
             notes: notes || null,
             teacherId: teacherId,
-            timetableId: timetable.id,
+            lessonNumber: targetLessonNumber,
             academicYearId: cls?.academicYearId || 0,
             branchId: cls?.branchId || 0
           },
@@ -264,6 +245,15 @@ async function postHandler(request: NextRequest) {
     }
 
     // Bulk attendance (disconnect from timetable)
+    const bulkLessonNumber = lessonNumber ? parseInt(lessonNumber) : 1;
+    
+    // Validate lesson number - only allow 1 or 2
+    if (bulkLessonNumber < 1 || bulkLessonNumber > 2) {
+      console.log('❌ Invalid bulk lesson number:', bulkLessonNumber);
+      return NextResponse.json({ 
+        error: "Invalid lesson number. Must be 1 or 2" 
+      }, { status: 400 });
+    }
     if (!classId) {
       console.log('❌ Missing classId');
       return NextResponse.json({ error: "Missing required field: classId" }, { status: 400 });
@@ -319,7 +309,6 @@ async function postHandler(request: NextRequest) {
     }
 
     console.log('💾 Saving attendance for:', {
-      timetableId,
       classId,
       subjectId,
       date,
@@ -336,14 +325,15 @@ async function postHandler(request: NextRequest) {
       console.log(`💾 Record notes: "${record.notes}"`);
       
       try {
-        // First, try to find existing record
-        console.log(`🔍 Looking for existing attendance for student ${record.studentId} on date ${date}...`);
+        // First, try to find existing record for this lesson
+        console.log(`🔍 Looking for existing attendance for student ${record.studentId} on date ${date} lesson ${bulkLessonNumber}...`);
         const existing = await prisma.attendance.findFirst({
           where: {
             studentId: record.studentId.toString(),
             classId: parseInt(classId),
             subjectId: parseInt(subjectId),
-            date: new Date(date)
+            date: new Date(date),
+            lessonNumber: bulkLessonNumber
           }
         });
         
@@ -375,6 +365,7 @@ async function postHandler(request: NextRequest) {
               status: record.status,
               notes: record.notes || null,
               teacherId: teacherId,
+              lessonNumber: bulkLessonNumber,
               academicYearId: 1,
               branchId: 1
             }

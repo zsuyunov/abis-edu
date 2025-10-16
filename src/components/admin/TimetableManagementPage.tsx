@@ -19,6 +19,7 @@ import {
   Check,
   X
 } from 'lucide-react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 
 interface Branch {
   id: number;
@@ -163,7 +164,6 @@ const TimetableManagementPage: React.FC = () => {
             b.shortName === '85' || b.shortName === '85 ' || b.shortName.trim() === '85'
           ) || branchesData[0];
           setSelectedBranch(branch85.id);
-          console.log('Auto-selected branch:', branch85.id, branch85.shortName);
         }
       } else {
         setBranches([]);
@@ -213,25 +213,17 @@ const TimetableManagementPage: React.FC = () => {
       // Don't filter by isActive - fetch all timetables and filter on frontend
       // This allows us to show both active and inactive based on showInactive toggle
 
-      console.log('Fetching timetables with params:', params.toString());
-      console.log('Selected filters:', { selectedBranch, selectedClass, selectedAcademicYear });
       
       // If no filters are selected, fetch all timetables to show something
       const url = params.toString() ? `/api/admin/timetables?${params}` : '/api/admin/timetables';
       const response = await fetch(url);
-      console.log('Timetables response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Timetables data received:', data);
-        console.log('Number of timetables found:', data.timetables?.length || 0);
         
         // Debug the first timetable's time fields
         if (data.timetables?.length > 0) {
           const firstTimetable = data.timetables[0];
-          console.log('🔍 First timetable time fields:');
-          console.log('  startTime:', firstTimetable.startTime, 'type:', typeof firstTimetable.startTime);
-          console.log('  endTime:', firstTimetable.endTime, 'type:', typeof firstTimetable.endTime);
         }
         
         // Filter timetables on frontend if specific filters are applied
@@ -246,7 +238,6 @@ const TimetableManagementPage: React.FC = () => {
           });
         }
         
-        console.log('Filtered timetables count:', filteredTimetables.length);
         setTimetables(filteredTimetables);
       } else {
         const errorText = await response.text();
@@ -558,23 +549,19 @@ const TimetableManagementPage: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    console.log('🗑️ Attempting to delete timetable with ID:', id);
     
     if (!confirm('Are you sure you want to delete this timetable entry? This action cannot be undone.')) {
       return;
     }
 
     try {
-      console.log('📡 Sending DELETE request to:', `/api/admin/timetables/${id}`);
-      const response = await fetch(`/api/admin/timetables/${id}`, {
+      const response = await csrfFetch(`/api/admin/timetables/${id}`, {
         method: 'DELETE'
       });
 
-      console.log('📡 Delete response status:', response.status);
       
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Delete successful:', result);
         setSuccess('Timetable entry deleted successfully');
         fetchTimetables();
         setTimeout(() => setSuccess(null), 3000);
@@ -593,8 +580,6 @@ const TimetableManagementPage: React.FC = () => {
   const generateTimetableGrid = (): TimetableGrid => {
     const grid: TimetableGrid = {};
     
-    console.log('🔍 Generating timetable grid with filteredTimetables:', filteredTimetables.length);
-    console.log('📅 Sample timetable data:', filteredTimetables.slice(0, 2));
     
     // Create time slots based on timetables AND meal times
     const timeSlots = new Set<string>();
@@ -608,7 +593,6 @@ const TimetableManagementPage: React.FC = () => {
     });
     
     
-    console.log('⏰ Found time slots from timetables and meals:', Array.from(timeSlots));
     
     // Sort time slots by start time
     const sortedTimeSlots = Array.from(timeSlots).sort((a, b) => {
@@ -617,7 +601,6 @@ const TimetableManagementPage: React.FC = () => {
       return aStart.localeCompare(bStart);
     });
     
-    console.log('📋 Sorted time slots:', sortedTimeSlots);
     
     // Initialize grid with time slots from actual timetables and meals
     sortedTimeSlots.forEach(timeSlot => {
@@ -633,21 +616,16 @@ const TimetableManagementPage: React.FC = () => {
       const timeSlot = `${startTime}-${endTime}`;
       const dayOfWeek = convertDayOfWeek(timetable.dayOfWeek);
       
-      console.log(`Placing timetable in grid: ${timetable.dayOfWeek} -> ${dayOfWeek} at ${timeSlot}`);
-      console.log(`Timetable subjects:`, timetable.subjects?.map(s => s.name).join(', ') || 'No subjects');
-      console.log(`Timetable teachers:`, timetable.teachers?.map(t => `${t.firstName} ${t.lastName}`).join(', ') || 'No teachers');
       
       if (grid[timeSlot]) {
         // Use the grouped timetable data directly (it already contains all subjects and teachers)
         grid[timeSlot][dayOfWeek] = timetable;
-        console.log(`✅ Successfully placed timetable in grid slot: ${timeSlot} for ${dayOfWeek}`);
       } else {
         console.error(`❌ Time slot ${timeSlot} not found in grid for timetable:`, timetable);
       }
     });
 
 
-    console.log('Final grid with timetables and meals:', grid);
     return grid;
   };
 
@@ -874,10 +852,10 @@ const TimetableManagementPage: React.FC = () => {
                                       ? timetable.teachers.map(t => `${t.firstName} ${t.lastName}`).join(' | ')
                                       : 'No teacher assigned'}
                                   </div>
-                                  {(timetable.roomNumber || timetable.buildingName) && (
+                                  {(timetable.roomNumber || (timetable.buildingName && timetable.buildingName !== 'virtual')) && (
                                     <div className="text-[10px] text-gray-500 mb-1 text-center">
                                       {timetable.roomNumber && `R: ${timetable.roomNumber}`}
-                                      {timetable.buildingName && ` (${timetable.buildingName})`}
+                                      {timetable.buildingName && timetable.buildingName !== 'virtual' && ` (${timetable.buildingName})`}
                                     </div>
                                   )}
                                   <div className="flex items-center justify-center gap-1 mt-1">

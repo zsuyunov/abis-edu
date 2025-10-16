@@ -94,11 +94,6 @@ export async function GET(request: NextRequest) {
       where: attendanceWhere,
       include: {
         subject: true, // Direct relation from Attendance to Subject
-        timetable: {
-          include: {
-            class: true,
-          },
-        },
       },
       orderBy: {
         date: 'desc',
@@ -152,10 +147,8 @@ export async function GET(request: NextRequest) {
         name: record.subject?.name || 'Unknown Subject'
       },
       timetable: {
-        startTime: record.timetable?.startTime ? 
-          new Date(record.timetable.startTime).toISOString().substring(11, 16) : '00:00',
-        endTime: record.timetable?.endTime ? 
-          new Date(record.timetable.endTime).toISOString().substring(11, 16) : '00:00'
+        startTime: '00:00',
+        endTime: '00:00'
       }
     }));
     
@@ -334,9 +327,6 @@ async function getAttendanceCalendar(studentId: string, dateRange: any, subjectI
 
   const attendanceRecords = await prisma.attendance.findMany({
     where: attendanceWhere,
-    include: {
-      timetable: true,
-    },
     orderBy: {
       date: 'desc',
     },

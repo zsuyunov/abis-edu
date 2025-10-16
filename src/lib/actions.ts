@@ -685,7 +685,6 @@ export const archiveTimetable = async (
       });
       await tx.archiveComment.create({
         data: {
-          timetableId: parseInt(timetableId),
           comment: comment,
           action: "ARCHIVE",
           createdBy: currentUserId,
@@ -718,7 +717,6 @@ export const restoreTimetable = async (
       });
       await tx.archiveComment.create({
         data: {
-          timetableId: parseInt(timetableId),
           comment: comment,
           action: "RESTORE",
           createdBy: currentUserId,
@@ -742,43 +740,18 @@ export const deleteTimetable = async (
   }
 
   try {
-    // Check if timetable has related records
-    const examsCount = await prisma.exam.count({
-      where: { timetableId: parseInt(timetableId) },
-    });
-
-    const homeworkCount = await prisma.homework.count({
-      where: { 
-        class: {
-          timetables: {
-            some: { id: parseInt(timetableId) }
-          }
-        }
-      },
-    });
-
-    if (examsCount > 0 || homeworkCount > 0) {
-      return { success: false, error: true };
-    }
+    // Timetables are now independent - no need to check related records
 
     await prisma.$transaction(async (tx) => {
       await tx.archiveComment.create({
         data: {
-          timetableId: parseInt(timetableId),
           comment: comment,
           action: "DELETE",
           createdBy: currentUserId,
         },
       });
 
-      // First, delete all related attendance records
-      await tx.attendance.deleteMany({
-        where: {
-          timetableId: parseInt(timetableId)
-        }
-      });
-
-      // Then delete the timetable
+      // Delete timetable (attendance and grades are independent)
       await tx.timetable.delete({
         where: { id: parseInt(timetableId) },
       });
@@ -835,7 +808,6 @@ export const createAttendance = async (
     await prisma.attendance.create({
       data: {
         studentId: data.studentId,
-        timetableId: data.timetableId,
         date: data.date,
         status: data.status as any,
         notes: data.notes || null,
@@ -868,7 +840,6 @@ export const updateAttendance = async (
       where: { id: data.id },
       data: {
         studentId: data.studentId,
-        timetableId: data.timetableId,
         date: data.date,
         status: data.status as any,
         notes: data.notes || null,
@@ -1048,10 +1019,9 @@ export const getAttendanceStatistics = async (
       },
     });
 
-    // Get attendance records for all students and timetables
+    // Get attendance records for all students within date range (no timetable dependency)
     const attendanceRecords = await prisma.attendance.findMany({
       where: {
-        timetableId: { in: timetables.map(t => t.id) },
         studentId: { in: students.map(s => s.id) },
         archived: false,
         ...(startDate && endDate ? {
@@ -1063,7 +1033,6 @@ export const getAttendanceStatistics = async (
       },
       include: {
         student: { select: { id: true, firstName: true, lastName: true, studentId: true } },
-        timetable: { select: { id: true, startTime: true } },
       },
     });
 
@@ -1147,7 +1116,6 @@ export const createGrade = async (
         academicYearId: data.academicYearId,
         subjectId: data.subjectId,
         teacherId: data.teacherId,
-        timetableId: data.timetableId || null,
         status: data.status as any,
       },
     });
@@ -1186,7 +1154,6 @@ export const updateGrade = async (
         academicYearId: data.academicYearId,
         subjectId: data.subjectId,
         teacherId: data.teacherId,
-        timetableId: data.timetableId || null,
         status: data.status as any,
       },
     });

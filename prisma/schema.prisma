@@ -230,13 +230,8 @@ model Timetable {
   branch                    Branch                     @relation(fields: [branchId], references: [id])
   class                     Class                      @relation(fields: [classId], references: [id])
   subject                   Subject?                   @relation(fields: [subjectId], references: [id])
-  Exam                      Exam[]
-  Attendance                Attendance[]
-  Grade                     Grade[]
-  ArchiveComment            ArchiveComment[]
   TimetableTemplate         TimetableTemplate?         @relation(fields: [timetableTemplateId], references: [id])
   timetableTemplateId       Int?
-  topics                    TimetableTopic[]
 
   @@index([branchId, classId, academicYearId])
   @@index([dayOfWeek, startTime])
@@ -278,7 +273,6 @@ model Exam {
   status          ExamStatus       @default(SCHEDULED)
   subjectId       Int?
   teacherId       String?
-  timetableId     Int?
   updatedAt       DateTime         @updatedAt
   archiveComments ArchiveComment[]
   academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
@@ -286,7 +280,6 @@ model Exam {
   class           Class            @relation(fields: [classId], references: [id])
   subject         Subject?         @relation(fields: [subjectId], references: [id])
   teacher         Teacher?         @relation(fields: [teacherId], references: [id])
-  timetable       Timetable?       @relation(fields: [timetableId], references: [id])
   examResults     ExamResult[]
   results         Result[]
 
@@ -398,13 +391,13 @@ model Attendance {
   notes           String?
   restoredAt      DateTime?
   status          AttendanceStatus @default(PRESENT)
-  timetableId     Int?
   updatedAt       DateTime         @updatedAt
   academicYearId  Int
   branchId        Int
   classId         Int
   subjectId       Int
   teacherId       String
+  lessonNumber    Int              @default(1)
   archiveComments ArchiveComment[]
   academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
   branch          Branch           @relation(fields: [branchId], references: [id])
@@ -412,9 +405,8 @@ model Attendance {
   student         Student          @relation(fields: [studentId], references: [id])
   subject         Subject          @relation(fields: [subjectId], references: [id])
   teacher         Teacher          @relation(fields: [teacherId], references: [id])
-  timetable       Timetable?       @relation(fields: [timetableId], references: [id])
 
-  @@unique([studentId, classId, subjectId, date])
+  @@unique([studentId, classId, subjectId, date, lessonNumber])
   @@index([branchId, classId, date])
   @@index([branchId, academicYearId, date])
   @@index([teacherId, date])
@@ -437,12 +429,12 @@ model Grade {
   subjectId       Int
   teacherId       String
   term            Int?
-  timetableId     Int?
   type            GradeType
   updatedAt       DateTime         @updatedAt
   value           Float
   week            Int?
   year            Int
+  lessonNumber    Int              @default(1)
   archiveComments ArchiveComment[]
   academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
   branch          Branch           @relation(fields: [branchId], references: [id])
@@ -450,7 +442,6 @@ model Grade {
   student         Student          @relation(fields: [studentId], references: [id])
   subject         Subject          @relation(fields: [subjectId], references: [id])
   teacher         Teacher          @relation(fields: [teacherId], references: [id])
-  timetable       Timetable?       @relation(fields: [timetableId], references: [id])
 
   @@index([studentId, subjectId, academicYearId])
   @@index([classId, subjectId, type, date])
@@ -852,7 +843,6 @@ model ArchiveComment {
   parentId            String?
   studentId           String?
   academicYearId      Int?
-  timetableId         Int?
   attendanceId        Int?
   gradeId             Int?
   documentId          Int?
@@ -874,7 +864,6 @@ model ArchiveComment {
   student             Student?           @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subject             Subject?           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   teacher             Teacher?           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  timetable           Timetable?         @relation(fields: [timetableId], references: [id], onDelete: Cascade)
   user                User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   TimetableTemplate   TimetableTemplate? @relation(fields: [timetableTemplateId], references: [id])
   timetableTemplateId Int?
@@ -1168,7 +1157,6 @@ model TimetableTopic {
   status         TopicStatus      @default(IN_PROGRESS)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  timetable      Timetable        @relation(fields: [timetableId], references: [id], onDelete: Cascade)
   teacher        Teacher          @relation(fields: [teacherId], references: [id])
   subject        Subject?         @relation(fields: [subjectId], references: [id])
   class          Class            @relation(fields: [classId], references: [id])

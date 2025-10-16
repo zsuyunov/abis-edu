@@ -15,6 +15,7 @@ interface AttendanceRecord {
   date: string;
   status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
   notes?: string;
+  lessonNumber?: number;
   subject: {
     id: string;
     name: string;
@@ -38,6 +39,10 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
 
+  // Animation state for lesson swapping
+  const [showingLesson, setShowingLesson] = useState<1 | 2>(1);
+  const [isSwapping, setIsSwapping] = useState(false);
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -49,6 +54,45 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
   useEffect(() => {
     fetchAttendanceData();
   }, [studentId, selectedSubject, currentDate]);
+
+  // Check if lesson 2 exists for swap animation
+  const hasLesson2 = () => {
+    if (!Array.isArray(attendanceData) || attendanceData.length === 0) return false;
+    return attendanceData.some(r => r.lessonNumber === 2);
+  };
+
+  // Auto-swap between lesson 1 and 2 every 3 seconds ONLY if at least one record has both lessons
+  useEffect(() => {
+    setIsSwapping(false);
+    setShowingLesson(1);
+    
+    // Check if ANY record has BOTH lesson 1 and lesson 2 records
+    const anyRecordHasBothLessons = attendanceData.some(record => {
+      const dateStr = format(new Date(record.date), 'yyyy-MM-dd');
+      const recordsForDate = attendanceData.filter(r => 
+        format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+      );
+      
+      const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+      const hasLesson2 = recordsForDate.some(r => r.lessonNumber === 2);
+      
+      return hasLesson1 && hasLesson2;
+    });
+    
+    // If NO record has both lessons, DO NOT start any animation
+    if (!anyRecordHasBothLessons) {
+      return; // Exit early, no timer created
+    }
+
+    // If at least one record has both lessons, start the swap animation
+    const timer = setInterval(() => {
+      setShowingLesson(prev => prev === 1 ? 2 : 1);
+      setIsSwapping(true);
+      setTimeout(() => setIsSwapping(false), 300);
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [attendanceData]);
 
   const fetchSubjects = async () => {
     try {
@@ -130,6 +174,39 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
       case 'EXCUSED': return 'Excused';
       default: return 'No Record';
     }
+  };
+
+  // Get attendance for specific subject, date, and lesson
+  const getAttendanceForSubjectAndDateAndLesson = (subjectId: string, date: Date, lessonNum: number = 1) => {
+    if (!Array.isArray(attendanceData)) return null;
+    return attendanceData.find(record => 
+      record.subject.id === subjectId &&
+      format(new Date(record.date), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd') &&
+      (record.lessonNumber === lessonNum || (!record.lessonNumber && lessonNum === 1))
+    );
+  };
+
+  // Get attendance to display based on showing lesson (for swap animation)
+  const getDisplayAttendance = (subjectId: string, date: Date) => {
+    // Only use swap animation if this specific subject/date has both lessons
+    const hasBothLessonsForThisDate = hasBothLessonsForDate(date);
+    const lessonToShow = hasBothLessonsForThisDate ? showingLesson : 1;
+    return getAttendanceForSubjectAndDateAndLesson(subjectId, date, lessonToShow);
+  };
+
+  // Check if there are both lessons on a date
+  const hasBothLessonsForDate = (date: Date): boolean => {
+    if (!Array.isArray(attendanceData)) return false;
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    const recordsForDate = attendanceData.filter(r => 
+      format(new Date(r.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    const hasLesson1 = recordsForDate.some(r => r.lessonNumber === 1 || !r.lessonNumber);
+    const hasLesson2Records = recordsForDate.some(r => r.lessonNumber === 2);
+    
+    return hasLesson1 && hasLesson2Records;
   };
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -258,7 +335,8 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
                           <div className="truncate font-semibold">{subject.name}</div>
                         </td>
                         {monthDays.map((day, dayIndex) => {
-                          const record = getAttendanceForSubjectAndDate(subject.id, day);
+                          const record = getDisplayAttendance(subject.id, day);
+                          const hasBothLessons = hasBothLessonsForDate(day);
                           
                           return (
                             <td 
@@ -268,15 +346,49 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
                               }`}
                             >
                               {record ? (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => handleCellClick(record)}
-                                  className={`w-9 h-9 rounded-lg ${getStatusColor(record.status)} flex items-center justify-center transition-all duration-200 hover:shadow-lg mx-auto`}
-                                  title={`Click to view details - ${getStatusText(record.status)}`}
-                                >
-                                  {getStatusIcon(record.status)}
-                                </motion.button>
+                                <div className="relative">
+                                  <motion.button
+                                    whileHover={{ scale: 1.15 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => handleCellClick(record)}
+                                    className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 hover:shadow-lg mx-auto ${
+                                      hasLesson2() && isSwapping ? 'scale-95 opacity-70' : ''
+                                    } ${getStatusColor(record.status)}`}
+                                    title={`Click to view details - ${getStatusText(record.status)}`}
+                                  >
+                                    <AnimatePresence mode="wait">
+                                      <motion.div
+                                        key={record.status}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        transition={{
+                                          duration: 0.2,
+                                          ease: "easeInOut"
+                                        }}
+                                      >
+                                        {getStatusIcon(record.status)}
+                                      </motion.div>
+                                    </AnimatePresence>
+                                  </motion.button>
+                                  {hasBothLessons && hasLesson2() && (
+                                    <AnimatePresence mode="wait">
+                                      <motion.span 
+                                        key={showingLesson}
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        transition={{
+                                          duration: 0.2,
+                                          ease: "easeInOut"
+                                        }}
+                                        className="absolute -top-1 -right-1 bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-lg"
+                                      >
+                                        L{showingLesson}
+                                      </motion.span>
+                                    </AnimatePresence>
+                                  )}
+                                </div>
                               ) : (
                                 <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center mx-auto">
                                   <span className="text-gray-400 text-xs">–</span>
