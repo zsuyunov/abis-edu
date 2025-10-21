@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async function GET(request: NextRequest) {
   try {
     // Try header-based auth first, then fallback to token auth
     const headerStudentId = request.headers.get('x-user-id');
@@ -84,8 +86,23 @@ export async function GET(request: NextRequest) {
       orderBy: { startDate: "desc" },
     });
 
-    // Get subjects taught in student's class (scoped by branch)
-    const availableSubjects = await prisma.subject.findMany({
+    // Get student's elective subject assignments
+    const electiveAssignments = await prisma.electiveStudentAssignment.findMany({
+      where: {
+        studentId: requestedStudentId,
+        status: 'ACTIVE'
+      },
+      include: {
+        electiveSubject: {
+          include: {
+            subject: true
+          }
+        }
+      }
+    });
+
+    // Get subjects taught in student's class (scoped by branch) and elective subjects
+    const classSubjects = await prisma.subject.findMany({
       where: {
         homework: {
           some: {
@@ -97,23 +114,74 @@ export async function GET(request: NextRequest) {
       orderBy: { name: "asc" },
     });
 
-    // Build filter conditions for homework with strict branch and class restrictions
-    const homeworkWhere: any = {
-      branchId: studentBranchId, // Always filter by student's branch
-      classId: studentClassId,   // Always filter by student's class
+    const electiveSubjects = await prisma.subject.findMany({
+      where: {
+        electiveSubjects: {
+          some: {
+            id: { in: electiveAssignments.map(a => a.electiveSubjectId) },
+            status: 'ACTIVE'
+          }
+        }
+      },
+      orderBy: { name: "asc" },
+    });
+
+    // Combine and deduplicate subjects
+    const allSubjects = [...classSubjects, ...electiveSubjects];
+    const availableSubjects = allSubjects.filter((subject, index, self) => 
+      index === self.findIndex(s => s.id === subject.id)
+    ).sort((a, b) => a.name.localeCompare(b.name));
+
+    // Build filter conditions for homework - include both class and elective homework
+    const baseFilters: any = {
       status: "ACTIVE", // Only show active homework to students
     };
 
-    // Only filter by academic year if explicitly requested
+    // Add academic year filter if specified
     if (academicYearId && academicYearId !== "undefined" && academicYearId !== "") {
-      homeworkWhere.academicYearId = parseInt(academicYearId);
+      baseFilters.academicYearId = parseInt(academicYearId);
       console.log('Filtering by specific academic year:', academicYearId);
     } else {
-      // Don't filter by academic year if not specified - show all homework for student
       console.log('No academic year filter specified - showing all homework for student');
     }
 
-    if (subjectId) homeworkWhere.subjectId = parseInt(subjectId);
+    // Create OR condition to include both class and elective homework
+    const homeworkWhere: any = {
+      ...baseFilters,
+      OR: [
+        // Regular class homework
+        {
+          branchId: studentBranchId,
+          classId: studentClassId,
+          electiveSubjectId: null,
+          ...(subjectId && { subjectId: parseInt(subjectId) })
+        }
+      ]
+    };
+
+    // Add elective homework if student has elective assignments
+    if (electiveAssignments.length > 0) {
+      const electiveSubjectIds = electiveAssignments.map(a => a.electiveSubjectId);
+      
+      if (subjectId) {
+        // Filter elective homework by subject
+        const subjectIdInt = parseInt(subjectId);
+        const matchingElectiveSubjects = electiveAssignments
+          .filter(assignment => assignment.electiveSubject.subjectId === subjectIdInt)
+          .map(assignment => assignment.electiveSubjectId);
+        
+        if (matchingElectiveSubjects.length > 0) {
+          homeworkWhere.OR.push({
+            electiveSubjectId: { in: matchingElectiveSubjects }
+          });
+        }
+      } else {
+        // Include all elective homework for this student
+        homeworkWhere.OR.push({
+          electiveSubjectId: { in: electiveSubjectIds }
+        });
+      }
+    }
 
     if (startDate && endDate) {
       homeworkWhere.assignedDate = {
@@ -185,6 +253,28 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             shortName: true,
+          },
+        },
+        electiveGroup: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        electiveSubject: {
+          include: {
+            subject: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            electiveGroup: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
         attachments: {
@@ -323,7 +413,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}));
 
 // Helper functions
 function calculateStudentHomeworkStats(homework: any[]) {

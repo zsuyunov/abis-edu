@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCSRF } from '@/lib/security';
 import { PrismaClient } from '@prisma/client';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
+import { validateOwnership } from '@/middlewares/validateOwnership';
+import { auditLogger } from '@/middlewares/auditLogger';
+import { rateLimit, RatePresets } from '@/middlewares/rateLimit';
 
 const prisma = new PrismaClient();
 
-async function deleteHandler(request: NextRequest) {
+async function deleteHandler(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {
-    const teacherId = request.headers.get('x-user-id');
+    const teacherId = locals?.user?.id || request.headers.get('x-user-id');
     if (!teacherId) {
       console.log('❌ Unauthorized: No teacher ID provided');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -64,11 +69,26 @@ async function deleteHandler(request: NextRequest) {
   }
 }
 
-export const DELETE = withCSRF(deleteHandler);
+export const DELETE = authenticateJWT(
+  authorizeRole('TEACHER')(
+    validateOwnership({
+      getContext: async (req) => {
+        const body = await req.clone().json().catch(() => ({}));
+        return {
+          studentId: body?.studentId,
+          classId: body?.classId ? parseInt(body.classId) : undefined,
+          subjectId: body?.subjectId ? parseInt(body.subjectId) : undefined,
+        };
+      },
+      requireTeacherMatch: true,
+      requireStudentSelf: false,
+    })(rateLimit(RatePresets.API)(auditLogger({ action: 'DELETE_ATTENDANCE' })(withCSRF(deleteHandler))))
+  )
+);
 
-async function putHandler(request: NextRequest) {
+async function putHandler(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {
-    const teacherId = request.headers.get('x-user-id');
+    const teacherId = locals?.user?.id || request.headers.get('x-user-id');
     if (!teacherId) {
       console.log('❌ Unauthorized: No teacher ID provided');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -130,11 +150,15 @@ async function putHandler(request: NextRequest) {
   }
 }
 
-export const PUT = withCSRF(putHandler);
+export const PUT = authenticateJWT(
+  authorizeRole('TEACHER')(
+    rateLimit(RatePresets.API)(auditLogger({ action: 'UPDATE_ATTENDANCE' })(withCSRF(putHandler)))
+  )
+);
 
-async function postHandler(request: NextRequest) {
+async function postHandler(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {
-    const teacherId = request.headers.get('x-user-id');
+    const teacherId = locals?.user?.id || request.headers.get('x-user-id');
     if (!teacherId) {
       console.log('❌ Unauthorized: No teacher ID provided');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -142,7 +166,7 @@ async function postHandler(request: NextRequest) {
 
     const body = await request.json();
     
-    const { studentId, classId, subjectId, date, status, notes, attendance, lessonNumber } = body;
+    const { studentId, classId, subjectId, date, status, notes, attendance, lessonNumber, electiveSubjectId, electiveGroupId } = body;
 
     // Check if this is a single attendance record or bulk attendance
     if (studentId && classId && subjectId && date && status) {
@@ -222,7 +246,10 @@ async function postHandler(request: NextRequest) {
             teacherId: teacherId,
             lessonNumber: targetLessonNumber,
             academicYearId: cls?.academicYearId || 0,
-            branchId: cls?.branchId || 0
+            branchId: cls?.branchId || 0,
+            // Add elective fields if provided
+            ...(electiveSubjectId && { electiveSubjectId: parseInt(electiveSubjectId) }),
+            ...(electiveGroupId && { electiveGroupId: parseInt(electiveGroupId) })
           },
           include: {
             student: {
@@ -367,7 +394,10 @@ async function postHandler(request: NextRequest) {
               teacherId: teacherId,
               lessonNumber: bulkLessonNumber,
               academicYearId: 1,
-              branchId: 1
+              branchId: 1,
+              // Add elective fields if provided
+              ...(electiveSubjectId && { electiveSubjectId: parseInt(electiveSubjectId) }),
+              ...(electiveGroupId && { electiveGroupId: parseInt(electiveGroupId) })
             }
           });
           console.log(`✅ Created attendance for student ${record.studentId}`);
@@ -422,4 +452,19 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(
+  authorizeRole('TEACHER')(
+    validateOwnership({
+      getContext: async (req) => {
+        const body = await req.clone().json().catch(() => ({}));
+        return {
+          studentId: body?.studentId,
+          classId: body?.classId ? parseInt(body.classId) : undefined,
+          subjectId: body?.subjectId ? parseInt(body.subjectId) : undefined,
+        };
+      },
+      requireTeacherMatch: true,
+      requireStudentSelf: false,
+    })(rateLimit(RatePresets.API)(auditLogger({ action: 'CREATE_OR_UPDATE_ATTENDANCE' })(withCSRF(postHandler))))
+  )
+);

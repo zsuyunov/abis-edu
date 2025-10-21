@@ -17,6 +17,7 @@ import {
   MapPin,
   AlertCircle,
   Check,
+  RefreshCw,
   X
 } from 'lucide-react';
 import { csrfFetch } from '@/hooks/useCsrfToken';
@@ -114,10 +115,12 @@ const TimetableManagementPage: React.FC = () => {
     endTime: '',
     subjectId: '',
     subjectIds: [] as number[],
-    teacherIds: [] as string[]
+    teacherIds: [] as string[],
+    subjectTeacherPairs: [] as { subjectId: number; teacherIds: string[] }[]
   });
   const [filteredEditTeachers, setFilteredEditTeachers] = useState<any[]>([]);
   const [loadingEditTeachers, setLoadingEditTeachers] = useState(false);
+  const [subjectTeachers, setSubjectTeachers] = useState<{[subjectId: number]: any[]}>({});
 
   useEffect(() => {
     fetchInitialData();
@@ -221,9 +224,21 @@ const TimetableManagementPage: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         
-        // Debug the first timetable's time fields
+        console.log('📥 Received timetables from API:', data.timetables?.length || 0, 'entries');
+        
+        // Debug timetables with multiple subjects
         if (data.timetables?.length > 0) {
-          const firstTimetable = data.timetables[0];
+          data.timetables.forEach((tt: any, index: number) => {
+            if (tt.subjects && tt.subjects.length > 1) {
+              console.log(`📚 Timetable ${index + 1} has ${tt.subjects.length} subjects:`, {
+                id: tt.id,
+                day: tt.dayOfWeek,
+                time: `${tt.startTime}-${tt.endTime}`,
+                subjects: tt.subjects.map((s: any) => s.name),
+                teachers: tt.teachers?.map((t: any) => `${t.firstName} ${t.lastName}`)
+              });
+            }
+          });
         }
         
         // Filter timetables on frontend if specific filters are applied
@@ -257,15 +272,26 @@ const TimetableManagementPage: React.FC = () => {
 
   const fetchSubjects = async () => {
     try {
+      console.log('🔄 Fetching subjects...');
       const response = await fetch('/api/subjects');
+      console.log('📡 Subjects API response status:', response.status);
+      
       if (response.ok) {
-        const data = await response.json();
-        setSubjects(Array.isArray(data) ? data : []);
+        const result = await response.json();
+        console.log('📦 Subjects API response:', result);
+        
+        // Handle the new API response format: { success: true, data: [...] }
+        const subjects = result.success ? result.data : result;
+        console.log('📚 Extracted subjects:', subjects);
+        
+        setSubjects(Array.isArray(subjects) ? subjects : []);
+        console.log('✅ Subjects set:', Array.isArray(subjects) ? subjects.length : 0, 'subjects');
       } else {
+        console.error('❌ Failed to fetch subjects. Status:', response.status);
         setSubjects([]);
       }
     } catch (error) {
-      console.error('Error fetching subjects:', error);
+      console.error('❌ Error fetching subjects:', error);
       setSubjects([]);
     }
   };
@@ -274,8 +300,10 @@ const TimetableManagementPage: React.FC = () => {
     try {
       const response = await fetch('/api/teachers');
       if (response.ok) {
-        const data = await response.json();
-        setTeachers(Array.isArray(data) ? data : []);
+        const result = await response.json();
+        // Handle the new API response format: { success: true, data: [...] }
+        const teachers = result.success ? result.data : result;
+        setTeachers(Array.isArray(teachers) ? teachers : []);
       } else {
         setTeachers([]);
       }
@@ -288,6 +316,17 @@ const TimetableManagementPage: React.FC = () => {
   const applyFilters = () => {
     let filtered = timetables;
 
+    console.log('🔍 Applying filters to', timetables.length, 'timetables');
+    
+    // Debug: Log timetables with multiple subjects
+    const multiSubjectTimetables = timetables.filter(t => t.subjects && t.subjects.length > 1);
+    if (multiSubjectTimetables.length > 0) {
+      console.log('📚 Found', multiSubjectTimetables.length, 'timetables with multiple subjects:');
+      multiSubjectTimetables.forEach((tt, idx) => {
+        console.log(`  ${idx + 1}. ID ${tt.id}: ${tt.subjects.map(s => s.name).join(' | ')} (${tt.dayOfWeek} ${tt.startTime}-${tt.endTime})`);
+      });
+    }
+
     // Filter by active/inactive status based on showInactive toggle
     if (showInactive) {
       // Show only archived/inactive timetables
@@ -299,6 +338,7 @@ const TimetableManagementPage: React.FC = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(t => 
+        t.subjects?.some(subject => subject.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         t.subject?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.class.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.roomNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -309,6 +349,7 @@ const TimetableManagementPage: React.FC = () => {
       );
     }
 
+    console.log('✅ Filtered to', filtered.length, 'timetables');
     setFilteredTimetables(filtered);
   };
 
@@ -317,6 +358,12 @@ const TimetableManagementPage: React.FC = () => {
     if (!time) return '';
     
     try {
+      // If it's already a string in HH:MM format, return as is
+      if (typeof time === 'string' && /^\d{1,2}:\d{2}$/.test(time)) {
+        const [hours, minutes] = time.split(':');
+        return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+      }
+      
       let date: Date;
       
       if (typeof time === 'string') {
@@ -325,8 +372,9 @@ const TimetableManagementPage: React.FC = () => {
           // ISO string format - parse as is
           date = new Date(time);
         } else if (time.includes(':')) {
-          // Time format like "08:20" - treat as local time
-          date = new Date(`1970-01-01T${time}:00`);
+          // Time format like "08:20" - treat as UTC to avoid timezone issues
+          const [hours, minutes] = time.split(':');
+          return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
         } else {
           // Try direct conversion
           date = new Date(time);
@@ -339,12 +387,6 @@ const TimetableManagementPage: React.FC = () => {
       if (isNaN(date.getTime())) {
         console.error('❌ Invalid date:', time);
         return 'Invalid';
-      }
-      
-      // Extract hours and minutes directly from the time string if possible
-      if (typeof time === 'string' && time.includes(':')) {
-        const [hours, minutes] = time.split(':');
-        return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
       }
       
       // For Date objects, use UTC methods to avoid timezone issues
@@ -388,31 +430,98 @@ const TimetableManagementPage: React.FC = () => {
     }).join(', ');
   };
 
+  const fetchIndividualTimetableEntries = async (groupedTimetable: any, subjectIds: number[]) => {
+    try {
+      // Fetch individual timetable entries for the same time slot to get proper teacher assignments
+      const response = await fetch(`/api/admin/timetables?branchId=${groupedTimetable.branchId}&classId=${groupedTimetable.classId}&academicYearId=${groupedTimetable.academicYearId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const allTimetables = data.timetables || [];
+        
+        // Find individual timetable entries that match this time slot
+        const matchingEntries = allTimetables.filter((tt: any) => 
+          tt.dayOfWeek === groupedTimetable.dayOfWeek &&
+          formatTime(tt.startTime) === formatTime(groupedTimetable.startTime) &&
+          formatTime(tt.endTime) === formatTime(groupedTimetable.endTime) &&
+          subjectIds.includes(tt.subjectId)
+        );
+        
+        console.log('🔍 Found matching individual entries:', matchingEntries.length);
+        
+        // Create subject-teacher pairs from individual entries
+        const pairs = subjectIds.map(subjectId => {
+          const entry = matchingEntries.find((tt: any) => tt.subjectId === subjectId);
+          return {
+            subjectId: subjectId,
+            teacherIds: entry?.teacherIds || []
+          };
+        });
+        
+        return pairs;
+      }
+    } catch (error) {
+      console.error('Error fetching individual timetable entries:', error);
+    }
+    
+    // Fallback: create empty pairs
+    return subjectIds.map(subjectId => ({
+      subjectId: subjectId,
+      teacherIds: [] as string[]
+    }));
+  };
+
   const fetchTeachersForEditSubjects = async (subjectIds: number[]) => {
     if (!subjectIds || subjectIds.length === 0) {
       setFilteredEditTeachers(teachers);
+      setSubjectTeachers({});
       return;
     }
 
     if (!selectedClass || !selectedAcademicYear) {
       setFilteredEditTeachers(teachers);
+      setSubjectTeachers({});
       return;
     }
 
     try {
       setLoadingEditTeachers(true);
-      const response = await fetch(`/api/teachers/by-subjects?subjectIds=${subjectIds.join(',')}&classId=${selectedClass}&academicYearId=${selectedAcademicYear}`);
+      const subjectTeachersMap: {[subjectId: number]: any[]} = {};
       
-      if (response.ok) {
-        const teachers = await response.json();
-        setFilteredEditTeachers(teachers);
-      } else {
-        console.error('Failed to fetch teachers for subjects');
-        setFilteredEditTeachers(teachers);
+      // Fetch teachers for each subject individually
+      for (const subjectId of subjectIds) {
+        try {
+          const response = await fetch(`/api/teachers/by-subjects?subjectIds=${subjectId}&classId=${selectedClass}&academicYearId=${selectedAcademicYear}`);
+          
+          if (response.ok) {
+            const subjectTeachersList = await response.json();
+            subjectTeachersMap[subjectId] = subjectTeachersList;
+            console.log(`📚 Subject ${subjectId} has ${subjectTeachersList.length} assigned teachers`);
+          } else {
+            console.error(`Failed to fetch teachers for subject ${subjectId}`);
+            subjectTeachersMap[subjectId] = [];
+          }
+        } catch (error) {
+          console.error(`Error fetching teachers for subject ${subjectId}:`, error);
+          subjectTeachersMap[subjectId] = [];
+        }
       }
+      
+      setSubjectTeachers(subjectTeachersMap);
+      
+      // Also set the combined list for backward compatibility
+      const allTeachers = Array.from(new Set(
+        Object.values(subjectTeachersMap).flat().map(t => t.id)
+      )).map(id => 
+        Object.values(subjectTeachersMap).flat().find(t => t.id === id)
+      ).filter(Boolean);
+      
+      setFilteredEditTeachers(allTeachers);
+      
     } catch (error) {
       console.error('Error fetching teachers for subjects:', error);
       setFilteredEditTeachers(teachers);
+      setSubjectTeachers({});
     } finally {
       setLoadingEditTeachers(false);
     }
@@ -432,15 +541,40 @@ const TimetableManagementPage: React.FC = () => {
     setEditFormData({...editFormData, subjectIds: newSubjectIds});
   };
 
-  const handleEdit = (timetable: any) => {
+  const handleEdit = async (timetable: any) => {
+    console.log('📝 Opening edit modal for timetable:', {
+      id: timetable.id,
+      subjectIds: timetable.subjectIds,
+      subjects: timetable.subjects?.map((s: any) => s.name),
+      teacherIds: timetable.teacherIds,
+      teachers: timetable.teachers?.map((t: any) => `${t.firstName} ${t.lastName}`)
+    });
+    
+    // Ensure subjects are loaded before opening modal
+    if (subjects.length === 0) {
+      console.log('🔄 No subjects loaded, fetching subjects...');
+      await fetchSubjects();
+    }
+    
     setEditingTimetable(timetable);
     const subjectIds = timetable.subjectIds || (timetable.subjectId ? [timetable.subjectId] : []);
+    
+    // Remove duplicates from subjectIds
+    const uniqueSubjectIds: number[] = Array.from(new Set(subjectIds));
+    console.log('🔍 Raw subjectIds from timetable:', subjectIds);
+    console.log('✨ Deduplicated subjectIds:', uniqueSubjectIds);
+    
+    // Create proper subject-teacher pairs structure
+    // We need to fetch individual timetable entries to get proper teacher assignments per subject
+    const subjectTeacherPairs = await fetchIndividualTimetableEntries(timetable, uniqueSubjectIds);
+    
     setEditFormData({
-      startTime: timetable.startTime,
-      endTime: timetable.endTime,
-      subjectId: subjectIds.length > 0 ? subjectIds[0].toString() : '',
-      subjectIds: subjectIds,
-      teacherIds: timetable.teacherIds || []
+      startTime: formatTime(timetable.startTime),
+      endTime: formatTime(timetable.endTime),
+      subjectId: uniqueSubjectIds.length > 0 ? uniqueSubjectIds[0].toString() : '',
+      subjectIds: uniqueSubjectIds,
+      teacherIds: timetable.teacherIds || [],
+      subjectTeacherPairs: subjectTeacherPairs
     });
     
     // Initialize filtered teachers
@@ -450,63 +584,109 @@ const TimetableManagementPage: React.FC = () => {
   };
 
   const handleUpdateTimetable = async () => {
-    if (!editingTimetable) return;
+    console.log('🔄 handleUpdateTimetable called');
+    
+    if (!editingTimetable) {
+      console.log('❌ No editing timetable, returning');
+      return;
+    }
+
+    console.log('📝 Current form data:', editFormData);
 
     try {
-      const updateData: any = {};
+      // Create separate timetable entries for each subject-teacher combination
+      const subjectTeacherEntries: Array<{
+        subjectId: number;
+        teacherIds: string[];
+        startTime: string;
+        endTime: string;
+        dayOfWeek: string;
+        classId: number | null;
+        branchId: number;
+        academicYearId: number;
+        roomNumber: string;
+        buildingName: string;
+      }> = [];
       
-      // Only include changed fields
-      if (editFormData.startTime !== editingTimetable.startTime) {
-        updateData.startTime = editFormData.startTime;
-      }
-      if (editFormData.endTime !== editingTimetable.endTime) {
-        updateData.endTime = editFormData.endTime;
-      }
-      // Handle subject updates - use subjectIds array for new structure
-      if (editFormData.subjectIds && editFormData.subjectIds.length > 0) {
-        updateData.subjectIds = editFormData.subjectIds;
-        updateData.subjectId = editFormData.subjectIds[0]; // Keep for backward compatibility
-      } else if (editFormData.subjectId) {
-        updateData.subjectId = parseInt(editFormData.subjectId);
-        updateData.subjectIds = [parseInt(editFormData.subjectId)];
-      }
-      if (JSON.stringify(editFormData.teacherIds) !== JSON.stringify(editingTimetable.teacherIds)) {
-        updateData.teacherIds = editFormData.teacherIds;
+      // Use subjectTeacherPairs if available and properly configured
+      if (editFormData.subjectTeacherPairs && editFormData.subjectTeacherPairs.length > 0) {
+        editFormData.subjectTeacherPairs.forEach(pair => {
+          if (pair.subjectId && pair.teacherIds.length > 0) {
+            subjectTeacherEntries.push({
+              subjectId: pair.subjectId,
+              teacherIds: pair.teacherIds,
+              startTime: editFormData.startTime,
+              endTime: editFormData.endTime,
+              dayOfWeek: editingTimetable.dayOfWeek,
+              classId: editingTimetable.classId,
+              branchId: editingTimetable.branchId,
+              academicYearId: editingTimetable.academicYearId,
+              roomNumber: editingTimetable.roomNumber,
+              buildingName: editingTimetable.buildingName
+            });
+          }
+        });
+      } else {
+        // Fallback: create entries for each subject with auto-assigned teachers
+        const uniqueSubjectIds = Array.from(new Set(editFormData.subjectIds));
+        uniqueSubjectIds.forEach(subjectId => {
+          subjectTeacherEntries.push({
+            subjectId: subjectId,
+            teacherIds: [], // Will be auto-assigned by backend
+            startTime: editFormData.startTime,
+            endTime: editFormData.endTime,
+            dayOfWeek: editingTimetable.dayOfWeek,
+            classId: editingTimetable.classId,
+            branchId: editingTimetable.branchId,
+            academicYearId: editingTimetable.academicYearId,
+            roomNumber: editingTimetable.roomNumber,
+            buildingName: editingTimetable.buildingName
+          });
+        });
       }
 
-      // If no changes, close modal
-      if (Object.keys(updateData).length === 0) {
-        setEditModalOpen(false);
+      if (subjectTeacherEntries.length === 0) {
+        setError('No valid subject-teacher combinations to save');
         return;
       }
 
-      const response = await fetch(`/api/admin/timetables/${editingTimetable.id}`, {
+      console.log('📤 Sending subject-teacher entries:', subjectTeacherEntries);
+
+      // Send the structured data to a new endpoint that handles multiple entries
+      const response = await csrfFetch(`/api/admin/timetables/${editingTimetable.id}/update-multiple`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
+        body: JSON.stringify({
+          entries: subjectTeacherEntries,
+          originalTimetableId: editingTimetable.id
+        })
       });
 
-              if (response.ok) {
-                const result = await response.json();
-                setSuccess('Timetable updated successfully');
-                setEditModalOpen(false);
-                // Refresh the timetable list to show the updated/created entries
-                fetchTimetables();
-                setTimeout(() => setSuccess(null), 3000);
-              } else {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to update timetable');
-              }
+      if (response.ok) {
+        console.log('✅ Update response OK');
+        const result = await response.json();
+        console.log('📥 Update result:', result);
+        setSuccess('Timetable updated successfully');
+        setEditModalOpen(false);
+        // Refresh the timetable list to show the updated/created entries
+        await fetchTimetables();
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        console.log('❌ Update response failed:', response.status);
+        const errorData = await response.json();
+        console.log('❌ Error data:', errorData);
+        throw new Error(errorData.error || 'Failed to update timetable');
+      }
     } catch (error) {
-      console.error('Error updating timetable:', error);
-      setError('Failed to update timetable');
+      console.error('❌ Error updating timetable:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update timetable');
       setTimeout(() => setError(null), 3000);
     }
   };
 
   const handleArchive = async (id: number) => {
     try {
-      const response = await fetch(`/api/admin/timetables/${id}`, {
+      const response = await csrfFetch(`/api/admin/timetables/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: false })
@@ -528,7 +708,7 @@ const TimetableManagementPage: React.FC = () => {
 
   const handleRestore = async (id: number) => {
     try {
-      const response = await fetch(`/api/admin/timetables/${id}`, {
+      const response = await csrfFetch(`/api/admin/timetables/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: true })
@@ -989,97 +1169,34 @@ const TimetableManagementPage: React.FC = () => {
 
                 {/* Subject Selection Grid */}
                 <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
-                  {subjects.map(subject => {
-                    const isSelected = editFormData.subjectIds?.includes(subject.id) || false;
-                    return (
-                      <div key={subject.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
-                        <span className="text-sm font-medium text-gray-700">{subject.name}</span>
-                        <button
-                          onClick={() => handleEditSubjectSelection(subject.id)}
-                          className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full transition-all duration-200 ${
-                            isSelected
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
-                          }`}
-                        >
-                          {isSelected ? (
-                            <> ✓ Added </>
-                          ) : (
-                            <> + Add </>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Teacher Selection */}
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Teachers
-                </label>
-                
-                {/* Selected Teachers Display */}
-                {editFormData.teacherIds && editFormData.teacherIds.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-xs text-gray-500 font-medium">Selected Teachers:</div>
-                    <div className="flex flex-wrap gap-2">
-                      {editFormData.teacherIds.map(teacherId => {
-                        const teacher = teachers.find(t => t.id === teacherId);
-                        return (
-                          <div
-                            key={teacherId}
-                            className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm"
-                          >
-                            <span>{teacher ? `${teacher.firstName} ${teacher.lastName}` : `Teacher ${teacherId}`}</span>
-                            <button
-                              onClick={() => {
-                                const newTeacherIds = editFormData.teacherIds.filter(id => id !== teacherId);
-                                setEditFormData({...editFormData, teacherIds: newTeacherIds});
-                              }}
-                              className="text-green-600 hover:text-green-800 transition-colors hover:bg-green-200 rounded-full p-0.5"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Teacher Selection Grid */}
-                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3 space-y-2">
-                  {loadingEditTeachers ? (
+                  {(() => {
+                    console.log('🎯 Rendering subjects in edit modal:', subjects.length, 'subjects:', subjects);
+                    return null;
+                  })()}
+                  {subjects.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                      <p className="text-sm">Loading teachers...</p>
+                      <p className="text-sm">Loading subjects...</p>
+                      <button
+                        onClick={() => fetchSubjects()}
+                        className="mt-2 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 mx-auto"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Retry
+                      </button>
                     </div>
-                  ) : filteredEditTeachers.length > 0 ? (
-                    filteredEditTeachers.map(teacher => {
-                      const isSelected = editFormData.teacherIds?.includes(teacher.id) || false;
+                  ) : (
+                    subjects.map(subject => {
+                      const isSelected = editFormData.subjectIds?.includes(subject.id) || false;
                       return (
-                        <div key={teacher.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${isSelected ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium text-gray-700">{teacher.firstName} {teacher.lastName}</span>
-                            <span className="text-xs text-gray-500">ID: {teacher.teacherId}</span>
-                          </div>
+                        <div key={subject.id} className={`flex items-center justify-between p-2 rounded-lg border transition-all ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}>
+                          <span className="text-sm font-medium text-gray-700">{subject.name}</span>
                           <button
-                            onClick={() => {
-                              const currentIds = editFormData.teacherIds || [];
-                              if (isSelected) {
-                                const newIds = currentIds.filter(id => id !== teacher.id);
-                                setEditFormData({...editFormData, teacherIds: newIds});
-                              } else {
-                                const newIds = [...currentIds, teacher.id];
-                                setEditFormData({...editFormData, teacherIds: newIds});
-                              }
-                            }}
+                            onClick={() => handleEditSubjectSelection(subject.id)}
                             className={`flex items-center gap-1 px-3 py-1 text-xs rounded-full transition-all duration-200 ${
                               isSelected
                                 ? 'bg-green-100 text-green-700'
-                                : 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md'
+                                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
                             }`}
                           >
                             {isSelected ? (
@@ -1091,19 +1208,165 @@ const TimetableManagementPage: React.FC = () => {
                         </div>
                       );
                     })
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">
-                        {editFormData.subjectIds.length === 0
-                          ? "Please select subjects first"
-                          : "No teachers assigned to selected subjects"}
-                      </p>
-                    </div>
                   )}
                 </div>
               </div>
+
+              {/* Subject-Teacher Assignments */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Subject-Teacher Assignments
+                </label>
+                
+                {editFormData.subjectIds && editFormData.subjectIds.length > 0 ? (
+                  <div className="space-y-4">
+                    {editFormData.subjectIds.map(subjectId => {
+                      const subject = subjects.find(s => s.id === subjectId);
+                      const pairIndex = editFormData.subjectTeacherPairs.findIndex(p => p.subjectId === subjectId);
+                      const currentPair = pairIndex >= 0 ? editFormData.subjectTeacherPairs[pairIndex] : { subjectId, teacherIds: [] };
+                      
+                      return (
+                        <div key={subjectId} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-medium text-gray-900">{subject?.name}</h4>
+                            <span className="text-xs text-gray-500">
+                              {currentPair.teacherIds.length} teacher(s) assigned
+                            </span>
+                          </div>
+                          
+                          {/* Selected Teachers for this Subject */}
+                          {currentPair.teacherIds.length > 0 && (
+                            <div className="mb-3">
+                              <div className="text-xs text-gray-500 font-medium mb-2">Assigned Teachers:</div>
+                              <div className="flex flex-wrap gap-2">
+                                {currentPair.teacherIds.map(teacherId => {
+                                  const teacher = teachers.find(t => t.id === teacherId);
+                                  return (
+                                    <div
+                                      key={teacherId}
+                                      className="flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm"
+                                    >
+                                      <span>{teacher ? `${teacher.firstName} ${teacher.lastName}` : `Teacher ${teacherId}`}</span>
+                                      <button
+                                        onClick={() => {
+                                          const newPairs = [...editFormData.subjectTeacherPairs];
+                                          if (pairIndex >= 0) {
+                                            newPairs[pairIndex] = {
+                                              ...newPairs[pairIndex],
+                                              teacherIds: newPairs[pairIndex].teacherIds.filter(id => id !== teacherId)
+                                            };
+                                          }
+                                          setEditFormData({...editFormData, subjectTeacherPairs: newPairs});
+                                        }}
+                                        className="text-green-600 hover:text-green-800 transition-colors hover:bg-green-200 rounded-full p-0.5"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Available Teachers for this Subject */}
+                          <div className="max-h-32 overflow-y-auto border border-gray-200 rounded p-2 bg-white">
+                            <div className="text-xs text-gray-500 font-medium mb-2">Available Teachers:</div>
+                            <div className="space-y-1">
+                              {loadingEditTeachers ? (
+                                <div className="text-center py-4 text-gray-500">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mx-auto mb-1"></div>
+                                  <p className="text-xs">Loading...</p>
+                                </div>
+                              ) : (subjectTeachers[subjectId] || [])
+                                .filter(teacher => !currentPair.teacherIds.includes(teacher.id))
+                                .map(teacher => (
+                                <button
+                                  key={teacher.id}
+                                  onClick={() => {
+                                    const newPairs = [...editFormData.subjectTeacherPairs];
+                                    if (pairIndex >= 0) {
+                                      newPairs[pairIndex] = {
+                                        ...newPairs[pairIndex],
+                                        teacherIds: [...newPairs[pairIndex].teacherIds, teacher.id]
+                                      };
+                                    } else {
+                                      newPairs.push({
+                                        subjectId: subjectId,
+                                        teacherIds: [teacher.id]
+                                      });
+                                    }
+                                    setEditFormData({...editFormData, subjectTeacherPairs: newPairs});
+                                  }}
+                                  className="w-full text-left flex items-center justify-between p-2 rounded hover:bg-gray-50 border border-gray-100"
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-gray-700">{teacher.firstName} {teacher.lastName}</span>
+                                    <span className="text-xs text-gray-500">ID: {teacher.teacherId}</span>
+                                  </div>
+                                  <span className="text-xs text-blue-600">+ Add</span>
+                                </button>
+                              ))}
+                              {!loadingEditTeachers && (subjectTeachers[subjectId] || []).filter(teacher => !currentPair.teacherIds.includes(teacher.id)).length === 0 && (
+                                <div className="text-center py-2 text-gray-500 text-xs">
+                                  {(subjectTeachers[subjectId] || []).length === 0 
+                                    ? "No teachers assigned to this subject"
+                                    : "All available teachers assigned"}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 border border-gray-200 rounded-lg">
+                    <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Please select subjects first to assign teachers</p>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Preview Section */}
+            {editFormData.subjectTeacherPairs && editFormData.subjectTeacherPairs.length > 0 && (
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-3">📋 Preview: What will be saved</h4>
+                <div className="space-y-2">
+                  {editFormData.subjectTeacherPairs
+                    .filter(pair => pair.teacherIds.length > 0)
+                    .map((pair, index) => {
+                      const subject = subjects.find(s => s.id === pair.subjectId);
+                      const assignedTeachers = pair.teacherIds.map(id => 
+                        teachers.find(t => t.id === id)
+                      ).filter(Boolean);
+                      
+                      return (
+                        <div key={pair.subjectId} className="flex items-center justify-between p-2 bg-white rounded border border-blue-100">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-blue-900">
+                              {index + 1}. {subject?.name}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              ({editFormData.startTime} - {editFormData.endTime})
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            Teachers: {assignedTeachers.map(t => `${t.firstName} ${t.lastName}`).join(', ')}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+                {editFormData.subjectTeacherPairs.filter(pair => pair.teacherIds.length > 0).length === 0 && (
+                  <div className="text-center py-4 text-blue-600">
+                    <AlertCircle className="w-6 h-6 mx-auto mb-2" />
+                    <p className="text-sm">No subject-teacher assignments configured. Teachers will be auto-assigned.</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end gap-3 mt-6">
               <button
@@ -1116,7 +1379,7 @@ const TimetableManagementPage: React.FC = () => {
                 onClick={handleUpdateTimetable}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
-                Update
+                Update Timetable
               </button>
             </div>
           </div>

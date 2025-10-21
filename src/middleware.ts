@@ -69,6 +69,21 @@ export async function middleware(request: NextRequest) {
   // Apply security headers to ALL responses
   response = SecurityHeaders.apply(response);
 
+  // Strict CORS for API routes
+  if (pathname.startsWith('/api/')) {
+    const allowedOrigin = process.env.FRONTEND_ORIGIN;
+    if (allowedOrigin) {
+      response.headers.set('Vary', 'Origin');
+      response.headers.set('Access-Control-Allow-Origin', allowedOrigin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      response.headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+      response.headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-CSRF-Token');
+    }
+    if (request.method === 'OPTIONS') {
+      return new NextResponse(null, { status: 204, headers: response.headers });
+    }
+  }
+
   // Allow Next.js Server Actions (they have special headers)
   const isServerAction = request.headers.get('next-action') !== null || 
                          request.headers.get('content-type')?.includes('multipart/form-data');
@@ -175,21 +190,40 @@ export async function middleware(request: NextRequest) {
     return errorResponse;
   }
 
-  // Role-based access control
-  const isAccessingOwnRoute = pathname.startsWith(userRoleRoute) || pathname === "/";
-
-  // Check specific role routes
-  if (pathname.startsWith("/admin") && user.role !== "admin") {
-    return NextResponse.redirect(new URL(userRoleRoute, request.url));
-  }
-  if (pathname.startsWith("/teacher") && user.role !== "teacher") {
-    return NextResponse.redirect(new URL(userRoleRoute, request.url));
-  }
-  if (pathname.startsWith("/student") && user.role !== "student") {
-    return NextResponse.redirect(new URL(userRoleRoute, request.url));
-  }
-  if (pathname.startsWith("/parent") && user.role !== "parent") {
-    return NextResponse.redirect(new URL(userRoleRoute, request.url));
+  // STRICT Role-based access control for UI routes (not API routes)
+  // API routes are protected by their own middleware (authenticateJWT + authorizeRole)
+  if (!pathname.startsWith('/api/')) {
+    // Students can ONLY access /student routes
+    if (user.role === "student") {
+      if (!pathname.startsWith("/student") && pathname !== "/") {
+        console.warn(`🚨 SECURITY: Student ${user.id} attempted to access ${pathname}`);
+        return NextResponse.redirect(new URL("/student", request.url));
+      }
+    }
+    
+    // Teachers can ONLY access /teacher routes
+    if (user.role === "teacher") {
+      if (!pathname.startsWith("/teacher") && pathname !== "/") {
+        console.warn(`🚨 SECURITY: Teacher ${user.id} attempted to access ${pathname}`);
+        return NextResponse.redirect(new URL("/teacher", request.url));
+      }
+    }
+    
+    // Parents can ONLY access /parent routes
+    if (user.role === "parent") {
+      if (!pathname.startsWith("/parent") && pathname !== "/") {
+        console.warn(`🚨 SECURITY: Parent ${user.id} attempted to access ${pathname}`);
+        return NextResponse.redirect(new URL("/parent", request.url));
+      }
+    }
+    
+    // Admins can ONLY access /admin routes
+    if (user.role === "admin") {
+      if (!pathname.startsWith("/admin") && pathname !== "/") {
+        console.warn(`🚨 SECURITY: Admin ${user.id} attempted to access ${pathname}`);
+        return NextResponse.redirect(new URL("/admin", request.url));
+      }
+    }
   }
 
   // Handle root path - redirect to role dashboard

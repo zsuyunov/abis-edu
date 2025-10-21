@@ -527,6 +527,8 @@ async function postHandler(request: NextRequest) {
       { error: "An error occurred during login. Please try again." },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

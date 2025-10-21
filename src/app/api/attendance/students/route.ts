@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-// GET /api/attendance/students?classId=1&subjectId=1 - Get students for attendance taking
+// GET /api/attendance/students?classId=1&subjectId=1 OR electiveSubjectId=1 - Get students for attendance taking
 export async function GET(request: NextRequest) {
   try {
     const teacherId = request.headers.get('x-user-id');
@@ -15,12 +15,61 @@ export async function GET(request: NextRequest) {
     const subjectId = searchParams.get('subjectId');
     const academicYearId = searchParams.get('academicYearId');
     const branchId = searchParams.get('branchId');
+    const electiveSubjectId = searchParams.get('electiveSubjectId');
+    const electiveGroupId = searchParams.get('electiveGroupId');
 
-    console.log('🔍 Fetching students with params:', { teacherId, classId, subjectId, academicYearId, branchId });
+    console.log('🔍 Fetching students with params:', { teacherId, classId, subjectId, academicYearId, branchId, electiveSubjectId, electiveGroupId });
 
+    // IMPORTANT: Check if this is an elective request
+    // Elective attendance: electiveSubjectId is provided, classId is optional/ignored
+    // Regular class attendance: classId is required, electiveSubjectId must be null/undefined
+    const isElective = !!electiveSubjectId;
+
+    if (isElective) {
+      // For electives, fetch students assigned to the elective subject
+      console.log('📚 Fetching elective students for electiveSubjectId:', electiveSubjectId);
+      
+      const electiveAssignments = await prisma.electiveStudentAssignment.findMany({
+        where: {
+          electiveSubjectId: parseInt(electiveSubjectId),
+          status: 'ACTIVE'
+        },
+        include: {
+          student: {
+            include: {
+              class: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: {
+          student: {
+            firstName: 'asc'
+          }
+        }
+      });
+
+      const students = electiveAssignments.map(assignment => ({
+        id: assignment.student.id,
+        firstName: assignment.student.firstName,
+        lastName: assignment.student.lastName,
+        studentId: assignment.student.studentId,
+        status: assignment.student.status,
+        class: assignment.student.class
+      }));
+
+      console.log(`📊 Elective students found: ${students.length} for electiveSubjectId: ${electiveSubjectId}`);
+      return NextResponse.json({ data: students, students }, { status: 200 });
+    }
+
+    // Regular class attendance
     if (!classId) {
       console.log('❌ No classId provided');
-      return NextResponse.json({ error: 'Class ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Class ID is required for non-elective attendance' }, { status: 400 });
     }
 
     // Skip teacher assignment verification for now to debug
@@ -49,7 +98,13 @@ export async function GET(request: NextRequest) {
         firstName: true,
         lastName: true,
         studentId: true,
-        status: true
+        status: true,
+        class: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       },
       orderBy: [
         { firstName: 'asc' },

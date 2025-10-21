@@ -330,6 +330,7 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   // Topic mutation
   const topicMutation = useOptimizedMutation(
     async (topicData: { timetableId: string; title: string; }) => {
+      console.log('🚀 Starting topic save:', topicData);
       const response = await csrfFetch('/api/timetable-topics', {
         method: 'POST',
         headers: {
@@ -341,17 +342,33 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
           title: topicData.title,
         }),
       });
-      if (!response.ok) throw new Error('Failed to save topic');
-      return response.json();
+      
+      console.log('📡 Topic API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Topic API error:', errorData);
+        throw new Error(errorData.error || 'Failed to save topic');
+      }
+      
+      const result = await response.json();
+      console.log('✅ Topic saved successfully:', result);
+      return result;
     },
     {
       onSuccess: async () => {
+        console.log('🎉 Topic mutation success');
         setShowTopicModal(false);
         setNewTopic("");
         // Force immediate refresh by updating trigger
         setRefreshTrigger(prev => prev + 1);
         // Also refetch for extra safety
         await refetch();
+      },
+      onError: (error) => {
+        console.error('❌ Topic mutation error:', error);
+        // Show error message to user
+        alert(`Failed to save topic: ${error.message}`);
       },
       invalidateQueries: [['teacher-timetables', teacherId, formattedDate, selectedBranchId, selectedRole]]
     }
@@ -412,9 +429,10 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
   const fetchStudents = useCallback(async (classId: number) => {
     setLoadingStudents(true);
     try {
-      const response = await csrfFetch(`/api/students/by-class?classId=${classId}`);
+      const response = await csrfFetch(`/api/teacher-students/by-class?classId=${classId}`);
       if (response.ok) {
-        const studentData = await response.json();
+        const result = await response.json();
+        const studentData = result.success ? result.data : result;
         setStudents(studentData);
         // Initialize attendance and grade data
         const initialAttendance: Record<string, 'present' | 'absent' | 'late' | 'excused'> = {};
@@ -436,9 +454,11 @@ const OptimizedTeacherScheduleDashboard = ({ teacherId, teacherData }: TeacherSc
         commentsRef.current = initialComments;
       } else {
         console.error('OptimizedTeacherScheduleDashboard - Failed to fetch students:', response.status);
+        setStudents([]);
       }
     } catch (error) {
       console.error('OptimizedTeacherScheduleDashboard - Error fetching students:', error);
+      setStudents([]);
     } finally {
       setLoadingStudents(false);
     }

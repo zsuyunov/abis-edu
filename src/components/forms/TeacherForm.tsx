@@ -40,7 +40,30 @@ const TeacherForm = ({
     setValue,
   } = useForm<TeacherSchema | TeacherUpdateSchema>({
     resolver: zodResolver(type === "update" ? teacherUpdateSchema : teacherSchema),
-    mode: "onSubmit", // Only validate on submit
+    mode: "onChange", // Validate on change to catch errors early
+    defaultValues: type === "update" ? {
+      id: data?.id,
+      firstName: data?.firstName || "",
+      lastName: data?.lastName || "",
+      dateOfBirth: data?.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
+      phone: data?.phone || "",
+      teacherId: data?.teacherId || "",
+      email: data?.email || "",
+      address: data?.address || "",
+      gender: data?.gender,
+      status: data?.status || "ACTIVE",
+      password: "",
+    } : {
+      firstName: "",
+      lastName: "",
+      phone: "",
+      teacherId: "",
+      password: "",
+      email: "",
+      address: "",
+      gender: undefined,
+      status: "ACTIVE",
+    },
   });
 
   const [state, formAction] = useFormState(
@@ -48,6 +71,7 @@ const TeacherForm = ({
     {
       success: false,
       error: false,
+      message: "",
     }
   );
 
@@ -57,21 +81,69 @@ const TeacherForm = ({
     photo?: any;
   }>({});
 
-  const onSubmit = handleSubmit((data) => {
-    console.log("Form data submitted:", data);
-    console.log("Teacher ID value:", data.teacherId);
-    console.log("Form errors:", errors);
-    console.log("Form isValid:", isValid);
-    console.log("Form isDirty:", isDirty);
-    // Include attachment URLs in the data
-    const formDataWithAttachments = {
-      ...data,
-      attachments: attachments,
-      // For updates, only include password if it's a non-empty string
-      ...(type === "update" ? (data.password && data.password.trim() !== '' ? { password: data.password } : {}) : {}),
-    };
-    console.log("Final form data:", formDataWithAttachments);
-    formAction(formDataWithAttachments as any);
+  const onSubmit = handleSubmit(
+    (data) => {
+      console.log("✅ Form validation passed!");
+      console.log("🚀 Teacher form submitted:", data);
+      console.log("🔍 Form data keys:", Object.keys(data));
+      console.log("🔍 Form data values:", Object.values(data));
+    
+    // Convert to FormData for server action
+    const payload = new FormData();
+    
+    // Add all form fields to FormData
+    Object.keys(data).forEach(key => {
+      const value = (data as any)[key];
+      console.log(`🔍 Processing field ${key}:`, value, typeof value);
+      
+      if (value !== undefined && value !== null) {
+        // Skip empty password field for updates
+        if (type === "update" && key === "password" && typeof value === 'string' && value.trim() === '') {
+          console.log(`⏭️ Skipping empty password for update`);
+          return;
+        }
+        
+        // Skip empty strings unless it's a valid empty value
+        if (value === '') {
+          console.log(`⏭️ Skipping empty value for ${key}`);
+          return;
+        }
+        
+        if (value instanceof Date) {
+          payload.append(key, value.toISOString());
+          console.log(`✅ Added ${key} as Date:`, value.toISOString());
+        } else {
+          payload.append(key, String(value));
+          console.log(`✅ Added ${key}:`, String(value));
+        }
+      } else {
+        console.log(`⚠️ Skipping ${key} - undefined or null`);
+      }
+    });
+    
+    // Add attachments
+    if (attachments.passport) {
+      payload.append('passport', JSON.stringify(attachments.passport));
+      console.log('✅ Added passport attachment');
+    }
+    if (attachments.resume) {
+      payload.append('resume', JSON.stringify(attachments.resume));
+      console.log('✅ Added resume attachment');
+    }
+    if (attachments.photo) {
+      payload.append('photo', JSON.stringify(attachments.photo));
+      console.log('✅ Added photo attachment');
+    }
+    
+    console.log("📤 Submitting teacher payload to server action");
+    console.log("📦 FormData entries:", Array.from(payload.entries()));
+    formAction(payload as any);
+  },
+  (errors) => {
+    console.error("❌ Form validation failed!");
+    console.error("📋 Validation errors:", errors);
+    console.error("📋 Error fields:", Object.keys(errors));
+    toast.error("Please fix the form errors before submitting");
   });
 
   const router = useRouter();
@@ -89,6 +161,13 @@ const TeacherForm = ({
   const [isGeneratingId, setIsGeneratingId] = useState(false);
   const [generatedTeacherId, setGeneratedTeacherId] = useState<string>("");
   const [currentTeacherId, setCurrentTeacherId] = useState<string>(data?.teacherId || "");
+
+  // Initialize form value for teacherId
+  useEffect(() => {
+    if (data?.teacherId) {
+      setValue("teacherId", data.teacherId);
+    }
+  }, [data?.teacherId, setValue]);
 
   // Teacher ID validation function
   const validateTeacherId = async (teacherId: string) => {
@@ -212,7 +291,6 @@ const TeacherForm = ({
             {...register("firstName")}
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
             placeholder="John"
-            defaultValue={data?.firstName}
           />
           {errors?.firstName?.message && (
             <p className="text-xs text-red-400">{errors.firstName.message.toString()}</p>
@@ -228,7 +306,6 @@ const TeacherForm = ({
             {...register("lastName")}
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
             placeholder="Doe"
-            defaultValue={data?.lastName}
           />
           {errors?.lastName?.message && (
             <p className="text-xs text-red-400">{errors.lastName.message.toString()}</p>
@@ -242,7 +319,6 @@ const TeacherForm = ({
           <select
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900"
             {...register("gender")}
-            defaultValue={data?.gender}
           >
             <option value="">Select Gender</option>
             <option value="MALE">Male</option>
@@ -285,7 +361,6 @@ const TeacherForm = ({
             {...register("phone")}
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
             placeholder="+998901234567"
-            defaultValue={data?.phone}
           />
           {errors?.phone?.message && (
             <p className="text-xs text-red-400">{errors.phone.message.toString()}</p>
@@ -299,13 +374,12 @@ const TeacherForm = ({
           <div className="relative">
             <input
               type="text"
-              {...register("teacherId")}
               className="ring-[1.5px] ring-gray-300 p-2 pr-10 rounded-md text-sm w-full bg-white text-gray-900 placeholder-gray-400"
               placeholder="T12345"
               value={currentTeacherId}
               onChange={(e) => {
                 setCurrentTeacherId(e.target.value);
-                setValue("teacherId", e.target.value);
+                setValue("teacherId", e.target.value, { shouldValidate: true });
               }}
             />
             {type === "create" && (
@@ -385,7 +459,6 @@ const TeacherForm = ({
           <select
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full bg-white text-gray-900"
             {...register("status")}
-            defaultValue={data?.status || "ACTIVE"}
           >
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
@@ -587,9 +660,12 @@ const TeacherForm = ({
       </div>
 
       {state.error && (
-        <span className="text-red-500">Something went wrong!</span>
+        <span className="text-red-500">{state.message || "Something went wrong!"}</span>
       )}
-      <button className="bg-blue-400 text-white p-2 rounded-md">
+      <button 
+        type="submit" 
+        className="bg-blue-400 text-white p-2 rounded-md hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
         {type === "create" ? "Create" : "Update"}
       </button>
     </form>

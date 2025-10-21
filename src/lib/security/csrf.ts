@@ -29,8 +29,20 @@ export class CSRFProtection {
       expiresAt: Date.now() + TOKEN_LIFETIME_MS,
     });
     
-    // Store with TTL (1 hour)
-    await storage.set(key, data, Math.ceil(TOKEN_LIFETIME_MS / 1000));
+    // Store with TTL (1 hour) - with timeout protection
+    try {
+      await Promise.race([
+        storage.set(key, data, Math.ceil(TOKEN_LIFETIME_MS / 1000)),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('CSRF storage timeout')), 2000)
+        )
+      ]);
+      console.log(`✅ CSRF token stored successfully for session ${sessionId}`);
+    } catch (error) {
+      console.warn('⚠️ CSRF token storage failed, token generated but not persisted:', error);
+      // Return token anyway - it will work for this session even if not persisted
+      // The storage adapter should handle Redis failures gracefully with fallback
+    }
     
     return token;
   }
@@ -43,7 +55,20 @@ export class CSRFProtection {
    */
   static async verifyToken(sessionId: string, token: string): Promise<boolean> {
     const key = `csrf:${sessionId}`;
-    const recordStr = await storage.get(key);
+    
+    let recordStr: string | null;
+    try {
+      // Add timeout protection to storage operations
+      recordStr = await Promise.race([
+        storage.get(key),
+        new Promise<null>((_, reject) => 
+          setTimeout(() => reject(new Error('CSRF verification timeout')), 1000)
+        )
+      ]);
+    } catch (error) {
+      console.warn('⚠️ CSRF token verification failed due to storage timeout:', error);
+      return false;
+    }
     
     if (!recordStr) return false;
     
@@ -51,7 +76,8 @@ export class CSRFProtection {
     
     // Check expiry
     if (Date.now() > record.expiresAt) {
-      await storage.del(key);
+      // Don't wait for deletion if it times out
+      storage.del(key).catch(() => {});
       return false;
     }
     

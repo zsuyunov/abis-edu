@@ -62,3 +62,9 @@ export class AuthService {
 
 // Named export for compatibility
 export const auth = AuthService;
+
+// Named exports for direct function access
+export const verifyToken = AuthService.verifyToken;
+export const generateToken = AuthService.generateToken;
+export const hashPassword = AuthService.hashPassword;
+export const verifyPassword = AuthService.verifyPassword;

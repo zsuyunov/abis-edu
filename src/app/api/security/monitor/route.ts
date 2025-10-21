@@ -10,9 +10,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF, verifyJwt } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 import { SecurityMonitoring } from '@/lib/security/monitoring';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     // SECURITY FIX: Admin authentication with signature verification
     const authToken = request.cookies.get('auth_token')?.value;
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}))
 
 // Manual trigger for scheduled scan
 async function postHandler(request: NextRequest) {
@@ -116,4 +118,6 @@ async function postHandler(request: NextRequest) {
     );
   }
 }
+
+export const POST = authenticateJWT(authorizeRole('ADMIN')(withCSRF(postHandler)));
 

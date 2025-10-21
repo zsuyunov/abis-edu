@@ -190,6 +190,35 @@ export async function csrfFetch(url: string, options: RequestInit = {}): Promise
   // Always include credentials for cookies
   options.credentials = options.credentials || 'include';
 
-  return fetch(url, options);
+  const response = await fetch(url, options);
+
+  // If we get a 403 error and this was a CSRF-protected request, try once more with a fresh token
+  if (response.status === 403 && needsCsrf) {
+    try {
+      console.log(`🔄 Got 403 error, retrying ${options.method} ${url} with fresh CSRF token`);
+      
+      // Clear cached token and get a fresh one
+      clearCsrfToken();
+      const freshToken = await getCsrfToken();
+      
+      // Retry the request with fresh token
+      const retryOptions = {
+        ...options,
+        headers: {
+          ...options.headers,
+          'x-csrf-token': freshToken,
+        },
+      };
+      
+      console.log(`🔐 Retrying with fresh CSRF token for ${options.method} ${url}`);
+      return fetch(url, retryOptions);
+    } catch (error) {
+      console.error(`❌ Failed to retry with fresh CSRF token:`, error);
+      // Return original response if retry fails
+      return response;
+    }
+  }
+
+  return response;
 }
 

@@ -1,32 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async function GET(request: NextRequest, _ctx?: any, locals?: { user?: { id: string; role: string } }) {
   try {
-    const studentId = request.headers.get('x-user-id');
-    let authenticatedUserId = studentId;
-
-    if (!studentId) {
-      const authHeader = request.headers.get('authorization');
-      const token = AuthService.extractTokenFromHeader(authHeader);
-      if (!token) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      
-      const session = await AuthService.verifyToken(token);
-      if (!session?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      authenticatedUserId = session.id;
+    const user = locals?.user;
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const url = new URL(request.url);
-    const requestedStudentId = url.searchParams.get("studentId") || authenticatedUserId;
+    const requestedStudentId = url.searchParams.get("studentId") || user.id;
 
-    // Verify student can only access their own data
-    if (authenticatedUserId !== requestedStudentId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    // SECURITY: Verify student can only access their own data
+    if (user.role === 'STUDENT' && user.id !== requestedStudentId) {
+      console.warn(`🚨 SECURITY: Student ${user.id} attempted to access subjects of student ${requestedStudentId}`);
+      return NextResponse.json({ error: "Access denied: You can only access your own subjects" }, { status: 403 });
+    }
+
+    // SECURITY: Parents can only access their children's data
+    if (user.role === 'PARENT') {
+      const studentParent = await prisma.studentParent.findFirst({
+        where: {
+          parentId: user.id,
+          studentId: requestedStudentId
+        }
+      });
+      
+      if (!studentParent) {
+        console.warn(`🚨 SECURITY: Parent ${user.id} attempted to access subjects of non-child student ${requestedStudentId}`);
+        return NextResponse.json({ error: "Access denied: You can only access your children's subjects" }, { status: 403 });
+      }
     }
 
     if (!requestedStudentId) {
@@ -83,4 +89,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}));

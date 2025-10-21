@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 import prisma from '@/lib/prisma';
 
 // GET - Fetch single timetable
@@ -97,46 +99,79 @@ async function putHandler(
       // Create new timetables for each subject
       const newTimetables = [];
       for (const subjectId of subjectIds) {
-        // Find teachers specifically assigned to this subject
+        // Determine teachers for this subject
         let subjectTeacherIds = [];
         
         if (teacherIds && teacherIds.length > 0) {
-          // Use the provided teachers for all subjects
-          subjectTeacherIds = teacherIds;
-        } else {
-          // Auto-assign teachers specifically for this subject
+          // Use manually selected teachers from the form
+          // Filter to only include teachers that are actually assigned to this subject
           const subjectTeacherAssignments = await prisma.teacherAssignment.findMany({
             where: {
-              classId: currentTimetable.classId,
+              classId: currentTimetable.classId || undefined,
               subjectId: subjectId,
               academicYearId: currentTimetable.academicYearId,
               status: 'ACTIVE',
-              role: 'TEACHER'
-            },
-            include: {
-              Teacher: true
+              role: 'TEACHER',
+              teacherId: { in: teacherIds }
             }
           });
           
           subjectTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
-          console.log(`📚 Subject ${subjectId} assigned teachers: [${subjectTeacherIds.join(', ')}]`);
+          console.log(`👨‍🏫 Subject ${subjectId} using selected teachers: [${subjectTeacherIds.join(', ')}]`);
+          
+          // If no valid teachers found from selection, fall back to auto-assignment
+          if (subjectTeacherIds.length === 0) {
+            const allSubjectTeachers = await prisma.teacherAssignment.findMany({
+              where: {
+                classId: currentTimetable.classId || undefined,
+                subjectId: subjectId,
+                academicYearId: currentTimetable.academicYearId,
+                status: 'ACTIVE',
+                role: 'TEACHER'
+              }
+            });
+            subjectTeacherIds = allSubjectTeachers.map(ta => ta.teacherId);
+            console.log(`🔄 Subject ${subjectId} fallback to auto-assigned teachers: [${subjectTeacherIds.join(', ')}]`);
+          }
+        } else {
+          // Auto-assign teachers specifically for THIS subject
+          const subjectTeacherAssignments = await prisma.teacherAssignment.findMany({
+            where: {
+              classId: currentTimetable.classId || undefined,
+              subjectId: subjectId,
+              academicYearId: currentTimetable.academicYearId,
+              status: 'ACTIVE',
+              role: 'TEACHER'
+            }
+          });
+          
+          subjectTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
+          console.log(`📚 Subject ${subjectId} auto-assigned teachers: [${subjectTeacherIds.join(', ')}]`);
         }
 
+        const timetableData = {
+          branchId: currentTimetable.branchId,
+          classId: currentTimetable.classId,
+          academicYearId: currentTimetable.academicYearId,
+          dayOfWeek: dayOfWeekUpper || currentTimetable.dayOfWeek,
+          startTime: startTimeDate || currentTimetable.startTime,
+          endTime: endTimeDate || currentTimetable.endTime,
+          roomNumber: currentTimetable.roomNumber,
+          buildingName: currentTimetable.buildingName,
+          subjectId: subjectId,
+          teacherIds: subjectTeacherIds,
+          isActive: currentTimetable.isActive,
+          ...otherData
+        };
+        
+        console.log(`💾 Creating timetable for subject ${subjectId}:`, {
+          day: timetableData.dayOfWeek,
+          room: timetableData.roomNumber,
+          teachers: subjectTeacherIds
+        });
+        
         const newTimetable = await prisma.timetable.create({
-          data: {
-            branchId: currentTimetable.branchId,
-            classId: currentTimetable.classId,
-            academicYearId: currentTimetable.academicYearId,
-            dayOfWeek: dayOfWeekUpper || currentTimetable.dayOfWeek,
-            startTime: startTimeDate || currentTimetable.startTime,
-            endTime: endTimeDate || currentTimetable.endTime,
-            roomNumber: currentTimetable.roomNumber,
-            buildingName: currentTimetable.buildingName,
-            subjectId: subjectId,
-            teacherIds: subjectTeacherIds,
-            isActive: currentTimetable.isActive,
-            ...otherData
-          },
+          data: timetableData,
           include: {
             subject: true,
             class: true,
@@ -186,7 +221,7 @@ async function putHandler(
   }
 }
 
-export const PUT = withCSRF(putHandler);
+export const PUT = authenticateJWT(authorizeRole('ADMIN')(withCSRF(putHandler)));
 
 // DELETE - Delete single timetable
 async function deleteHandler(
@@ -213,4 +248,4 @@ async function deleteHandler(
   }
 }
 
-export const DELETE = withCSRF(deleteHandler);
+export const DELETE = authenticateJWT(authorizeRole('ADMIN')(withCSRF(deleteHandler)));

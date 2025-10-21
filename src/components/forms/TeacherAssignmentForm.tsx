@@ -334,8 +334,10 @@ const TeacherAssignmentForm = ({
         }
 
         if (subjectsRes.ok) {
-          const subs = await subjectsRes.json();
-          setSubjects(Array.isArray(subs) ? subs : (subs.subjects || []));
+          const result = await subjectsRes.json();
+          // Handle the new API response format: { success: true, data: [...] }
+          const subjects = result.success ? result.data : result;
+          setSubjects(Array.isArray(subjects) ? subjects : []);
         }
 
         // Pre-populate for update mode

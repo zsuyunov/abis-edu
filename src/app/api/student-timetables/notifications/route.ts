@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
       notifications.push({
         id: `upcoming-${timetable.id}`,
         type: "upcoming",
-        title: `Upcoming: Class ${timetable.class.name}`, // Updated due to schema changes
+        title: `Upcoming: ${timetable.class?.name || 'Elective Class'}`, // Updated due to schema changes
         message: message,
         timestamp: timetable.startTime,
         read: false,

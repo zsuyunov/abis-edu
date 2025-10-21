@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 import prisma from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
+  // Basic auth check
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  const params = context.params;
   try {
     const academicYear = await prisma.academicYear.findUnique({
       where: { id: parseInt(params.id) },
@@ -35,8 +44,9 @@ export async function GET(
 
 async function putHandler(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
+  const params = context.params;
   try {
     const body = await request.json();
     const { name, startDate, endDate, isCurrent, semesters } = body;
@@ -90,14 +100,39 @@ async function putHandler(
   }
 }
 
+export async function PUT(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
+  // Basic auth check
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  return putHandler(request, context);
+}
+export async function DELETE(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
+  // Basic auth check
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  return deleteHandler(request, context);
+}
+
 async function deleteHandler(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
     const body = await request.json();
     const { comment, createdBy } = body;
-    const academicYearId = parseInt(params.id);
+    const academicYearId = parseInt(context.params.id);
 
     // Check if academic year is being used by classes
     const classCount = await prisma.class.count({

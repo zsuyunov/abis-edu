@@ -117,16 +117,16 @@ class ResilientRedisStorage implements StorageAdapter {
     this.fallback = new MemoryStorage();
     this.fallback.startCleanup();
 
-    // Initialize Redis with fast-fail configuration
+    // Initialize Redis with ultra-fast-fail configuration for better UX
     this.client = new Redis(redisUrl, {
-      maxRetriesPerRequest: 2, // Reduced retries
-      connectTimeout: 5000, // 5 second timeout
-      commandTimeout: 3000, // 3 second command timeout
+      maxRetriesPerRequest: 1, // Only 1 retry to fail fast
+      connectTimeout: 1000, // 1 second timeout - fail fast
+      commandTimeout: 1000, // 1 second command timeout - fail fast
       enableReadyCheck: false, // Don't wait for ready
       lazyConnect: true, // Don't connect immediately
       retryStrategy(times) {
-        if (times > 3) return null; // Stop retrying after 3 attempts
-        return Math.min(times * 200, 1000); // Fast retry with max 1s delay
+        if (times > 1) return null; // Stop retrying after 1 attempt
+        return 100; // Very fast retry - 100ms
       },
     });
 

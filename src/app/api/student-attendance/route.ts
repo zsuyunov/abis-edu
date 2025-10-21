@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async function GET(request: NextRequest) {
   try {
     // Try header-based auth first, then fallback to token auth
     const studentId = request.headers.get('x-user-id');
@@ -60,6 +62,21 @@ export async function GET(request: NextRequest) {
     // Calculate date range based on period or month
     const dateRange = month ? calculateMonthRange(month) : calculateDateRange(period);
 
+    // Get student's elective subject assignments to include elective attendance
+    const electiveAssignments = await prisma.electiveStudentAssignment.findMany({
+      where: {
+        studentId: requestedStudentId,
+        status: 'ACTIVE'
+      },
+      include: {
+        electiveSubject: {
+          include: {
+            subject: true
+          }
+        }
+      }
+    });
+
     // Build filter conditions
     const attendanceWhere: any = {
       studentId: requestedStudentId,
@@ -69,9 +86,25 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // Filter by subjectId directly (Attendance has direct subjectId field)
+    // Filter by subjectId - include both regular and elective attendance for this subject
     if (subjectId) {
-      attendanceWhere.subjectId = parseInt(subjectId);
+      const subjectIdInt = parseInt(subjectId);
+      
+      // Find elective subjects that match this subject ID
+      const matchingElectiveSubjects = electiveAssignments
+        .filter(assignment => assignment.electiveSubject.subjectId === subjectIdInt)
+        .map(assignment => assignment.electiveSubjectId);
+
+      // Create OR condition to include both regular and elective attendance
+      if (matchingElectiveSubjects.length > 0) {
+        attendanceWhere.OR = [
+          { subjectId: subjectIdInt, electiveSubjectId: null }, // Regular class attendance
+          { electiveSubjectId: { in: matchingElectiveSubjects } } // Elective attendance
+        ];
+      } else {
+        // Only regular attendance for this subject
+        attendanceWhere.subjectId = subjectIdInt;
+      }
     }
 
     // Filter by academicYearId directly (Attendance has direct academicYearId field)
@@ -89,11 +122,18 @@ export async function GET(request: NextRequest) {
       whereClause: attendanceWhere
     });
 
-    // Get attendance records with subject information
+    // Get attendance records with subject and elective information
     const attendanceRecords = await prisma.attendance.findMany({
       where: attendanceWhere,
       include: {
         subject: true, // Direct relation from Attendance to Subject
+        electiveGroup: true, // Include elective group info
+        electiveSubject: {
+          include: {
+            subject: true,
+            electiveGroup: true
+          }
+        }
       },
       orderBy: {
         date: 'desc',
@@ -136,21 +176,32 @@ export async function GET(request: NextRequest) {
     // Format data for analytics components
     const barData = generateBarChartData(attendanceRecords, period);
     
-    // Format attendance records with subject information
-    const formattedAttendanceRecords = attendanceRecords.map(record => ({
-      id: record.id.toString(),
-      date: record.date.toISOString(),
-      status: record.status,
-      notes: record.notes,
-      subject: {
-        id: record.subject?.id?.toString() || record.subjectId?.toString() || '',
-        name: record.subject?.name || 'Unknown Subject'
-      },
-      timetable: {
-        startTime: '00:00',
-        endTime: '00:00'
-      }
-    }));
+    // Format attendance records with subject and elective information
+    const formattedAttendanceRecords = attendanceRecords.map(record => {
+      const isElective = !!record.electiveSubjectId;
+      const subjectInfo = isElective ? record.electiveSubject?.subject : record.subject;
+      
+      return {
+        id: record.id.toString(),
+        date: record.date.toISOString(),
+        status: record.status,
+        notes: record.notes,
+        subject: {
+          id: subjectInfo?.id?.toString() || record.subjectId?.toString() || '',
+          name: subjectInfo?.name || 'Unknown Subject'
+        },
+        elective: isElective ? {
+          groupId: record.electiveGroupId,
+          groupName: record.electiveGroup?.name || record.electiveSubject?.electiveGroup?.name || 'Unknown Group',
+          subjectId: record.electiveSubjectId,
+          isElective: true
+        } : null,
+        timetable: {
+          startTime: '00:00',
+          endTime: '00:00'
+        }
+      };
+    });
     
     return NextResponse.json({
       student: {
@@ -196,7 +247,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}));
 
 // Helper functions
 function calculateDateRange(period: string) {
@@ -307,6 +358,21 @@ function calculateAttendanceStats(records: any[], period: string) {
 }
 
 async function getAttendanceCalendar(studentId: string, dateRange: any, subjectId?: string, academicYearId?: string) {
+  // Get student's elective assignments for calendar view
+  const electiveAssignments = await prisma.electiveStudentAssignment.findMany({
+    where: {
+      studentId: studentId,
+      status: 'ACTIVE'
+    },
+    include: {
+      electiveSubject: {
+        include: {
+          subject: true
+        }
+      }
+    }
+  });
+
   const attendanceWhere: any = {
     studentId,
     date: {
@@ -315,9 +381,25 @@ async function getAttendanceCalendar(studentId: string, dateRange: any, subjectI
     },
   };
 
-  // Filter by subjectId directly (Attendance has direct subjectId field)
+  // Filter by subjectId - include both regular and elective attendance
   if (subjectId) {
-    attendanceWhere.subjectId = parseInt(subjectId);
+    const subjectIdInt = parseInt(subjectId);
+    
+    // Find elective subjects that match this subject ID
+    const matchingElectiveSubjects = electiveAssignments
+      .filter(assignment => assignment.electiveSubject.subjectId === subjectIdInt)
+      .map(assignment => assignment.electiveSubjectId);
+
+    // Create OR condition to include both regular and elective attendance
+    if (matchingElectiveSubjects.length > 0) {
+      attendanceWhere.OR = [
+        { subjectId: subjectIdInt, electiveSubjectId: null }, // Regular class attendance
+        { electiveSubjectId: { in: matchingElectiveSubjects } } // Elective attendance
+      ];
+    } else {
+      // Only regular attendance for this subject
+      attendanceWhere.subjectId = subjectIdInt;
+    }
   }
 
   // Filter by academicYearId directly (Attendance has direct academicYearId field)
@@ -327,6 +409,16 @@ async function getAttendanceCalendar(studentId: string, dateRange: any, subjectI
 
   const attendanceRecords = await prisma.attendance.findMany({
     where: attendanceWhere,
+    include: {
+      subject: true,
+      electiveGroup: true,
+      electiveSubject: {
+        include: {
+          subject: true,
+          electiveGroup: true
+        }
+      }
+    },
     orderBy: {
       date: 'desc',
     },

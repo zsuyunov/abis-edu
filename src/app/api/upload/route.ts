@@ -3,6 +3,9 @@ import { withCSRF } from '@/lib/security';
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
+import { validateFileUpload } from '@/middlewares/validateFileUpload';
 
 async function postHandler(request: NextRequest) {
   try {
@@ -74,4 +77,26 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(
+  authorizeRole('TEACHER', 'STUDENT')(
+    validateFileUpload({
+      formField: 'file',
+      maxSizeBytes: 10 * 1024 * 1024,
+      allowedExtensions: ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.png', '.jpg', '.jpeg', '.gif', '.mp4', '.mp3'],
+      allowedMimeTypes: [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/gif',
+        'video/mp4',
+        'audio/mp3',
+        'audio/mpeg',
+      ],
+    })(withCSRF(postHandler))
+  )
+);

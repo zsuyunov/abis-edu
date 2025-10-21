@@ -50,6 +50,8 @@ interface TimetableEntry {
     description?: string;
     status: 'draft' | 'in_progress' | 'completed' | 'cancelled';
   }>;
+  isElective?: boolean;
+  electiveGroup?: { id: number; name: string } | null;
 }
 
 interface TeacherWeeklyTimetableProps {
@@ -342,10 +344,20 @@ const TeacherWeeklyTimetable = ({
                     }`}>
                       {timetable && (
                         <div className={`h-full rounded-lg p-3 transition-all duration-200 hover:shadow-md cursor-pointer ${
-                          timetable.status === "ACTIVE" 
-                            ? "bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200" 
-                            : "bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200"
+                          // Visual distinction: Purple for electives, Blue for active classes, Gray for inactive
+                          timetable.isElective
+                            ? "bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-300"
+                            : timetable.status === "ACTIVE" 
+                              ? "bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200" 
+                              : "bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200"
                         }`}>
+                          {/* Elective Badge - only displayed for elective timetables */}
+                          {timetable.isElective && timetable.electiveGroup && (
+                            <div className="text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full inline-block mb-2">
+                              📚 Elective
+                            </div>
+                          )}
+                          
                           {/* Subject and Class */}
                           <div className="space-y-2">
                             <div className="flex items-center gap-2">
@@ -356,9 +368,11 @@ const TeacherWeeklyTimetable = ({
                             </div>
                             
                             <div className="flex items-center gap-2">
-                              <Users className="w-4 h-4 text-indigo-600" />
-                              <span className="text-sm text-indigo-700">
-                                {timetable.class.name}
+                              <Users className={`w-4 h-4 ${timetable.isElective ? 'text-purple-600' : 'text-indigo-600'}`} />
+                              <span className={`text-sm ${timetable.isElective ? 'text-purple-700' : 'text-indigo-700'}`}>
+                                {timetable.isElective && timetable.electiveGroup 
+                                  ? timetable.electiveGroup.name 
+                                  : timetable.class?.name || 'N/A'}
                               </span>
                           </div>
 

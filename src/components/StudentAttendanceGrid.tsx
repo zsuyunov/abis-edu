@@ -231,29 +231,29 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
     >
       <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+        <div className="p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                <BookOpen className="w-5 h-5 text-white" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">My Attendance Record</h2>
-                <p className="text-sm text-gray-600">View your attendance history by subject</p>
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">My Attendance Record</h2>
+                <p className="text-xs sm:text-sm text-gray-600">View your attendance history by subject</p>
               </div>
             </div>
           </div>
 
           {/* Subject Filter */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Filter className="w-4 h-4" />
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <Filter className="w-3 h-3 sm:w-4 sm:h-4" />
               Filter by Subject
             </label>
             <select
               value={selectedSubject}
               onChange={(e) => setSelectedSubject(e.target.value)}
-              className="w-full px-4 py-3 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-all duration-200"
+              className="w-full px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-all duration-200"
             >
               <option value="">All Subjects</option>
               {Array.isArray(subjects) && subjects.map(subject => (
@@ -268,12 +268,12 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => navigateMonth('prev')}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-colors"
+              className="p-1.5 sm:p-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-colors"
             >
-              <ChevronLeft className="w-6 h-6" />
+              <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
             </motion.button>
             
-            <h3 className="text-lg font-bold text-gray-900">
+            <h3 className="text-base sm:text-lg font-bold text-gray-900">
               {format(currentDate, 'MMMM yyyy')}
             </h3>
             
@@ -281,9 +281,9 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => navigateMonth('next')}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-colors"
+              className="p-1.5 sm:p-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-colors"
             >
-              <ChevronRight className="w-6 h-6" />
+              <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
             </motion.button>
           </div>
         </div>
@@ -305,20 +305,20 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <div className="overflow-auto max-h-[600px] relative">
+              <div className="overflow-auto max-h-[400px] sm:max-h-[600px] relative">
                 <table className="min-w-full border-collapse">
                   <thead className="sticky top-0 z-30">
                     <tr className="bg-gray-50 border-b-2 border-gray-200">
-                      <th className="sticky left-0 z-40 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r-2 border-gray-300 min-w-[160px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                      <th className="sticky left-0 z-40 bg-gray-50 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r-2 border-gray-300 min-w-[120px] sm:min-w-[160px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                         Subject
                       </th>
                       {monthDays.map((day, index) => (
-                        <th key={day.toISOString()} className={`px-3 py-2 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider border-r border-gray-100 min-w-[60px] ${
+                        <th key={day.toISOString()} className={`px-1 sm:px-3 py-1 sm:py-2 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider border-r border-gray-100 min-w-[40px] sm:min-w-[60px] ${
                           index % 7 === 5 || index % 7 === 6 ? 'bg-gray-100' : 'bg-gray-50'
                         }`}>
                           <div className="flex flex-col items-center">
-                            <span className="text-base font-bold text-gray-900">{format(day, 'dd')}</span>
-                            <span className="text-xs text-gray-500">{format(day, 'EEE')}</span>
+                            <span className="text-sm sm:text-base font-bold text-gray-900">{format(day, 'dd')}</span>
+                            <span className="text-[10px] sm:text-xs text-gray-500">{format(day, 'EEE')}</span>
                           </div>
                         </th>
                       ))}
@@ -331,7 +331,7 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
                       <tr key={subject.id} className={`border-b border-gray-100 hover:bg-gray-50/50 transition-colors ${
                         subjectIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
                       }`}>
-                        <td className="sticky left-0 z-20 px-4 py-3 text-sm font-medium text-gray-900 border-r-2 border-gray-300 min-w-[160px] bg-gradient-to-r from-white via-white to-gray-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                        <td className="sticky left-0 z-20 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-gray-900 border-r-2 border-gray-300 min-w-[120px] sm:min-w-[160px] bg-gradient-to-r from-white via-white to-gray-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                           <div className="truncate font-semibold">{subject.name}</div>
                         </td>
                         {monthDays.map((day, dayIndex) => {
@@ -341,7 +341,7 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
                           return (
                             <td 
                               key={day.toISOString()} 
-                              className={`px-2 py-3 text-center border-r border-gray-100 min-w-[60px] ${
+                              className={`px-1 sm:px-2 py-2 sm:py-3 text-center border-r border-gray-100 min-w-[40px] sm:min-w-[60px] ${
                                 dayIndex % 7 === 5 || dayIndex % 7 === 6 ? 'bg-gray-50/50' : 'bg-white'
                               }`}
                             >
@@ -351,7 +351,7 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
                                     whileHover={{ scale: 1.15 }}
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => handleCellClick(record)}
-                                    className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 hover:shadow-lg mx-auto ${
+                                    className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center transition-all duration-200 hover:shadow-lg mx-auto ${
                                       hasLesson2() && isSwapping ? 'scale-95 opacity-70' : ''
                                     } ${getStatusColor(record.status)}`}
                                     title={`Click to view details - ${getStatusText(record.status)}`}
@@ -382,7 +382,7 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
                                           duration: 0.2,
                                           ease: "easeInOut"
                                         }}
-                                        className="absolute -top-1 -right-1 bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-lg"
+                                        className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 bg-gradient-to-br from-purple-500 to-indigo-600 text-white text-[8px] sm:text-[10px] font-bold rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center shadow-lg"
                                       >
                                         L{showingLesson}
                                       </motion.span>
@@ -390,8 +390,8 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
                                   )}
                                 </div>
                               ) : (
-                                <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center mx-auto">
-                                  <span className="text-gray-400 text-xs">–</span>
+                                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-gray-100 flex items-center justify-center mx-auto">
+                                  <span className="text-gray-400 text-[10px] sm:text-xs">–</span>
                                 </div>
                               )}
                             </td>
@@ -408,37 +408,37 @@ const StudentAttendanceGrid: React.FC<StudentAttendanceGridProps> = ({ studentId
 
         {/* Empty State */}
         {attendanceData.length === 0 && !loading && (
-          <div className="text-center py-12">
-            <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-500 font-medium">No attendance records found for this period.</p>
+          <div className="text-center py-8 sm:py-12">
+            <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 text-gray-300" />
+            <p className="text-sm sm:text-base text-gray-500 font-medium">No attendance records found for this period.</p>
           </div>
         )}
 
         {/* Legend */}
-        <div className="p-6 bg-gray-50 border-t border-gray-200">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Legend</h4>
-          <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-[#34C759] flex items-center justify-center">
-                <Check className="w-4 h-4 text-white" />
+        <div className="p-4 sm:p-6 bg-gray-50 border-t border-gray-200">
+          <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-3 text-center">Legend</h4>
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-xs sm:text-sm">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-[#34C759] flex items-center justify-center">
+                <Check className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
               </div>
               <span className="text-gray-700 font-medium">Present</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-[#FF3B30] flex items-center justify-center">
-                <X className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-[#FF3B30] flex items-center justify-center">
+                <X className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
               </div>
               <span className="text-gray-700 font-medium">Absent</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-[#FFCC00] flex items-center justify-center">
-                <Clock className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-[#FFCC00] flex items-center justify-center">
+                <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
               </div>
               <span className="text-gray-700 font-medium">Late</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-[#007AFF] flex items-center justify-center">
-                <Shield className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-[#007AFF] flex items-center justify-center">
+                <Shield className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
               </div>
               <span className="text-gray-700 font-medium">Excused</span>
             </div>

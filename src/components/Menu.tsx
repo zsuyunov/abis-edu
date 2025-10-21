@@ -70,6 +70,12 @@ const menuItems = [
         visible: ["admin", "teacher"],
       },
       {
+        icon: "/subject.png",
+        label: "Electives",
+        href: "/admin/electives",
+        visible: ["admin"],
+      },
+      {
         icon: "/singleBranch.png",
         label: "Branches",
         href: "/list/branches",

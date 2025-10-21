@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 import prisma from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
@@ -120,7 +122,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}))
 
 async function postHandler(request: NextRequest) {
   try {
@@ -196,4 +198,4 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(authorizeRole('ADMIN')(withCSRF(postHandler)));

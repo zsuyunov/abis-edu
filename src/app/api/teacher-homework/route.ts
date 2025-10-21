@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('TEACHER')(async function GET(request: NextRequest) {
   try {
     const teacherId = request.headers.get("x-user-id");
     const { searchParams } = new URL(request.url);
@@ -83,7 +85,7 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching homework:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-}
+}));
 
 async function postHandler(request: NextRequest) {
   try {
@@ -187,7 +189,7 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(authorizeRole('TEACHER')(withCSRF(postHandler)));
 
 async function deleteHandler(request: NextRequest) {
   try {
@@ -233,4 +235,4 @@ async function deleteHandler(request: NextRequest) {
   }
 }
 
-export const DELETE = withCSRF(deleteHandler);
+export const DELETE = authenticateJWT(authorizeRole('TEACHER')(withCSRF(deleteHandler)));

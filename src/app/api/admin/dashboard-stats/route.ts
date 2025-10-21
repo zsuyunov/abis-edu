@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma, { withPrismaRetry } from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest, context?: any, locals?: { user?: { id: string; role: string } }) {
   try {
-    // For now, skip authentication to debug the database queries
-    // TODO: Re-enable authentication after fixing database issues
-    
     console.log("Starting dashboard stats fetch...");
 
     // Get counts for all user types with retry logic for connection issues
@@ -170,4 +169,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}))

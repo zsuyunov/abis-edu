@@ -1,7 +1,9 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET() {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET() {
   try {
     const branches = await prisma.branch.findMany({
       select: { id: true, shortName: true, legalName: true, district: true },
@@ -20,4 +22,4 @@ export async function GET() {
     console.error('Error fetching branches:', error);
     return NextResponse.json({ error: 'Failed to fetch branches' }, { status: 500 });
   }
-}
+}));

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const subjectId = searchParams.get('subjectId');
@@ -115,4 +117,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}));

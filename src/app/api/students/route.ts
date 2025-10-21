@@ -1,8 +1,12 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
+import { validateOwnership } from '@/middlewares/validateOwnership';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest, _ctx?: any, locals?: { user?: { id: string; role: string } }) {
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");
@@ -51,9 +55,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Ownership narrowing for STUDENT/PARENT
+    const user = locals?.user;
+    const whereNarrow: any = { ...query };
+    if (user) {
+      if ((user.role || '').toUpperCase() === 'STUDENT') {
+        whereNarrow.id = user.id; // student sees only themselves
+      } else if ((user.role || '').toUpperCase() === 'PARENT') {
+        whereNarrow.studentParents = { some: { parentId: user.id } };
+      }
+    }
+
     const [students, totalCount] = await prisma.$transaction([
       prisma.student.findMany({
-        where: query,
+        where: whereNarrow,
         include: {
           class: { include: { branch: true } },
           studentParents: { include: { parent: true } },
@@ -65,7 +80,7 @@ export async function GET(request: NextRequest) {
           createdAt: "desc",
         },
       }),
-      prisma.student.count({ where: query }),
+      prisma.student.count({ where: whereNarrow }),
     ]);
 
     return NextResponse.json({
@@ -81,4 +96,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}));

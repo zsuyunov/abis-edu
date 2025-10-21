@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import * as XLSX from "xlsx";
 import { headers } from "next/headers";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
 // Export assigned teachers for a selected branch
 // Fields: No, Teacher ID, Full Name, Phone Number, Login Password (firstname_abis)
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     // Admin auth (reuse header convention used elsewhere)
     const headersList = headers();
@@ -99,6 +101,6 @@ export async function GET(request: NextRequest) {
     console.error("Error exporting teacher assignments:", error);
     return NextResponse.json({ success: false, error: "Failed to export teachers" }, { status: 500 });
   }
-}
+}))
 
 

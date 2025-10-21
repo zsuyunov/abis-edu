@@ -3,6 +3,8 @@ import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { PasswordService } from "@/lib/security";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
 async function putHandler(request: NextRequest) {
   try {
@@ -124,4 +126,4 @@ async function putHandler(request: NextRequest) {
   }
 }
 
-export const PUT = withCSRF(putHandler);
+export const PUT = authenticateJWT(authorizeRole('STUDENT')(withCSRF(putHandler)));

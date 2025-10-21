@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { headers } from 'next/headers';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
 // POST /api/teacher-grades - Save grades for a lesson
-export async function POST(request: NextRequest) {
+export const POST = authenticateJWT(authorizeRole('TEACHER')(async function POST(request: NextRequest) {
   try {
     const headersList = headers();
     const teacherId = headersList.get('x-user-id');
@@ -23,7 +25,9 @@ export async function POST(request: NextRequest) {
       date,
       maxScore,
       assignmentTitle,
-      records
+      records,
+      electiveGroupId,
+      electiveSubjectId
     } = body;
 
     // Validate required fields
@@ -104,7 +108,10 @@ export async function POST(request: NextRequest) {
       description: record.feedback || assignmentTitle || 'Daily Grade',
       week: Math.ceil(new Date(date).getDate() / 7),
       month: new Date(date).getMonth() + 1,
-      year: new Date(date).getFullYear()
+      year: new Date(date).getFullYear(),
+      // Add elective fields if provided
+      ...(electiveGroupId && { electiveGroupId: parseInt(electiveGroupId) }),
+      ...(electiveSubjectId && { electiveSubjectId: parseInt(electiveSubjectId) })
     }));
 
     // Use transaction to ensure all records are created or none
@@ -132,10 +139,10 @@ export async function POST(request: NextRequest) {
     console.error('Error saving grades:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+}));
 
 // GET /api/teacher-grades - Get grades for teacher's classes
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('TEACHER')(async function GET(request: NextRequest) {
   try {
     const headersList = headers();
     const teacherId = headersList.get('x-user-id');
@@ -221,4 +228,4 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching grades:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+}));

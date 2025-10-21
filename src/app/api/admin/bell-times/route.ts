@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
 // Temporary in-memory storage until database migration is applied
 let savedBellTimes: any[] = [];
 
 // GET - Fetch bell times by year range
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const yearRange = searchParams.get('yearRange');
@@ -117,7 +119,7 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching bell times:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+}))
 
 // POST - Create or update bell times
 async function postHandler(request: NextRequest) {
@@ -156,4 +158,4 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(authorizeRole('ADMIN')(withCSRF(postHandler)));

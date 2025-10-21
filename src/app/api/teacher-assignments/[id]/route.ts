@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 import prisma from "@/lib/prisma";
 
 async function deleteHandler(
@@ -86,3 +88,6 @@ async function putHandler(
     );
   }
 }
+
+export const DELETE = authenticateJWT(authorizeRole('ADMIN')(withCSRF(deleteHandler)));
+export const PUT = authenticateJWT(authorizeRole('ADMIN')(withCSRF(putHandler)));

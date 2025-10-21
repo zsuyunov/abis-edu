@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
 import prisma from '@/lib/prisma';
 import { headers } from 'next/headers';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
+import { auditLogger } from '@/middlewares/auditLogger';
 
 // PATCH /api/attendance/[id] - Update attendance record
 async function patchHandler(
@@ -68,7 +71,11 @@ async function patchHandler(
   }
 }
 
-export const PATCH = withCSRF(patchHandler);
+export const PATCH = authenticateJWT(
+  authorizeRole('TEACHER', 'ADMIN')(
+    auditLogger({ action: 'UPDATE_ATTENDANCE' })(withCSRF(patchHandler))
+  )
+);
 
 // DELETE /api/attendance/[id] - Delete attendance record
 async function deleteHandler(
@@ -116,4 +123,8 @@ async function deleteHandler(
   }
 }
 
-export const DELETE = withCSRF(deleteHandler);
+export const DELETE = authenticateJWT(
+  authorizeRole('TEACHER', 'ADMIN')(
+    auditLogger({ action: 'DELETE_ATTENDANCE' })(withCSRF(deleteHandler))
+  )
+);

@@ -25,6 +25,8 @@ interface TimetableEntry {
   class: { id: number; name: string };
   branch: { id: number; shortName: string };
   academicYear?: { id: number; name: string };
+  isElective?: boolean;
+  electiveGroup?: { id: number; name: string } | null;
 }
 
 interface StudentWeeklyTimetableProps {
@@ -200,7 +202,19 @@ const StudentWeeklyTimetable = ({
               return (
                       <td key={`${day}-${timeSlot}`} className="px-2 py-2 border-r border-gray-200 align-top">
                         {timetable && (
-                          <div className="p-3 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 hover:shadow-md transition-all duration-200">
+                          <div className={`p-3 rounded-lg border hover:shadow-md transition-all duration-200 ${
+                            // Purple theme for electives, blue theme for regular classes
+                            timetable.isElective 
+                              ? 'bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300' 
+                              : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200'
+                          }`}>
+                            {/* Elective Badge - only shown for elective subjects */}
+                            {timetable.isElective && timetable.electiveGroup && (
+                              <div className="text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full inline-block mb-1">
+                                📚 {timetable.electiveGroup.name}
+                              </div>
+                            )}
+                            
                             {/* Subjects */}
                             <div className="font-semibold text-sm text-gray-900 mb-2">
                               {timetable.subjects && timetable.subjects.length > 0 

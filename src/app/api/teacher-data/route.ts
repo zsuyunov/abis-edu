@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('TEACHER')(async function GET(request: NextRequest) {
   try {
     const teacherId = request.headers.get("x-user-id");
     
@@ -66,4 +68,4 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching teacher data:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-}
+}));

@@ -60,7 +60,7 @@ const UserForm = ({
   const noBranchPositions = ["MAIN_DIRECTOR", "MAIN_HR", "MAIN_ADMISSION"];
 
   const onSubmit = handleSubmit((data) => {
-    console.log(data);
+    console.log("🚀 User form submitted:", data);
     
     // Custom validation: Branch is required for positions that need it
     if (!noBranchPositions.includes(data.position) && (!data.branchId || data.branchId === 0)) {
@@ -68,14 +68,32 @@ const UserForm = ({
       return;
     }
     
-    // Include attachment URLs in the data
-    const formDataWithAttachments = {
-      ...data,
-      attachments: attachments,
-      // For updates, only include password if it's provided and not empty
-      ...(type === "update" ? (data.password && data.password.trim() !== '' ? { password: data.password } : {}) : {}),
-    };
-    formAction(formDataWithAttachments as any);
+    // Convert to FormData for server action
+    const payload = new FormData();
+    
+    // Add all form fields to FormData
+    Object.keys(data).forEach(key => {
+      const value = (data as any)[key];
+      if (value !== undefined && value !== null && value !== '') {
+        // Skip password field for updates if empty
+        if (type === "update" && key === "password" && value.trim() === '') {
+          return;
+        }
+        if (value instanceof Date) {
+          payload.append(key, value.toISOString());
+        } else {
+          payload.append(key, String(value));
+        }
+      }
+    });
+    
+    // Add attachments
+    if (attachments.photo) {
+      payload.append('photo', JSON.stringify(attachments.photo));
+    }
+    
+    console.log("📤 Submitting user payload to server action");
+    formAction(payload as any);
   });
 
   const router = useRouter();

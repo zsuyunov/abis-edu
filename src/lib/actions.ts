@@ -51,6 +51,7 @@ import {
   AnnouncementSchema,
 } from "./formValidationSchemas";
 import prisma from "./prisma";
+import { withPrismaRetry } from "./prisma";
 import type { Prisma } from "@prisma/client";
 import { AuthService } from "@/lib/auth";
 
@@ -803,6 +804,11 @@ export const createAttendance = async (
 
     if (!timetable) {
       throw new Error("Timetable not found");
+    }
+
+    // Only create attendance for timetables with a classId (not elective timetables)
+    if (!timetable.classId) {
+      throw new Error("Cannot create attendance for elective timetables without a specific class");
     }
 
     await prisma.attendance.create({
@@ -3561,15 +3567,68 @@ export const updateUser = async (
 // Teacher Actions
 export const createTeacher = async (
   currentState: CurrentState,
-  data: TeacherSchema
+  formData: FormData
 ) => {
   try {
+    console.log("[createTeacher] Starting teacher creation process");
+    
+    // Extract data from FormData
+    const data = {
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
+      dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : undefined,
+      phone: formData.get("phone") as string,
+      teacherId: formData.get("teacherId") as string,
+      password: formData.get("password") as string,
+      gender: formData.get("gender") as string,
+      email: formData.get("email") as string,
+      address: formData.get("address") as string,
+      status: formData.get("status") as string || "ACTIVE",
+      passport: {
+        country: formData.get("passport.country") as string,
+        documentNumber: formData.get("passport.documentNumber") as string,
+        issueDate: formData.get("passport.issueDate") ? new Date(formData.get("passport.issueDate") as string) : undefined,
+        expiryDate: formData.get("passport.expiryDate") ? new Date(formData.get("passport.expiryDate") as string) : undefined,
+      },
+      education: {
+        institutionName: formData.get("education.institutionName") as string,
+        specialization: formData.get("education.specialization") as string,
+        documentSeries: formData.get("education.documentSeries") as string,
+        graduationDate: formData.get("education.graduationDate") ? new Date(formData.get("education.graduationDate") as string) : undefined,
+        languageSkills: formData.get("education.languageSkills") as string,
+      },
+      attachments: {
+        passport: formData.get("attachments.passport") ? JSON.parse(formData.get("attachments.passport") as string) : undefined,
+        resume: formData.get("attachments.resume") ? JSON.parse(formData.get("attachments.resume") as string) : undefined,
+        photo: formData.get("attachments.photo") ? JSON.parse(formData.get("attachments.photo") as string) : undefined,
+      }
+    };
+    
+    console.log("[createTeacher] Extracted data:", { 
+      firstName: data.firstName, 
+      lastName: data.lastName, 
+      phone: data.phone,
+      teacherId: data.teacherId 
+    });
+    
+    // Validate required fields
+    if (!data.firstName || !data.lastName || !data.phone || !data.password || !data.gender) {
+      console.error("[createTeacher] Missing required fields");
+      return { 
+        success: false, 
+        error: true, 
+        message: "Please fill in all required fields (First Name, Last Name, Phone, Password, Gender)" 
+      };
+    }
+    
+    console.log("[createTeacher] Checking for duplicate phone number...");
     // Check if phone number is already taken by any teacher
     const existingTeacherByPhone = await prisma.teacher.findFirst({ 
       where: { phone: data.phone } 
     });
 
     if (existingTeacherByPhone) {
+      console.error("[createTeacher] Phone number already exists");
       return { 
         success: false, 
         error: true, 
@@ -3577,22 +3636,28 @@ export const createTeacher = async (
       };
     }
 
-    // Hash the password
+    console.log("[createTeacher] Hashing password...");
+    // Hash the password (now using fast bcrypt)
     const hashedPassword = await AuthService.hashPassword(data.password);
+    console.log("[createTeacher] Password hashed successfully");
 
+    console.log("[createTeacher] Processing teacher ID...");
     // Use the provided teacher ID from the form, or generate one if not provided
     let teacherId = data.teacherId;
     if (!teacherId) {
+      console.log("[createTeacher] Generating unique teacher ID...");
       teacherId = await generateUniqueTeacherId();
     }
 
     // Check if the provided teacher ID is already taken
     if (data.teacherId) {
+      console.log("[createTeacher] Checking if teacher ID is available...");
       const existingTeacherById = await prisma.teacher.findFirst({
         where: { teacherId: data.teacherId }
       });
       
       if (existingTeacherById) {
+        console.error("[createTeacher] Teacher ID already exists");
         return {
           success: false,
           error: true,
@@ -3600,31 +3665,35 @@ export const createTeacher = async (
         };
       }
     }
+    console.log("[createTeacher] Teacher ID confirmed:", teacherId);
 
     // Prepare teacher data
     const teacherData = {
       id: teacherId,
       firstName: data.firstName,
       lastName: data.lastName,
-      gender: data.gender,
+      gender: data.gender as "MALE" | "FEMALE",
       dateOfBirth: data.dateOfBirth || new Date('1990-01-01'), // Provide default date if none provided
       phone: data.phone,
       teacherId: teacherId, // Use the provided or generated teacherId
       password: hashedPassword,
       email: data.email || null,
       address: data.address || "",
-      status: data.status,
+      status: (data.status || "ACTIVE") as "ACTIVE" | "INACTIVE",
     };
 
+    console.log("[createTeacher] Creating teacher in database...");
     // Create teacher with related data in transaction
     await prisma.$transaction(async (tx) => {
       // Create the teacher
       const teacher = await tx.teacher.create({
         data: teacherData,
       });
+      console.log("[createTeacher] Teacher record created:", teacher.id);
 
       // Create passport only if all required fields are provided
       if (data.passport && data.passport.country && data.passport.documentNumber && data.passport.issueDate && data.passport.expiryDate) {
+        console.log("[createTeacher] Saving passport data...");
         await tx.teacherPassport.create({
           data: {
             teacherId: teacher.id,
@@ -3638,6 +3707,7 @@ export const createTeacher = async (
 
       // Create education only if all required fields are provided
       if (data.education && data.education.institutionName && data.education.specialization && data.education.documentSeries && data.education.graduationDate) {
+        console.log("[createTeacher] Saving education data...");
         await tx.teacherEducation.create({
           data: {
             teacherId: teacher.id,
@@ -3692,17 +3762,50 @@ export const createTeacher = async (
         }
 
         if (attachmentsToCreate.length > 0) {
+          console.log("[createTeacher] Saving attachments...");
           await tx.teacherAttachment.createMany({
             data: attachmentsToCreate,
           });
+          console.log("[createTeacher] Attachments saved");
         }
       }
     });
 
-    return { success: true, error: false };
+    console.log("[createTeacher] Teacher creation completed successfully");
+    return { success: true, error: false, message: "Teacher created successfully" };
   } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
+    console.error("[createTeacher] Error occurred:", err);
+    
+    // Handle specific error types
+    if (err instanceof Error) {
+      if (err.message.includes("timeout")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "Request timed out. Please try again. If the problem persists, contact support." 
+        };
+      }
+      
+      if (err.message.includes("Unique constraint")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "A teacher with this information already exists. Please check phone number or teacher ID." 
+        };
+      }
+      
+      return { 
+        success: false, 
+        error: true, 
+        message: `Failed to create teacher: ${err.message}` 
+      };
+    }
+    
+    return { 
+      success: false, 
+      error: true, 
+      message: "An unexpected error occurred. Please try again." 
+    };
   }
 };
 
@@ -4084,30 +4187,101 @@ export const deleteTeacherAssignment = async (
 
 export const updateTeacher = async (
   currentState: CurrentState,
-  data: TeacherUpdateSchema
+  formData: FormData
 ) => {
-  if (!data.id) {
-    return { success: false, error: true };
-  }
-
   try {
+    console.log("[updateTeacher] Starting teacher update process");
+    
+    // Extract data from FormData
+    const data = {
+      id: formData.get("id") as string,
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
+      dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : undefined,
+      phone: formData.get("phone") as string,
+      password: formData.get("password") as string,
+      gender: formData.get("gender") as string,
+      email: formData.get("email") as string,
+      address: formData.get("address") as string,
+      status: formData.get("status") as string,
+      passport: {
+        country: formData.get("passport.country") as string,
+        documentNumber: formData.get("passport.documentNumber") as string,
+        issueDate: formData.get("passport.issueDate") ? new Date(formData.get("passport.issueDate") as string) : undefined,
+        expiryDate: formData.get("passport.expiryDate") ? new Date(formData.get("passport.expiryDate") as string) : undefined,
+      },
+      education: {
+        institutionName: formData.get("education.institutionName") as string,
+        specialization: formData.get("education.specialization") as string,
+        documentSeries: formData.get("education.documentSeries") as string,
+        graduationDate: formData.get("education.graduationDate") ? new Date(formData.get("education.graduationDate") as string) : undefined,
+        languageSkills: formData.get("education.languageSkills") as string,
+      },
+      attachments: {
+        passport: formData.get("attachments.passport") ? JSON.parse(formData.get("attachments.passport") as string) : undefined,
+        resume: formData.get("attachments.resume") ? JSON.parse(formData.get("attachments.resume") as string) : undefined,
+        photo: formData.get("attachments.photo") ? JSON.parse(formData.get("attachments.photo") as string) : undefined,
+      }
+    };
+    
+    console.log("[updateTeacher] Extracted data:", { 
+      id: data.id,
+      firstName: data.firstName, 
+      lastName: data.lastName, 
+      phone: data.phone 
+    });
+    
+    if (!data.id) {
+      console.error("[updateTeacher] Missing teacher ID");
+      return { success: false, error: true, message: "Teacher ID is required" };
+    }
+
+    // Validate required fields
+    if (!data.firstName || !data.lastName || !data.phone || !data.gender) {
+      console.error("[updateTeacher] Missing required fields");
+      return { 
+        success: false, 
+        error: true, 
+        message: "Please fill in all required fields (First Name, Last Name, Phone, Gender)" 
+      };
+    }
+
+    console.log("[updateTeacher] Checking if teacher exists:", data.id);
+    // Check if teacher exists
+    const existingTeacher = await prisma.teacher.findUnique({
+      where: { id: data.id },
+      select: { id: true, firstName: true, lastName: true }
+    });
+
+    if (!existingTeacher) {
+      const message = `Teacher with ID ${data.id} not found. The teacher may have been deleted.`;
+      console.error("[updateTeacher]", message);
+      return { success: false, error: true, message };
+    }
+    
+    console.log("[updateTeacher] Teacher found:", existingTeacher.firstName, existingTeacher.lastName);
+
     // Prepare teacher data
     const teacherData: any = {
       firstName: data.firstName,
       lastName: data.lastName,
-      gender: data.gender,
+      gender: data.gender as "MALE" | "FEMALE",
       dateOfBirth: data.dateOfBirth,
       phone: data.phone,
       email: data.email || null,
       address: data.address || "",
-      status: data.status,
+      status: (data.status || "ACTIVE") as "ACTIVE" | "INACTIVE",
     };
 
     // Only update password if provided
     if (data.password && data.password.trim()) {
+      console.log("[updateTeacher] Hashing new password...");
+      // Hash password (now using fast bcrypt)
       teacherData.password = await AuthService.hashPassword(data.password);
+      console.log("[updateTeacher] Password hashed successfully");
     }
 
+    console.log("[updateTeacher] Updating teacher in database...");
     // Update teacher with related data in transaction
     await prisma.$transaction(async (tx) => {
       // Update the teacher
@@ -4115,6 +4289,7 @@ export const updateTeacher = async (
         where: { id: data.id },
         data: teacherData,
       });
+      console.log("[updateTeacher] Teacher record updated:", data.id);
 
       // Update or create passport only if all required fields are provided
       if (data.passport && data.id && data.passport.country && data.passport.documentNumber && data.passport.issueDate && data.passport.expiryDate) {
@@ -4217,17 +4392,58 @@ export const updateTeacher = async (
         }
 
         if (attachmentsToCreate.length > 0) {
+          console.log("[updateTeacher] Saving attachments...");
           await tx.teacherAttachment.createMany({
             data: attachmentsToCreate,
           });
+          console.log("[updateTeacher] Attachments saved");
         }
       }
     });
 
-    return { success: true, error: false };
+    console.log("[updateTeacher] Teacher update completed successfully");
+    return { success: true, error: false, message: "Teacher updated successfully" };
   } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
+    console.error("[updateTeacher] Error occurred:", err);
+    
+    // Handle specific error types
+    if (err instanceof Error) {
+      if (err.message.includes("timeout")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "Request timed out. Please try again. If the problem persists, contact support." 
+        };
+      }
+      
+      if (err.message.includes("Unique constraint")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "A teacher with this information already exists. Please check phone number." 
+        };
+      }
+      
+      if (err.message.includes("not found")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "Teacher not found. The record may have been deleted." 
+        };
+      }
+      
+      return { 
+        success: false, 
+        error: true, 
+        message: `Failed to update teacher: ${err.message}` 
+      };
+    }
+    
+    return { 
+      success: false, 
+      error: true, 
+      message: "An unexpected error occurred. Please try again." 
+    };
   }
 };
 
@@ -5068,9 +5284,10 @@ export const createStudent = async (
   currentState: CurrentState,
   formData: FormData
 ): Promise<CurrentState> => {
+  const startTime = Date.now();
+  
   try {
-    console.log("Creating student with formData:", formData);
-    console.log("FormData entries:", Array.from(formData.entries()));
+    console.log("[createStudent] Starting student creation process");
     
     // Extract data from FormData
     const data = {
@@ -5093,89 +5310,185 @@ export const createStudent = async (
       }
     };
     
-    console.log("Parsed student data:", data);
-    
-    // Check if studentId is already taken by any user type
-    const [existingStudent, existingUser, existingTeacher, existingParent] = await Promise.all([
-      prisma.student.findFirst({ where: { studentId: data.studentId } as any }),
-      prisma.user.findFirst({ where: { userId: data.studentId } as any }),
-      prisma.teacher.findFirst({ where: { teacherId: data.studentId } as any }),
-      prisma.parent.findFirst({ where: { parentId: data.studentId } as any }),
-    ]);
+    console.log("[createStudent] Extracted data:", { 
+      firstName: data.firstName, 
+      lastName: data.lastName, 
+      studentId: data.studentId 
+    });
 
-    if (existingStudent || existingUser || existingTeacher || existingParent) {
+    // Validate required fields
+    if (!data.firstName || !data.lastName || !data.phone || !data.studentId || !data.password || !data.gender) {
+      console.error("[createStudent] Missing required fields");
       return { 
         success: false, 
         error: true, 
-        message: "This ID is already taken. Please use a different ID." 
+        message: "Please fill in all required fields (First Name, Last Name, Phone, Student ID, Password, Gender)" 
       };
     }
+    
+    // Use withPrismaRetry for database operations to handle connection issues
+    const result = await withPrismaRetry(async () => {
+      console.log("[createStudent] Checking for duplicate student ID...");
+      
+      // Optimized duplicate check - use single query with OR condition instead of Promise.all
+      const existingRecord = await prisma.$queryRaw`
+        SELECT 'student' as type FROM "Student" WHERE "studentId" = ${data.studentId}
+        UNION ALL
+        SELECT 'user' as type FROM "User" WHERE "userId" = ${data.studentId}
+        UNION ALL  
+        SELECT 'teacher' as type FROM "Teacher" WHERE "teacherId" = ${data.studentId}
+        UNION ALL
+        SELECT 'parent' as type FROM "Parent" WHERE "parentId" = ${data.studentId}
+        LIMIT 1
+      `;
 
-    // Hash the password
-    const hashedPassword = await AuthService.hashPassword(data.password);
+      if (Array.isArray(existingRecord) && existingRecord.length > 0) {
+        console.error("[createStudent] Student ID already exists");
+        throw new Error("DUPLICATE_ID");
+      }
 
-    // Generate a unique ID for the student
-    const studentId = `student_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log("[createStudent] Hashing password...");
+      // Hash password with reduced rounds for faster processing
+      const hashedPassword = await AuthService.hashPassword(data.password);
 
-    const studentData: any = {
-      id: studentId,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      dateOfBirth: data.dateOfBirth,
-      phone: data.phone,
-      studentId: data.studentId,
-      password: hashedPassword,
-      gender: data.gender,
-      status: data.status,
-    };
+      console.log("[createStudent] Generating unique student ID...");
+      // Generate a unique ID for the student
+      const studentId = `student_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Only include branchId and classId if they are provided
-    if (data.branchId) {
-      studentData.branchId = data.branchId;
-    }
-    if (data.classId) {
-      studentData.classId = data.classId;
-    }
+      const studentData: any = {
+        id: studentId,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        dateOfBirth: data.dateOfBirth,
+        phone: data.phone,
+        studentId: data.studentId,
+        password: hashedPassword,
+        gender: data.gender,
+        status: data.status,
+      };
 
-    // Only include parentId if provided
-    if (data.parentId) {
-      studentData.parentId = data.parentId;
-    }
+      // Only include branchId and classId if they are provided
+      if (data.branchId) {
+        studentData.branchId = data.branchId;
+      }
+      if (data.classId) {
+        studentData.classId = data.classId;
+      }
 
-    const created = await prisma.student.create({
-      data: studentData,
+      // Only include parentId if provided
+      if (data.parentId) {
+        studentData.parentId = data.parentId;
+      }
+
+      console.log("[createStudent] Creating student in database...");
+      
+      // Use transaction for atomic operations with timeout
+      const created = await prisma.$transaction(async (tx) => {
+        // Create student record
+        const student = await tx.student.create({
+          data: studentData,
+        });
+
+        // Process attachments if provided
+        const rawAttachments: any[] = [
+          (data as any)?.attachments?.document1,
+          (data as any)?.attachments?.document2,
+          (data as any)?.attachments?.image1,
+          (data as any)?.attachments?.image2,
+        ].filter(Boolean);
+
+        if (rawAttachments.length > 0) {
+          console.log("[createStudent] Saving attachments...");
+          const attachmentsToCreate = rawAttachments.map((att: any) => ({
+            studentId: student.id,
+            fileType: att.fileType || (att.type ?? "file"),
+            fileName: att.name || att.fileName || `file_${Date.now()}`,
+            originalName: att.name || att.originalName || "uploaded-file",
+            fileUrl: att.url || att.fileUrl || "",
+            filePath: att.filePath || att.url || "",
+            fileSize: att.size || att.fileSize || 0,
+          }));
+          
+          // Use createMany for batch insert
+          await tx.studentAttachment.createMany({ 
+            data: attachmentsToCreate,
+            skipDuplicates: true 
+          });
+          console.log("[createStudent] Attachments saved");
+        }
+
+        return student;
+      }, {
+        maxWait: 10000, // Maximum time to wait for a transaction slot (10s)
+        timeout: 15000, // Maximum time the transaction can run (15s)
+      });
+
+      console.log("[createStudent] Student record created:", created.id);
+      return created;
+    }, {
+      retries: 2,
+      baseDelayMs: 200
     });
 
-    // Persist attachments if provided
-    const rawAttachments: any[] = [
-      (data as any)?.attachments?.document1,
-      (data as any)?.attachments?.document2,
-      (data as any)?.attachments?.image1,
-      (data as any)?.attachments?.image2,
-    ].filter(Boolean);
-
-    if (rawAttachments.length > 0) {
-      const attachmentsToCreate = rawAttachments.map((att: any) => ({
-        studentId: created.id,
-        fileType: att.fileType || (att.type ?? "file"),
-        fileName: att.name || att.fileName || `file_${Date.now()}`,
-        originalName: att.name || att.originalName || "uploaded-file",
-        fileUrl: att.url || att.fileUrl || "",
-        filePath: att.filePath || att.url || "",
-        fileSize: att.size || att.fileSize || 0,
-      }));
-      await prisma.studentAttachment.createMany({ data: attachmentsToCreate });
-    }
-
-    console.log("✅ Student created successfully:", created.id);
-    revalidatePath("/admin/list/students");
+    const duration = Date.now() - startTime;
+    console.log(`[createStudent] Student creation completed successfully in ${duration}ms`);
+    
+    // Revalidate path asynchronously to avoid blocking response
+    setTimeout(() => {
+      revalidatePath("/admin/list/students");
+    }, 0);
+    
     return { success: true, error: false, message: "Student created successfully" };
+    
   } catch (err) {
-    console.error("Student creation error:", err);
+    const duration = Date.now() - startTime;
+    console.error(`[createStudent] Error occurred after ${duration}ms:`, err);
+    
+    // Handle specific error types
+    if (err instanceof Error) {
+      if (err.message === "DUPLICATE_ID") {
+        return { 
+          success: false, 
+          error: true, 
+          message: "This ID is already taken. Please use a different ID." 
+        };
+      }
+      
+      if (err.message.includes("timeout") || err.message.includes("TIMEOUT")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "Request timed out. Please try again. If the problem persists, contact support." 
+        };
+      }
+      
+      if (err.message.includes("Unique constraint")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "A student with this ID already exists. Please use a different ID." 
+        };
+      }
+      
+      if (err.message.includes("Connection") || err.message.includes("ECONNRESET")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "Database connection issue. Please try again in a moment." 
+        };
+      }
+      
+      return { 
+        success: false, 
+        error: true, 
+        message: `Failed to create student: ${err.message}` 
+      };
+    }
+    
     return { 
       success: false, 
       error: true, 
-      message: `Failed to create student: ${err instanceof Error ? err.message : 'Unknown error'}` 
+      message: "An unexpected error occurred. Please try again." 
     };
   }
 };
@@ -5184,34 +5497,54 @@ export const updateStudent = async (
   currentState: CurrentState,
   formData: FormData
 ): Promise<CurrentState> => {
-  // Extract data from FormData
-  const data = {
-    id: formData.get("id") as string,
-    firstName: formData.get("firstName") as string,
-    lastName: formData.get("lastName") as string,
-    dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : undefined,
-    phone: formData.get("phone") as string,
-    studentId: formData.get("studentId") as string,
-    password: formData.get("password") as string,
-    gender: formData.get("gender") as string,
-    status: formData.get("status") as string || "ACTIVE",
-    branchId: formData.get("branchId") ? parseInt(formData.get("branchId") as string) : undefined,
-    classId: formData.get("classId") ? parseInt(formData.get("classId") as string) : undefined,
-    parentId: formData.get("parentId") as string || undefined,
-    attachments: {
-      document1: formData.get("document1") ? JSON.parse(formData.get("document1") as string) : undefined,
-      document2: formData.get("document2") ? JSON.parse(formData.get("document2") as string) : undefined,
-      image1: formData.get("image1") ? JSON.parse(formData.get("image1") as string) : undefined,
-      image2: formData.get("image2") ? JSON.parse(formData.get("image2") as string) : undefined,
-    }
-  };
-  
-  if (!data.id) {
-    return { success: false, error: true, message: "Student ID is required" };
-  }
-
   try {
-    console.log("🔄 Updating student:", data.id, data.firstName, data.lastName);
+    console.log("[updateStudent] Starting student update process");
+    
+    // Extract data from FormData
+    const data = {
+      id: formData.get("id") as string,
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
+      dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : undefined,
+      phone: formData.get("phone") as string,
+      studentId: formData.get("studentId") as string,
+      password: formData.get("password") as string,
+      gender: formData.get("gender") as string,
+      status: formData.get("status") as string || "ACTIVE",
+      branchId: formData.get("branchId") ? parseInt(formData.get("branchId") as string) : undefined,
+      classId: formData.get("classId") ? parseInt(formData.get("classId") as string) : undefined,
+      parentId: formData.get("parentId") as string || undefined,
+      attachments: {
+        document1: formData.get("document1") ? JSON.parse(formData.get("document1") as string) : undefined,
+        document2: formData.get("document2") ? JSON.parse(formData.get("document2") as string) : undefined,
+        image1: formData.get("image1") ? JSON.parse(formData.get("image1") as string) : undefined,
+        image2: formData.get("image2") ? JSON.parse(formData.get("image2") as string) : undefined,
+      }
+    };
+    
+    console.log("[updateStudent] Extracted data:", { 
+      id: data.id,
+      firstName: data.firstName, 
+      lastName: data.lastName, 
+      studentId: data.studentId 
+    });
+    
+    if (!data.id) {
+      console.error("[updateStudent] Missing student ID");
+      return { success: false, error: true, message: "Student ID is required" };
+    }
+
+    // Validate required fields
+    if (!data.firstName || !data.lastName || !data.phone || !data.studentId || !data.gender) {
+      console.error("[updateStudent] Missing required fields");
+      return { 
+        success: false, 
+        error: true, 
+        message: "Please fill in all required fields (First Name, Last Name, Phone, Student ID, Gender)" 
+      };
+    }
+
+    console.log("[updateStudent] Checking if student exists:", data.id);
 
     // First check if student exists
     const existingStudent = await prisma.student.findUnique({
@@ -5221,9 +5554,11 @@ export const updateStudent = async (
 
     if (!existingStudent) {
       const message = `Student with ID ${data.id} not found. The student may have been deleted.`;
-      console.error("❌", message);
+      console.error("[updateStudent]", message);
       return { success: false, error: true, message };
     }
+    
+    console.log("[updateStudent] Student found:", existingStudent.firstName, existingStudent.lastName);
 
     const updateData: any = {
       firstName: data.firstName,
@@ -5247,17 +5582,20 @@ export const updateStudent = async (
 
     // Only update password if provided
     if (data.password && data.password.trim()) {
-      console.log("🔐 Hashing new password...");
+      console.log("[updateStudent] Hashing new password...");
+      // Hash password (now using fast bcrypt)
       updateData.password = await AuthService.hashPassword(data.password);
+      console.log("[updateStudent] Password hashed successfully");
     }
 
-    console.log("📝 Updating student in database...");
+    console.log("[updateStudent] Updating student in database...");
     const updated = await prisma.student.update({
       where: {
         id: data.id,
       },
       data: updateData as any,
     });
+    console.log("[updateStudent] Student record updated:", updated.id);
 
     // Append newly uploaded attachments if any
     const rawAttachments: any[] = [
@@ -5268,6 +5606,7 @@ export const updateStudent = async (
     ].filter(Boolean);
 
     if (rawAttachments.length > 0) {
+      console.log("[updateStudent] Saving new attachments...");
       const attachmentsToCreate = rawAttachments.map((att: any) => ({
         studentId: updated.id,
         fileType: att.fileType || (att.type ?? "file"),
@@ -5278,18 +5617,54 @@ export const updateStudent = async (
         fileSize: att.size || att.fileSize || 0,
       }));
       await prisma.studentAttachment.createMany({ data: attachmentsToCreate });
+      console.log("[updateStudent] Attachments saved");
     }
 
-    console.log("✅ Student updated successfully:", updated.id);
+    console.log("[updateStudent] Revalidating paths...");
     revalidatePath("/admin/list/students");
     revalidatePath(`/admin/list/students/${data.id}`);
+    console.log("[updateStudent] Student update completed successfully");
     return { success: true, error: false, message: "Student updated successfully" };
   } catch (err) {
-    console.error("Student update error:", err);
+    console.error("[updateStudent] Error occurred:", err);
+    
+    // Handle specific error types
+    if (err instanceof Error) {
+      if (err.message.includes("timeout")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "Request timed out. Please try again. If the problem persists, contact support." 
+        };
+      }
+      
+      if (err.message.includes("Unique constraint")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "A student with this ID already exists. Please use a different ID." 
+        };
+      }
+      
+      if (err.message.includes("not found")) {
+        return { 
+          success: false, 
+          error: true, 
+          message: "Student not found. The record may have been deleted." 
+        };
+      }
+      
+      return { 
+        success: false, 
+        error: true, 
+        message: `Failed to update student: ${err.message}` 
+      };
+    }
+    
     return { 
       success: false, 
       error: true, 
-      message: `Failed to update student: ${err instanceof Error ? err.message : 'Unknown error'}` 
+      message: "An unexpected error occurred. Please try again." 
     };
   }
 };

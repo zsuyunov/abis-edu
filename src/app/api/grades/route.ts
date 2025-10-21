@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCSRF } from '@/lib/security';
 import prisma from '@/lib/prisma';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
+import { validateOwnership } from '@/middlewares/validateOwnership';
+import { auditLogger } from '@/middlewares/auditLogger';
+import { rateLimit, RatePresets } from '@/middlewares/rateLimit';
 
-async function postHandler(request: NextRequest) {
+async function postHandler(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {
-    const teacherId = request.headers.get('x-user-id');
+    const teacherId = locals?.user?.id || request.headers.get('x-user-id');
     if (!teacherId) {
       console.log('❌ Unauthorized: No teacher ID provided');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -265,7 +270,22 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(
+  authorizeRole('TEACHER')(
+    validateOwnership({
+      getContext: async (req) => {
+        const body = await req.clone().json().catch(() => ({}));
+        return {
+          studentId: body?.studentId,
+          classId: body?.classId ? parseInt(body.classId) : undefined,
+          subjectId: body?.subjectId ? parseInt(body.subjectId) : undefined,
+        };
+      },
+      requireTeacherMatch: true,
+      requireStudentSelf: false,
+    })(rateLimit(RatePresets.API)(auditLogger({ action: 'CREATE_OR_UPDATE_GRADE' })(withCSRF(postHandler))))
+  )
+);
 
 export async function GET(request: NextRequest) {
   try {
@@ -357,9 +377,9 @@ export async function GET(request: NextRequest) {
 }
 
 // PUT method for updating individual grades
-async function putHandler(request: NextRequest) {
+async function putHandler(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {
-    const teacherId = request.headers.get('x-user-id');
+    const teacherId = locals?.user?.id || request.headers.get('x-user-id');
     if (!teacherId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -416,11 +436,15 @@ async function putHandler(request: NextRequest) {
   }
 }
 
-export const PUT = withCSRF(putHandler);
+export const PUT = authenticateJWT(
+  authorizeRole('TEACHER')(
+    rateLimit(RatePresets.API)(auditLogger({ action: 'UPDATE_GRADE' })(withCSRF(putHandler)))
+  )
+);
 
-async function deleteHandler(request: NextRequest) {
+async function deleteHandler(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {
-    const teacherId = request.headers.get('x-user-id');
+    const teacherId = locals?.user?.id || request.headers.get('x-user-id');
     if (!teacherId) {
       console.log('❌ Unauthorized: No teacher ID provided');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -487,4 +511,8 @@ async function deleteHandler(request: NextRequest) {
   }
 }
 
-export const DELETE = withCSRF(deleteHandler);
+export const DELETE = authenticateJWT(
+  authorizeRole('TEACHER')(
+    rateLimit(RatePresets.API)(auditLogger({ action: 'DELETE_GRADE' })(withCSRF(deleteHandler)))
+  )
+);

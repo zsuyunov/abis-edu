@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
+import { withConnection } from "@/lib/dbConnection";
 
 // Helper function to get days of week in a date range
 function getDaysOfWeekInRange(startDate: string, endDate: string): string[] {
@@ -22,7 +25,7 @@ function getDayNameFromDate(date: string): string {
   return dayNames[new Date(date).getDay()];
 }
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   try {
     // Get authenticated user from header
     const userId = request.headers.get('x-user-id');
@@ -89,6 +92,20 @@ export async function GET(request: NextRequest) {
     const specificClassIds = specificAssignments.map(ta => ta.classId);
     const assignedSubjectIds = specificAssignments.map(ta => ta.subjectId as number);
 
+    // Get teacher's elective subject assignments (where they're assigned as a teacher)
+    const teacherId = userId;
+    const electiveSubjects = await prisma.electiveSubject.findMany({
+      where: {
+        teacherIds: { has: teacherId },
+        status: 'ACTIVE'
+      },
+      include: {
+        electiveGroup: true,
+        subject: true
+      }
+    });
+    const electiveSubjectIds = electiveSubjects.map(es => es.id);
+
     // Filter by teacher's assignments based on role
     if (mode === 'supervisor') {
       // For supervisor mode, show all classes in the branch
@@ -103,16 +120,16 @@ export async function GET(request: NextRequest) {
         // For regular teacher mode, show timetables where:
         // 1. Teacher has general assignment to class (can see all subjects), OR
         // 2. Teacher has specific assignment to class/subject, OR
-        // 3. Teacher is directly assigned to the timetable via teacherIds
+        // 3. Teacher is directly assigned to the timetable via teacherIds, OR
+        // 4. Timetable is for an elective subject where teacher is assigned
 
-        const teacherId = userId;
         const assignmentConditions = [];
 
         // Condition 1: General class assignments (no specific subject) - can see ALL timetables for these classes
         if (generalClassIds.length > 0) {
           assignmentConditions.push({
-            classId: { in: generalClassIds }
-            // No subjectId filter - teacher can see all subjects for these classes
+            classId: { in: generalClassIds },
+            electiveSubjectId: null // Regular class timetables only
           });
         }
 
@@ -120,14 +137,23 @@ export async function GET(request: NextRequest) {
         if (specificClassIds.length > 0 && assignedSubjectIds.length > 0) {
           assignmentConditions.push({
             classId: { in: specificClassIds },
-            subjectId: { in: assignedSubjectIds }
+            subjectId: { in: assignedSubjectIds },
+            electiveSubjectId: null // Regular class timetables only
           });
         }
 
-        // Condition 3: Teacher is directly assigned to timetable
+        // Condition 3: Teacher is directly assigned to regular timetable
         assignmentConditions.push({
-          teacherIds: { hasSome: [teacherId] }
+          teacherIds: { hasSome: [teacherId] },
+          electiveSubjectId: null // Regular class timetables only
         });
+
+        // Condition 4: Elective timetables where teacher is assigned
+        if (electiveSubjectIds.length > 0) {
+          assignmentConditions.push({
+            electiveSubjectId: { in: electiveSubjectIds }
+          });
+        }
 
         // Combine conditions with OR
         if (assignmentConditions.length > 0) {
@@ -188,6 +214,15 @@ export async function GET(request: NextRequest) {
         academicYear: true,
           },
         },
+        electiveGroup: true,
+        electiveSubject: {
+          include: {
+            subject: true,
+            electiveGroup: true
+          }
+        },
+        branch: true,
+        academicYear: true,
       },
       orderBy: {
         startTime: 'asc',
@@ -221,7 +256,7 @@ export async function GET(request: NextRequest) {
     // Group timetables by time slot and day to combine multiple subjects/teachers
     const groupedTimetables = new Map();
     
-    timetables.forEach(timetable => {
+    timetables.forEach((timetable: any) => {
       const formatTime = (date: Date) => {
         // Use local time to match stored @db.Time values and keep correct order
         const hours = date.getHours().toString().padStart(2, '0');
@@ -229,7 +264,11 @@ export async function GET(request: NextRequest) {
         return `${hours}:${minutes}`;
       };
 
-      const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
+      const isElective = !!timetable.electiveSubjectId;
+      // For electives, use electiveGroupId in the key to keep them separate
+      const timeKey = isElective
+        ? `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-elective-${timetable.electiveGroupId}-${timetable.roomNumber || ''}`
+        : `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
       
       if (!groupedTimetables.has(timeKey)) {
         // Calculate lesson number based on start time
@@ -261,14 +300,21 @@ export async function GET(request: NextRequest) {
           isActive: timetable.isActive,
           createdAt: timetable.createdAt,
           updatedAt: timetable.updatedAt,
-          branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
-          class: {
+          branch: isElective ? timetable.branch : (timetable.class?.branch || { id: 'none', shortName: 'N/A' }),
+          class: isElective ? null : {
             ...timetable.class,
             name: timetable.class?.name || `Class ${timetable.classId}`,
             academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
             branch: timetable.class?.branch || { id: 'none', shortName: 'N/A' },
           },
-          academicYear: timetable.class?.academicYear || { id: 1, name: 'Default' },
+          academicYear: isElective ? timetable.academicYear : (timetable.class?.academicYear || { id: 1, name: 'Default' }),
+          electiveGroup: timetable.electiveGroup || null,
+          electiveSubject: timetable.electiveSubject || null,
+          isElective: isElective,
+          // For electives, use elective group name as display name
+          displayName: isElective ? 
+            (timetable.electiveGroup?.name || `Elective Group ${timetable.electiveGroupId}`) : 
+            (timetable.class?.name || `Class ${timetable.classId}`),
           subjectIds: [],
           subjects: [],
           teacherIds: [],
@@ -287,7 +333,7 @@ export async function GET(request: NextRequest) {
       
       // Add teachers if not already present
       if (timetable.teacherIds && timetable.teacherIds.length > 0) {
-        timetable.teacherIds.forEach(teacherId => {
+        timetable.teacherIds.forEach((teacherId: string) => {
           if (!grouped.teacherIds.includes(teacherId)) {
             grouped.teacherIds.push(teacherId);
             // Add teacher details if available
@@ -309,7 +355,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       timetables: transformedTimetables,
-      teacherAssignments: teacherAssignments.map(ta => ({
+      assignments: teacherAssignments.map(ta => ({
         id: ta.id,
         role: ta.role,
         branchId: ta.branchId,
@@ -325,3 +371,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = authenticateJWT(authorizeRole('TEACHER')(withConnection(getHandler)));

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
 const prisma = new PrismaClient();
 
-export async function GET() {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET() {
   try {
     // Fetch real subjects from database
     const subjects = await prisma.subject.findMany({
@@ -20,7 +22,10 @@ export async function GET() {
       }
     });
     
-    const response = NextResponse.json(subjects);
+    const response = NextResponse.json({
+      success: true,
+      data: subjects
+    });
     // Ensure no caching for fresh data
     response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     response.headers.set('Pragma', 'no-cache');
@@ -34,4 +39,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+}));

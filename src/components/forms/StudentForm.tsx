@@ -59,6 +59,43 @@ const StudentForm = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Submit handler to properly call the server action
+  const onSubmit = handleSubmit((formData) => {
+    console.log("🚀 Student form submitted:", formData);
+    setIsSubmitting(true);
+    
+    const payload = new FormData();
+    
+    // Add all form fields to FormData
+    Object.keys(formData).forEach(key => {
+      const value = (formData as any)[key];
+      if (value !== undefined && value !== null && value !== '') {
+        if (value instanceof Date) {
+          payload.append(key, value.toISOString());
+        } else {
+          payload.append(key, String(value));
+        }
+      }
+    });
+    
+    // Add attachments
+    if (attachments.document1) {
+      payload.append('document1', JSON.stringify(attachments.document1));
+    }
+    if (attachments.document2) {
+      payload.append('document2', JSON.stringify(attachments.document2));
+    }
+    if (attachments.image1) {
+      payload.append('image1', JSON.stringify(attachments.image1));
+    }
+    if (attachments.image2) {
+      payload.append('image2', JSON.stringify(attachments.image2));
+    }
+    
+    console.log("📤 Submitting payload to server action");
+    formAction(payload);
+  });
+
   // Branch and class assignment is handled in Student Assignments section
   const [attachments, setAttachments] = useState<{
     document1: any;
@@ -159,14 +196,14 @@ const StudentForm = ({
     }
   }, [state, router, type, setOpen]);
 
-  // Timeout mechanism - if submitting for more than 30 seconds, reset
+  // Timeout mechanism - if submitting for more than 45 seconds, reset
   useEffect(() => {
     if (isSubmitting) {
       const timeout = setTimeout(() => {
         console.warn("⏰ Form submission timeout - resetting");
         setIsSubmitting(false);
-        toast.error("Request timeout. Please try again.");
-      }, 30000); // 30 seconds
+        toast.error("Request timeout. Please try again. If the problem persists, contact support.");
+      }, 45000); // 45 seconds - increased to allow for database retry logic
 
       return () => clearTimeout(timeout);
     }
@@ -174,7 +211,7 @@ const StudentForm = ({
 
   return (
     <FormProvider {...methods}>
-      <form className="flex flex-col gap-4 sm:gap-6" action={formAction}>
+      <form className="flex flex-col gap-4 sm:gap-6" onSubmit={onSubmit}>
         <h1 className="text-base sm:text-lg font-semibold">
           {type === "create" ? "Create a new student" : "Update the student"}
         </h1>
@@ -439,14 +476,6 @@ const StudentForm = ({
           <button 
             type="submit" 
             disabled={isSubmitting || studentIdError !== ""}
-            onClick={(e) => {
-              if (studentIdError) {
-                e.preventDefault();
-                toast.error("Please fix Student ID error before submitting");
-                return;
-              }
-              setIsSubmitting(true);
-            }}
             className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSubmitting && (

@@ -19,8 +19,10 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import * as XLSX from 'xlsx';
 import { headers } from "next/headers";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     // Security: Verify admin authentication
     const headersList = headers();
@@ -204,4 +206,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}))

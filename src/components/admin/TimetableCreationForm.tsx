@@ -19,6 +19,7 @@ import {
   UserCheck,
   BookCheck
 } from 'lucide-react';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 
 interface Branch {
   id: number;
@@ -236,14 +237,23 @@ const TimetableCreationForm: React.FC = () => {
   const fetchSubjects = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
+      console.log('🔄 Fetching subjects in creation form...');
       const response = await fetch('/api/subjects');
+      console.log('📡 Subjects API response status:', response.status);
+      
       if (response.ok) {
-        const data = await response.json();
-        console.log('Subjects fetched:', data);
-        if (Array.isArray(data) && data.length === 0) {
+        const result = await response.json();
+        console.log('📦 Subjects API response:', result);
+        
+        // Handle the new API response format: { success: true, data: [...] }
+        const subjects = result.success ? result.data : result;
+        console.log('📚 Extracted subjects:', subjects);
+        
+        if (Array.isArray(subjects) && subjects.length === 0) {
           console.warn('No subjects found in database. Please add subjects first.');
         }
-        setSubjects(Array.isArray(data) ? data : []);
+        setSubjects(Array.isArray(subjects) ? subjects : []);
+        console.log('✅ Subjects set in creation form:', Array.isArray(subjects) ? subjects.length : 0, 'subjects');
       } else {
         console.error('Failed to fetch subjects. Status:', response.status);
         setSubjects([]);
@@ -259,12 +269,23 @@ const TimetableCreationForm: React.FC = () => {
   const fetchTeachers = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
+      console.log('🔄 Fetching teachers in creation form...');
       const response = await fetch('/api/teachers');
+      console.log('📡 Teachers API response status:', response.status);
+      
       if (response.ok) {
-        const data = await response.json();
-        setTeachers(Array.isArray(data) ? data : []);
-        setFilteredTeachers(Array.isArray(data) ? data : []);
+        const result = await response.json();
+        console.log('📦 Teachers API response:', result);
+        
+        // Handle the new API response format: { success: true, data: [...] }
+        const teachers = result.success ? result.data : result;
+        console.log('👥 Extracted teachers:', teachers);
+        
+        setTeachers(Array.isArray(teachers) ? teachers : []);
+        setFilteredTeachers(Array.isArray(teachers) ? teachers : []);
+        console.log('✅ Teachers set in creation form:', Array.isArray(teachers) ? teachers.length : 0, 'teachers');
       } else {
+        console.error('Failed to fetch teachers. Status:', response.status);
         setTeachers([]);
         setFilteredTeachers([]);
       }
@@ -741,9 +762,18 @@ const TimetableCreationForm: React.FC = () => {
       }
 
       // Save all slots
+      console.log('📤 Saving timetable slots:', allSlots);
+      allSlots.forEach((slot, index) => {
+        console.log(`📦 Slot ${index + 1}:`, {
+          day: slot.dayOfWeek,
+          time: `${slot.startTime}-${slot.endTime}`,
+          subjectTeacherPairs: slot.subjectTeacherPairs,
+          subjectCount: slot.subjectTeacherPairs?.length || 0
+        });
+      });
       
       const promises = allSlots.map(slot => 
-        fetch('/api/admin/timetables', {
+        csrfFetch('/api/admin/timetables', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(slot)

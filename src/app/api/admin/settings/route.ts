@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
+import { rateLimit, RatePresets } from '@/middlewares/rateLimit';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(rateLimit(RatePresets.API)(async function GET(request: NextRequest) {
   try {
     const userId = request.headers.get("x-user-id");
     const userRole = request.headers.get("x-user-role");
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+})));
 
 async function putHandler(request: NextRequest) {
   try {
@@ -69,3 +72,5 @@ async function putHandler(request: NextRequest) {
     );
   }
 }
+
+export const PUT = authenticateJWT(authorizeRole('ADMIN')(rateLimit(RatePresets.API)(withCSRF(putHandler))));

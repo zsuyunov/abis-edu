@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {
-    const userId = request.headers.get("x-user-id");
-    const userRole = request.headers.get("x-user-role");
-
-    if (!userId || userRole !== "admin") {
+    const userId = locals?.user?.id;
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -39,14 +39,12 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}))
 
-async function putHandler(request: NextRequest) {
+async function putHandler(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {
-    const userId = request.headers.get("x-user-id");
-    const userRole = request.headers.get("x-user-role");
-
-    if (!userId || userRole !== "admin") {
+    const userId = locals?.user?.id;
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -80,3 +78,5 @@ async function putHandler(request: NextRequest) {
     );
   }
 }
+
+export const PUT = authenticateJWT(authorizeRole('ADMIN')(withCSRF(putHandler)));

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Users, BookOpen, ChevronDown, FileText, Clock, CheckCircle, Plus, GraduationCap, Trash2, Mic, Image, Play, Pause, Download, Eye, X, ArrowLeft } from 'lucide-react';
 import ModernHomeworkCreation from './ModernHomeworkCreation';
+import { csrfFetch } from '@/hooks/useCsrfToken';
 
 interface TeacherData {
   assignedClasses: Array<{
@@ -182,10 +183,11 @@ const TeacherHomeworkGrid: React.FC<TeacherHomeworkGridProps> = ({
     try {
       setDeletingHomework(homeworkId);
       
-      const response = await fetch(`/api/teacher-homework?homeworkId=${homeworkId}`, {
+      const response = await csrfFetch(`/api/teacher-homework?homeworkId=${homeworkId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-id': teacherId,
         },
       });
 

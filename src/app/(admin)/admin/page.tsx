@@ -77,8 +77,8 @@ const AdminPage = ({
         </div>
 
         {/* ATTENDANCE CHART - Moved below stats */}
-        <div className="w-full h-[450px]">
-          <Suspense fallback={<div className="animate-pulse bg-gray-200 h-[450px] rounded-lg"></div>}>
+        <div className="w-full min-h-[600px]">
+          <Suspense fallback={<div className="animate-pulse bg-gray-200 h-[600px] rounded-lg"></div>}>
             <AttendanceChartContainer />
           </Suspense>
         </div>

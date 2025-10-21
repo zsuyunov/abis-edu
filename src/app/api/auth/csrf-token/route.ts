@@ -40,8 +40,13 @@ export async function GET(request: NextRequest) {
     const sessionId = payload.id;
     console.log(`✅ Generating CSRF token for session: ${sessionId}`);
 
-    // Generate CSRF token
-    const csrfToken = await CSRFProtection.generateToken(sessionId);
+    // Generate CSRF token with timeout protection
+    const csrfToken = await Promise.race([
+      CSRFProtection.generateToken(sessionId),
+      new Promise<string>((_, reject) => 
+        setTimeout(() => reject(new Error('CSRF token generation timeout')), 3000)
+      )
+    ]);
     console.log(`✅ CSRF token generated successfully for session ${sessionId}`);
 
     const response = NextResponse.json({

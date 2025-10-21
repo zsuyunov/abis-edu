@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 import prisma from '@/lib/prisma';
 
 // GET - Fetch timetables with filtering
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get('branchId');
@@ -81,6 +83,7 @@ export async function GET(request: NextRequest) {
 
       const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
       
+      console.log(`🔑 Grouping key for subject ${timetable.subjectId}:`, timeKey);
       
       if (!groupedTimetables.has(timeKey)) {
         groupedTimetables.set(timeKey, {
@@ -136,6 +139,13 @@ export async function GET(request: NextRequest) {
       return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
     });
 
+    // Log timetables with multiple subjects for debugging
+    console.log(`📊 Total grouped timetables: ${formattedTimetables.length}`);
+    formattedTimetables.forEach((tt, idx) => {
+      if (tt.subjects && tt.subjects.length > 1) {
+        console.log(`📚 Grouped timetable ${idx}: ${tt.subjects.length} subjects:`, tt.subjects.map((s: any) => s.name));
+      }
+    });
 
     return NextResponse.json({
       timetables: formattedTimetables,
@@ -146,17 +156,34 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching timetables:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+}))
 
 // POST - Create new timetable
 async function postHandler(request: NextRequest) {
   try {
     const body = await request.json();
     
+    // Determine if this is an elective timetable or regular class timetable
+    const isElectiveTimetable = body.electiveGroupId && body.electiveSubjectId;
+    
     // Validate required fields
-    if (!body.branchId || !body.classId || !body.academicYearId) {
+    if (!body.branchId || !body.academicYearId) {
       return NextResponse.json({ 
-        error: 'Missing required fields: branchId, classId, or academicYearId' 
+        error: 'Missing required fields: branchId or academicYearId' 
+      }, { status: 400 });
+    }
+
+    // For regular timetables, classId is required
+    if (!isElectiveTimetable && !body.classId) {
+      return NextResponse.json({ 
+        error: 'Missing required field: classId (required for non-elective timetables)' 
+      }, { status: 400 });
+    }
+
+    // For elective timetables, electiveGroupId and electiveSubjectId are required
+    if (isElectiveTimetable && (!body.electiveGroupId || !body.electiveSubjectId)) {
+      return NextResponse.json({ 
+        error: 'Missing required fields: electiveGroupId and electiveSubjectId (required for elective timetables)' 
       }, { status: 400 });
     }
 
@@ -180,37 +207,70 @@ async function postHandler(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Handle subject-teacher pairs structure
-    const subjectTeacherPairs = body.subjectTeacherPairs || [];
-    
-    // For backward compatibility, also handle old structure
-    if (subjectTeacherPairs.length === 0) {
-      const subjectIds = body.subjectIds || (body.subjectId ? [body.subjectId] : []);
-      const teacherIds = body.teacherIds || [];
+    // Validate elective group and subject if this is an elective timetable
+    if (isElectiveTimetable) {
+      const electiveSubject = await prisma.electiveSubject.findUnique({
+        where: { id: parseInt(body.electiveSubjectId) },
+        include: {
+          electiveGroup: true,
+          subject: true
+        }
+      });
+
+      if (!electiveSubject) {
+        return NextResponse.json({
+          error: `Elective subject with ID ${body.electiveSubjectId} not found`
+        }, { status: 404 });
+      }
+
+      if (electiveSubject.electiveGroupId !== parseInt(body.electiveGroupId)) {
+        return NextResponse.json({
+          error: `Elective subject ${body.electiveSubjectId} does not belong to elective group ${body.electiveGroupId}`
+        }, { status: 400 });
+      }
+
+      // For electives, use a single subject-teacher pair from the ElectiveSubject
+      const subjectTeacherPairs = [{
+        subjectId: electiveSubject.subjectId,
+        teacherIds: electiveSubject.teacherIds
+      }];
+
+      body.subjectTeacherPairs = subjectTeacherPairs;
+    } else {
+      // Handle regular class timetable subject-teacher pairs
+      const subjectTeacherPairs = body.subjectTeacherPairs || [];
       
-      if (subjectIds.length === 0) {
+      // For backward compatibility, also handle old structure
+      if (subjectTeacherPairs.length === 0) {
+        const subjectIds = body.subjectIds || (body.subjectId ? [body.subjectId] : []);
+        const teacherIds = body.teacherIds || [];
+        
+        if (subjectIds.length === 0) {
+          return NextResponse.json({
+            error: 'At least one subject must be specified'
+          }, { status: 400 });
+        }
+        
+        // Convert old structure to new structure
+        subjectIds.forEach((subjectId: number) => {
+          subjectTeacherPairs.push({
+            subjectId,
+            teacherIds: teacherIds
+          });
+        });
+      }
+      
+      if (subjectTeacherPairs.length === 0) {
         return NextResponse.json({
           error: 'At least one subject must be specified'
         }, { status: 400 });
       }
-      
-      // Convert old structure to new structure
-      subjectIds.forEach((subjectId: number) => {
-        subjectTeacherPairs.push({
-          subjectId,
-          teacherIds: teacherIds
-        });
-      });
-    }
-    
-    if (subjectTeacherPairs.length === 0) {
-      return NextResponse.json({
-        error: 'At least one subject must be specified'
-      }, { status: 400 });
+
+      body.subjectTeacherPairs = subjectTeacherPairs;
     }
 
     // Validate that all subjects exist
-    const allSubjectIds = subjectTeacherPairs.map((pair: any) => pair.subjectId);
+    const allSubjectIds = body.subjectTeacherPairs.map((pair: any) => pair.subjectId);
     const subjects = await prisma.subject.findMany({
       where: { id: { in: allSubjectIds } }
     });
@@ -223,15 +283,17 @@ async function postHandler(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Validate that the class exists
-    const classExists = await prisma.class.findUnique({
-      where: { id: parseInt(body.classId) }
-    });
+    // Validate that the class exists (only for non-elective timetables)
+    if (!isElectiveTimetable) {
+      const classExists = await prisma.class.findUnique({
+        where: { id: parseInt(body.classId) }
+      });
 
-    if (!classExists) {
-      return NextResponse.json({ 
-        error: `Class with ID ${body.classId} not found` 
-      }, { status: 400 });
+      if (!classExists) {
+        return NextResponse.json({ 
+          error: `Class with ID ${body.classId} not found` 
+        }, { status: 400 });
+      }
     }
 
     // Validate that the branch exists
@@ -270,13 +332,14 @@ async function postHandler(request: NextRequest) {
     // Create timetable entries for each subject-teacher pair
     const timetableEntries = [];
     
-    for (const pair of subjectTeacherPairs) {
+    for (const pair of body.subjectTeacherPairs) {
       const { subjectId, teacherIds } = pair;
       
       // Use provided teachers or auto-assign
       let finalTeacherIds = teacherIds || [];
       
-      if (finalTeacherIds.length === 0) {
+      // Only auto-assign for non-elective timetables
+      if (finalTeacherIds.length === 0 && !isElectiveTimetable && body.classId) {
         // Auto-assign teachers specifically for this subject
         const subjectTeacherAssignments = await prisma.teacherAssignment.findMany({
           where: {
@@ -294,9 +357,9 @@ async function postHandler(request: NextRequest) {
         finalTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
       }
 
-      const timetableData = {
+      const timetableData: any = {
         branchId: parseInt(body.branchId),
-        classId: parseInt(body.classId),
+        classId: isElectiveTimetable ? null : parseInt(body.classId),
         academicYearId: parseInt(body.academicYearId),
         dayOfWeek: dayOfWeek,
         subjectId: subjectId,
@@ -316,8 +379,16 @@ async function postHandler(request: NextRequest) {
         roomNumber: body.roomNumber || '',
         buildingName: body.buildingName || '',
         isActive: true,
+        // Explicitly set elective fields to null for regular timetables
+        electiveGroupId: null,
+        electiveSubjectId: null,
       };
 
+      // Override elective fields ONLY if this is an elective timetable
+      if (isElectiveTimetable) {
+        timetableData.electiveGroupId = parseInt(body.electiveGroupId);
+        timetableData.electiveSubjectId = parseInt(body.electiveSubjectId);
+      }
 
       const timetableEntry = await prisma.timetable.create({
         data: timetableData,
@@ -326,6 +397,12 @@ async function postHandler(request: NextRequest) {
           class: true,
           branch: true,
           academicYear: true,
+          electiveGroup: true,
+          electiveSubject: {
+            include: {
+              subject: true
+            }
+          },
         }
       });
 
@@ -333,7 +410,7 @@ async function postHandler(request: NextRequest) {
     }
 
     return NextResponse.json({ 
-      message: `Timetable entries saved successfully for ${timetableEntries.length} subjects`, 
+      message: `Timetable entries saved successfully for ${timetableEntries.length} ${isElectiveTimetable ? 'elective' : ''} subject(s)`, 
       data: timetableEntries
     }, { status: 201 });
 
@@ -361,7 +438,7 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(authorizeRole('ADMIN')(withCSRF(postHandler)));
 
 // PUT - Update timetable
 async function putHandler(request: NextRequest) {
@@ -410,7 +487,7 @@ async function putHandler(request: NextRequest) {
 
         const teacherAssignments = await prisma.teacherAssignment.findMany({
           where: {
-            classId: currentTimetable.classId,
+            classId: currentTimetable.classId || undefined,
             subjectId: currentTimetable.subjectId,
             academicYearId: currentTimetable.academicYearId,
             status: 'ACTIVE',
@@ -448,7 +525,7 @@ async function putHandler(request: NextRequest) {
   }
 }
 
-export const PUT = withCSRF(putHandler);
+export const PUT = authenticateJWT(authorizeRole('ADMIN')(withCSRF(putHandler)));
 
 // DELETE - Delete timetable
 async function deleteHandler(request: NextRequest) {
@@ -480,4 +557,4 @@ async function deleteHandler(request: NextRequest) {
   }
 }
 
-export const DELETE = withCSRF(deleteHandler);
+export const DELETE = authenticateJWT(authorizeRole('ADMIN')(withCSRF(deleteHandler)));

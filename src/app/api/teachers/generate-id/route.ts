@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     // Generate a unique teacher ID in format T + 5 digits
     let teacherId: string;
@@ -55,4 +57,4 @@ export async function GET(request: NextRequest) {
       error: "Failed to generate teacher ID"
     }, { status: 500 });
   }
-}
+}));

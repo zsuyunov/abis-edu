@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { headers } from 'next/headers';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
 // GET /api/student-grades - Get student's grades and statistics
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async function GET(request: NextRequest) {
   try {
     const headersList = headers();
     const studentId = headersList.get('x-user-id');
@@ -18,7 +20,22 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const subjectId = searchParams.get('subjectId');
 
-    // Build where clause
+    // Get student's elective subject assignments
+    const electiveAssignments = await prisma.electiveStudentAssignment.findMany({
+      where: {
+        studentId: studentId,
+        status: 'ACTIVE'
+      },
+      include: {
+        electiveSubject: {
+          include: {
+            subject: true
+          }
+        }
+      }
+    });
+
+    // Build where clause to include both regular and elective grades
     const whereClause: any = {
       studentId
     };
@@ -31,7 +48,23 @@ export async function GET(request: NextRequest) {
     }
 
     if (subjectId) {
-      whereClause.subjectId = parseInt(subjectId);
+      const subjectIdInt = parseInt(subjectId);
+      
+      // Find elective subjects that match this subject ID
+      const matchingElectiveSubjects = electiveAssignments
+        .filter(assignment => assignment.electiveSubject.subjectId === subjectIdInt)
+        .map(assignment => assignment.electiveSubjectId);
+
+      // Create OR condition to include both regular and elective grades
+      if (matchingElectiveSubjects.length > 0) {
+        whereClause.OR = [
+          { subjectId: subjectIdInt, electiveSubjectId: null }, // Regular class grades
+          { electiveSubjectId: { in: matchingElectiveSubjects } } // Elective grades
+        ];
+      } else {
+        // Only regular grades for this subject
+        whereClause.subjectId = subjectIdInt;
+      }
     }
 
     console.log('🔍 Student Grades Query:', {
@@ -52,6 +85,28 @@ export async function GET(request: NextRequest) {
             select: {
               id: true,
               name: true
+            }
+          },
+          electiveGroup: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          electiveSubject: {
+            include: {
+              subject: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              },
+              electiveGroup: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
             }
           }
         },
@@ -86,7 +141,9 @@ export async function GET(request: NextRequest) {
       // Subject averages
       const subjectMap = new Map();
       grades.forEach(grade => {
-        const subjectName = grade.subject.name;
+        const isElective = !!grade.electiveSubjectId;
+        const subjectInfo = isElective ? grade.electiveSubject?.subject : grade.subject;
+        const subjectName = subjectInfo?.name || 'Unknown Subject';
         const percentage = (grade.value / grade.maxValue) * 100;
 
         if (!subjectMap.has(subjectName)) {
@@ -105,14 +162,23 @@ export async function GET(request: NextRequest) {
       }));
 
       // Recent grades
-      const recentGrades = grades.slice(0, 10).map(grade => ({
-        id: grade.id.toString(),
-        value: grade.value,
-        maxValue: grade.maxValue,
-        subject: grade.subject.name,
-        date: grade.date.toISOString(),
-        type: grade.type
-      }));
+      const recentGrades = grades.slice(0, 10).map(grade => {
+        const isElective = !!grade.electiveSubjectId;
+        const subjectInfo = isElective ? grade.electiveSubject?.subject : grade.subject;
+        
+        return {
+          id: grade.id.toString(),
+          value: grade.value,
+          maxValue: grade.maxValue,
+          subject: subjectInfo?.name || 'Unknown Subject',
+          date: grade.date.toISOString(),
+          type: grade.type,
+          elective: isElective ? {
+            groupName: grade.electiveGroup?.name || grade.electiveSubject?.electiveGroup?.name || 'Unknown Group',
+            isElective: true
+          } : null
+        };
+      });
 
       const statistics = {
         weeklyAverage,
@@ -152,6 +218,28 @@ export async function GET(request: NextRequest) {
               firstName: true,
               lastName: true
             }
+          },
+          electiveGroup: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          electiveSubject: {
+            include: {
+              subject: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              },
+              electiveGroup: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
           }
         },
         orderBy: [
@@ -182,26 +270,37 @@ export async function GET(request: NextRequest) {
       }
 
       // Transform data for frontend
-      const transformedGrades = grades.map(grade => ({
-        id: grade.id.toString(),
-        value: grade.value,
-        maxValue: grade.maxValue,
-        percentage: (grade.value / grade.maxValue) * 100,
-        subjectId: grade.subjectId,
-        subject: {
-          id: grade.subject.id.toString(),
-          name: grade.subject.name
-        },
-        class: grade.class.name,
-        teacher: {
-          id: grade.teacher.id,
+      const transformedGrades = grades.map(grade => {
+        const isElective = !!grade.electiveSubjectId;
+        const subjectInfo = isElective ? grade.electiveSubject?.subject : grade.subject;
+        
+        return {
+          id: grade.id.toString(),
+          value: grade.value,
+          maxValue: grade.maxValue,
+          percentage: (grade.value / grade.maxValue) * 100,
+          subjectId: subjectInfo?.id || grade.subjectId,
+          subject: {
+            id: (subjectInfo?.id || grade.subjectId)?.toString() || '',
+            name: subjectInfo?.name || 'Unknown Subject'
+          },
+          class: grade.class?.name || 'Unknown Class',
+          teacher: {
+            id: grade.teacher.id,
           firstName: grade.teacher.firstName,
           lastName: grade.teacher.lastName
         },
         date: grade.date.toISOString(),
         type: grade.type,
-        description: grade.description
-      }));
+        description: grade.description,
+        elective: isElective ? {
+          groupId: grade.electiveGroupId,
+          groupName: grade.electiveGroup?.name || grade.electiveSubject?.electiveGroup?.name || 'Unknown Group',
+          subjectId: grade.electiveSubjectId,
+          isElective: true
+        } : null
+        };
+      });
 
       return NextResponse.json({
         success: true,
@@ -214,4 +313,4 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching student grades:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+}));

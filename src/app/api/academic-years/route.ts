@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 import prisma from "@/lib/prisma";
 
-export async function GET() {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET() {
   try {
     // Only return active/current academic years, latest first
     const academicYears = await prisma.academicYear.findMany({
@@ -31,7 +33,7 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+}))
 
 async function postHandler(request: NextRequest) {
   try {
@@ -74,3 +76,5 @@ async function postHandler(request: NextRequest) {
     );
   }
 }
+
+export const POST = authenticateJWT(authorizeRole('ADMIN')(withCSRF(postHandler)));

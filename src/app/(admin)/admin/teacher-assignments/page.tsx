@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import FormContainer from "@/components/FormContainer";
 
@@ -48,7 +50,7 @@ interface UnassignedTeacher {
   firstName: string;
   lastName: string;
   teacherId: string;
-  branch: {
+  branch?: {
     id: number;
     shortName: string;
   };
@@ -61,6 +63,7 @@ const TeacherAssignmentsPage = () => {
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
   const [unassignedTeachers, setUnassignedTeachers] = useState<UnassignedTeacher[]>([]);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
   
   // Filters
   const [selectedBranch, setSelectedBranch] = useState<string>("");
@@ -84,6 +87,15 @@ const TeacherAssignmentsPage = () => {
   const [branches, setBranches] = useState<any[]>([]);
   const [academicYears, setAcademicYears] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [query, setQuery] = useState("");
+
+  // Lazy-load the assignment form for Quick Assign
+  const TeacherAssignmentForm = dynamic(() => import("@/components/forms/TeacherAssignmentForm"), {
+    loading: () => <div className="p-6 text-center">Loading form...</div>,
+    ssr: false,
+  });
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignTeacher, setAssignTeacher] = useState<UnassignedTeacher | null>(null);
 
   // Statistics
   const [stats, setStats] = useState({
@@ -111,12 +123,12 @@ const TeacherAssignmentsPage = () => {
         window.removeEventListener('teacher-assignment-updated', handler);
       }
     };
-  }, [selectedBranch, selectedAcademicYear, selectedSubject, selectedRole]);
+  }, [selectedBranch, selectedAcademicYear, selectedSubject, selectedRole, query]);
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedBranch, selectedAcademicYear, selectedSubject, selectedRole]);
+  }, [selectedBranch, selectedAcademicYear, selectedSubject, selectedRole, query]);
 
   // Fetch assignments when page changes
   useEffect(() => {
@@ -153,6 +165,7 @@ const TeacherAssignmentsPage = () => {
       if (selectedAcademicYear) params.append("academicYearId", selectedAcademicYear);
       if (selectedSubject) params.append("subjectId", selectedSubject);
       if (selectedRole) params.append("role", selectedRole);
+      if (query.trim()) params.append("q", query.trim());
       
       // Add pagination parameters
       params.append("page", currentPage.toString());
@@ -278,8 +291,8 @@ const TeacherAssignmentsPage = () => {
       {/* FILTERS */}
       <div className="bg-gray-50 p-4 rounded-lg mb-6">
         <h2 className="text-lg font-semibold mb-4">Advanced Filters</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
             <select
@@ -339,6 +352,17 @@ const TeacherAssignmentsPage = () => {
               <option value="SUPERVISOR">Supervisor</option>
               <option value="TEACHER">Teacher</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Search Teacher</label>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Name or Teacher ID"
+              className="w-full p-2 border border-gray-300 rounded-md text-sm"
+            />
           </div>
 
           <div className="flex items-end">
@@ -564,7 +588,7 @@ const TeacherAssignmentsPage = () => {
                     </div>
                   </div>
                   <div className="text-sm text-gray-600 mb-3">
-                    <div>Branch: {teacher.branch.shortName}</div>
+                    <div>Branch: {teacher.branch?.shortName || "-"}</div>
                     {teacher.supervisedClass && (
                       <div className="text-blue-600 font-medium">
                         Supervises: {teacher.supervisedClass.name}
@@ -573,16 +597,16 @@ const TeacherAssignmentsPage = () => {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleQuickAssign(teacher)}
+                      onClick={() => {
+                        setAssignTeacher(teacher);
+                        setShowAssignModal(true);
+                      }}
                       className="flex-1 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors"
                     >
                       Quick Assign
                     </button>
                     <button
-                      onClick={() => {
-                        // TODO: Open teacher profile
-                        console.log("View teacher profile:", teacher.id);
-                      }}
+                      onClick={() => router.push(`/admin/list/teachers/${teacher.id}`)}
                       className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-100 transition-colors"
                     >
                       View Profile
@@ -592,6 +616,17 @@ const TeacherAssignmentsPage = () => {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {showAssignModal && assignTeacher && (
+        <div className="w-screen h-screen fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center">
+          <div className="bg-white p-4 rounded-md relative w-[90%] md:w-[70%] lg:w-[60%] xl:w-[50%] 2xl:w-[40%] max-h-[90vh] overflow-y-auto">
+            <TeacherAssignmentForm type="create" data={assignTeacher} setOpen={setShowAssignModal} />
+            <div className="absolute top-4 right-4 cursor-pointer bg-gray-100 hover:bg-gray-200 rounded-full p-2 z-10" onClick={() => setShowAssignModal(false)}>
+              <Image src="/close.png" alt="" width={16} height={16} />
+            </div>
+          </div>
         </div>
       )}
     </div>

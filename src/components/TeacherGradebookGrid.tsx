@@ -116,11 +116,16 @@ const TeacherGradebookGrid: React.FC<TeacherGradebookGridProps> = ({
     try {
       const response = await csrfFetch(`/api/students/by-class?classId=${selectedClass}`);
       if (response.ok) {
-        const data = await response.json();
-        setStudents(data);
+        const result = await response.json();
+        const students = result.success ? result.data : result;
+        setStudents(students);
+      } else {
+        console.error('Failed to fetch students. Status:', response.status);
+        setStudents([]);
       }
     } catch (error) {
       console.error('Error fetching students:', error);
+      setStudents([]);
     }
   };
 

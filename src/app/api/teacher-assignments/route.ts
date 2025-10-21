@@ -1,16 +1,20 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 import prisma from "@/lib/prisma";
 
 export const revalidate = 60; // cache for 1 min
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get("branchId");
     const academicYearId = searchParams.get("academicYearId");
     const subjectId = searchParams.get("subjectId");
     const role = searchParams.get("role");
+    const q = searchParams.get("q");
     
     // Pagination parameters
     const page = parseInt(searchParams.get("page") || "1");
@@ -46,7 +50,18 @@ export async function GET(request: NextRequest) {
 
     // Build assignments directly from TeacherAssignment table with pagination
     const teacherAssignments = await prisma.teacherAssignment.findMany({
-      where: whereClause,
+      where: {
+        ...whereClause,
+        ...(q && q.trim()
+          ? {
+              OR: [
+                { Teacher: { firstName: { contains: q, mode: "insensitive" } } },
+                { Teacher: { lastName: { contains: q, mode: "insensitive" } } },
+                { Teacher: { teacherId: { contains: q, mode: "insensitive" } } },
+              ],
+            }
+          : {}),
+      },
       include: {
         Teacher: { select: { id: true, firstName: true, lastName: true, teacherId: true } },
         Class: { select: { id: true, name: true, branch: { select: { id: true, shortName: true } } } },
@@ -75,7 +90,23 @@ export async function GET(request: NextRequest) {
       createdAt: ta.createdAt,
     }));
 
-    const totalPages = Math.ceil(totalCount / limit);
+    // If searching, recompute totalCount based on same where
+    const filteredTotal = await prisma.teacherAssignment.count({
+      where: {
+        ...whereClause,
+        ...(q && q.trim()
+          ? {
+              OR: [
+                { Teacher: { firstName: { contains: q, mode: "insensitive" } } },
+                { Teacher: { lastName: { contains: q, mode: "insensitive" } } },
+                { Teacher: { teacherId: { contains: q, mode: "insensitive" } } },
+              ],
+            }
+          : {}),
+      },
+    });
+
+    const totalPages = Math.ceil((q ? filteredTotal : totalCount) / limit);
     
     const res = NextResponse.json({
       success: true,
@@ -83,7 +114,7 @@ export async function GET(request: NextRequest) {
       pagination: {
         page,
         limit,
-        totalCount,
+        totalCount: q ? filteredTotal : totalCount,
         totalPages,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
@@ -98,7 +129,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}))
 
 async function postHandler(request: NextRequest) {
   try {
@@ -163,7 +194,7 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(authorizeRole('ADMIN')(withCSRF(postHandler)));
 
 async function deleteHandler(request: NextRequest) {
   try {
@@ -238,4 +269,4 @@ async function deleteHandler(request: NextRequest) {
   }
 }
 
-export const DELETE = withCSRF(deleteHandler);
+export const DELETE = authenticateJWT(authorizeRole('ADMIN')(withCSRF(deleteHandler)));

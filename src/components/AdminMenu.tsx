@@ -26,7 +26,8 @@ import {
   CalendarDays,
   Mail,
   User,
-  Settings
+  Settings,
+  ListChecks
 } from "lucide-react";
 
 const adminMenuItems = [
@@ -72,6 +73,11 @@ const adminMenuItems = [
         icon: School,
         label: "Classes",
         href: "/admin/list/classes",
+      },
+      {
+        icon: ListChecks,
+        label: "Electives",
+        href: "/admin/electives",
       },
       {
         icon: Building2,

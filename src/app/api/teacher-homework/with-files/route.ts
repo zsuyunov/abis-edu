@@ -42,6 +42,8 @@ async function postHandler(request: NextRequest) {
     const classId = parseInt(formData.get('classId') as string);
     const subjectId = parseInt(formData.get('subjectId') as string);
     const branchId = parseInt(formData.get('branchId') as string);
+    const electiveGroupId = formData.get('electiveGroupId') ? parseInt(formData.get('electiveGroupId') as string) : null;
+    const electiveSubjectId = formData.get('electiveSubjectId') ? parseInt(formData.get('electiveSubjectId') as string) : null;
 
     // Debug the received date values
     console.log('Received date values:', {
@@ -179,6 +181,9 @@ async function postHandler(request: NextRequest) {
         classId,
         subjectId,
         teacherId: authenticatedUserId!,
+        // Add elective fields if provided
+        ...(electiveGroupId && { electiveGroupId }),
+        ...(electiveSubjectId && { electiveSubjectId }),
       },
     });
 

@@ -57,6 +57,8 @@ model Student {
   class               Class?                     @relation(fields: [classId], references: [id])
   attachments         StudentAttachment[]
   studentParents      StudentParent[]
+  electiveAssignments ElectiveStudentAssignment[]
+  electiveClassAssignments ElectiveClassStudentAssignment[]
 
   @@index([branchId, status])
   @@index([classId, status])
@@ -108,6 +110,7 @@ model Teacher {
 
   @@index([firstName, lastName])
   @@index([status, createdAt])
+  @@index([teacherId])
 }
 
 model Parent {
@@ -137,6 +140,7 @@ model Parent {
   @@index([branchId, status])
   @@index([firstName, lastName])
   @@index([status, createdAt])
+  @@index([parentId])
 }
 
 model StudentParent {
@@ -184,6 +188,7 @@ model Class {
   timetables        Timetable[]
   TimetableTemplate TimetableTemplate[]
   timetableTopics   TimetableTopic[]
+  electiveClasses   ElectiveClass[]
 
   @@index([branchId, status])
   @@index([academicYearId, status])
@@ -209,12 +214,14 @@ model Subject {
   TimetableTemplate  TimetableTemplate[]
   timetableTopics    TimetableTopic[]
   timetables         Timetable[]
+  electiveSubjects   ElectiveSubject[]
+  electiveClassSubjects ElectiveClassSubject[]
 }
 
 model Timetable {
   id                        Int                        @id @default(autoincrement())
   branchId                  Int
-  classId                   Int
+  classId                   Int?
   academicYearId            Int
   dayOfWeek                 String?
   subjectId                 Int?
@@ -226,10 +233,14 @@ model Timetable {
   isActive                  Boolean                    @default(true)
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
+  electiveGroupId           Int?
+  electiveSubjectId         Int?
   academicYear              AcademicYear               @relation(fields: [academicYearId], references: [id])
   branch                    Branch                     @relation(fields: [branchId], references: [id])
-  class                     Class                      @relation(fields: [classId], references: [id])
+  class                     Class?                     @relation(fields: [classId], references: [id])
   subject                   Subject?                   @relation(fields: [subjectId], references: [id])
+  electiveGroup             ElectiveGroup?             @relation(fields: [electiveGroupId], references: [id], onDelete: Cascade)
+  electiveSubject           ElectiveSubject?           @relation(fields: [electiveSubjectId], references: [id], onDelete: Cascade)
   TimetableTemplate         TimetableTemplate?         @relation(fields: [timetableTemplateId], references: [id])
   timetableTemplateId       Int?
 
@@ -237,6 +248,8 @@ model Timetable {
   @@index([dayOfWeek, startTime])
   @@index([classId, dayOfWeek])
   @@index([isActive])
+  @@index([electiveGroupId, dayOfWeek])
+  @@index([electiveSubjectId])
 }
 
 model BellTime {
@@ -332,12 +345,16 @@ model Homework {
   latePenalty         Float?
   passingGrade        Float?
   totalPoints         Float?
+  electiveGroupId     Int?
+  electiveSubjectId   Int?
   archiveComments     ArchiveComment[]
   academicYear        AcademicYear         @relation(fields: [academicYearId], references: [id])
   branch              Branch               @relation(fields: [branchId], references: [id])
   class               Class                @relation(fields: [classId], references: [id])
   subject             Subject              @relation(fields: [subjectId], references: [id])
   teacher             Teacher              @relation(fields: [teacherId], references: [id])
+  electiveGroup       ElectiveGroup?       @relation(fields: [electiveGroupId], references: [id])
+  electiveSubject     ElectiveSubject?     @relation(fields: [electiveSubjectId], references: [id])
   attachments         HomeworkAttachment[]
   submissions         HomeworkSubmission[]
   results             Result[]
@@ -346,6 +363,8 @@ model Homework {
   @@index([teacherId, assignedDate])
   @@index([status, dueDate])
   @@index([teacherId, status])
+  @@index([electiveGroupId])
+  @@index([electiveSubjectId])
 }
 
 model HomeworkSubmission {
@@ -382,69 +401,81 @@ model Result {
 }
 
 model Attendance {
-  id              Int              @id @default(autoincrement())
-  date            DateTime
-  studentId       String
-  archived        Boolean          @default(false)
-  archivedAt      DateTime?
-  createdAt       DateTime         @default(now())
-  notes           String?
-  restoredAt      DateTime?
-  status          AttendanceStatus @default(PRESENT)
-  updatedAt       DateTime         @updatedAt
-  academicYearId  Int
-  branchId        Int
-  classId         Int
-  subjectId       Int
-  teacherId       String
-  lessonNumber    Int              @default(1)
-  archiveComments ArchiveComment[]
-  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
-  branch          Branch           @relation(fields: [branchId], references: [id])
-  class           Class            @relation(fields: [classId], references: [id])
-  student         Student          @relation(fields: [studentId], references: [id])
-  subject         Subject          @relation(fields: [subjectId], references: [id])
-  teacher         Teacher          @relation(fields: [teacherId], references: [id])
+  id                Int              @id @default(autoincrement())
+  date              DateTime
+  studentId         String
+  archived          Boolean          @default(false)
+  archivedAt        DateTime?
+  createdAt         DateTime         @default(now())
+  notes             String?
+  restoredAt        DateTime?
+  status            AttendanceStatus @default(PRESENT)
+  updatedAt         DateTime         @updatedAt
+  academicYearId    Int
+  branchId          Int
+  classId           Int
+  subjectId         Int
+  teacherId         String
+  lessonNumber      Int              @default(1)
+  electiveGroupId   Int?
+  electiveSubjectId Int?
+  archiveComments   ArchiveComment[]
+  academicYear      AcademicYear     @relation(fields: [academicYearId], references: [id])
+  branch            Branch           @relation(fields: [branchId], references: [id])
+  class             Class            @relation(fields: [classId], references: [id])
+  student           Student          @relation(fields: [studentId], references: [id])
+  subject           Subject          @relation(fields: [subjectId], references: [id])
+  teacher           Teacher          @relation(fields: [teacherId], references: [id])
+  electiveGroup     ElectiveGroup?   @relation(fields: [electiveGroupId], references: [id])
+  electiveSubject   ElectiveSubject? @relation(fields: [electiveSubjectId], references: [id])
 
   @@unique([studentId, classId, subjectId, date, lessonNumber])
   @@index([branchId, classId, date])
   @@index([branchId, academicYearId, date])
   @@index([teacherId, date])
+  @@index([electiveGroupId])
+  @@index([electiveSubjectId])
 }
 
 model Grade {
-  id              Int              @id @default(autoincrement())
-  academicYearId  Int
-  archivedAt      DateTime?
-  branchId        Int
-  classId         Int
-  createdAt       DateTime         @default(now())
-  date            DateTime
-  description     String?
-  maxValue        Float            @default(100)
-  month           Int?
-  restoredAt      DateTime?
-  status          GradeStatus      @default(ACTIVE)
-  studentId       String
-  subjectId       Int
-  teacherId       String
-  term            Int?
-  type            GradeType
-  updatedAt       DateTime         @updatedAt
-  value           Float
-  week            Int?
-  year            Int
-  lessonNumber    Int              @default(1)
-  archiveComments ArchiveComment[]
-  academicYear    AcademicYear     @relation(fields: [academicYearId], references: [id])
-  branch          Branch           @relation(fields: [branchId], references: [id])
-  class           Class            @relation(fields: [classId], references: [id])
-  student         Student          @relation(fields: [studentId], references: [id])
-  subject         Subject          @relation(fields: [subjectId], references: [id])
-  teacher         Teacher          @relation(fields: [teacherId], references: [id])
+  id                Int              @id @default(autoincrement())
+  academicYearId    Int
+  archivedAt        DateTime?
+  branchId          Int
+  classId           Int
+  createdAt         DateTime         @default(now())
+  date              DateTime
+  description       String?
+  maxValue          Float            @default(100)
+  month             Int?
+  restoredAt        DateTime?
+  status            GradeStatus      @default(ACTIVE)
+  studentId         String
+  subjectId         Int
+  teacherId         String
+  term              Int?
+  type              GradeType
+  updatedAt         DateTime         @updatedAt
+  value             Float
+  week              Int?
+  year              Int
+  lessonNumber      Int              @default(1)
+  electiveGroupId   Int?
+  electiveSubjectId Int?
+  archiveComments   ArchiveComment[]
+  academicYear      AcademicYear     @relation(fields: [academicYearId], references: [id])
+  branch            Branch           @relation(fields: [branchId], references: [id])
+  class             Class            @relation(fields: [classId], references: [id])
+  student           Student          @relation(fields: [studentId], references: [id])
+  subject           Subject          @relation(fields: [subjectId], references: [id])
+  teacher           Teacher          @relation(fields: [teacherId], references: [id])
+  electiveGroup     ElectiveGroup?   @relation(fields: [electiveGroupId], references: [id])
+  electiveSubject   ElectiveSubject? @relation(fields: [electiveSubjectId], references: [id])
 
   @@index([studentId, subjectId, academicYearId])
   @@index([classId, subjectId, type, date])
+  @@index([electiveGroupId])
+  @@index([electiveSubjectId])
 }
 
 model Complaint {
@@ -683,6 +714,8 @@ model Branch {
   TimetableTemplate   TimetableTemplate[]
   TimetableBulkUpload TimetableBulkUpload[]
   timetableTopics     TimetableTopic[]
+  electiveGroups      ElectiveGroup[]
+  electiveClasses     ElectiveClass[]
 }
 
 /*
@@ -737,6 +770,7 @@ model User {
   education            UserEducation?
   passport             UserPassport?
   // settings         UserSettings?
+  @@index([userId])
 }
 
 model UserPassport {
@@ -818,6 +852,8 @@ model AcademicYear {
   TimetableTemplate   TimetableTemplate[]
   TimetableBulkUpload TimetableBulkUpload[]
   timetableTopics     TimetableTopic[]
+  electiveGroups      ElectiveGroup[]
+  electiveClasses     ElectiveClass[]
 }
 
 model Semester {
@@ -1449,6 +1485,30 @@ enum BulkUploadStatus {
   PARTIALLY_COMPLETED
 }
 
+enum ElectiveGroupStatus {
+  ACTIVE
+  ARCHIVED
+  INACTIVE
+}
+
+enum ElectiveSubjectStatus {
+  ACTIVE
+  INACTIVE
+  FULL
+}
+
+enum ElectiveAssignmentStatus {
+  ACTIVE
+  WITHDRAWN
+  COMPLETED
+}
+
+enum ElectiveClassStatus {
+  ACTIVE
+  ARCHIVED
+  INACTIVE
+}
+
 // ============================================================================
 // Security Models for Authentication Hardening
 // ============================================================================
@@ -1508,4 +1568,146 @@ enum SecurityEventStatus {
   SUCCESS
   FAILURE
   WARNING
+}
+
+// ----------------------------------------------------------------------------
+// Audit logging for mutating operations (CREATE, UPDATE, DELETE)
+// ----------------------------------------------------------------------------
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     String?
+  route      String
+  action     String
+  timestamp  DateTime @default(now())
+  ipAddress  String?
+  metadata   Json?
+
+  @@index([route, action])
+  @@index([userId, timestamp])
+}
+
+// ----------------------------------------------------------------------------
+// Elective System Models
+// ----------------------------------------------------------------------------
+model ElectiveGroup {
+  id              Int                         @id @default(autoincrement())
+  name            String
+  description     String?
+  branchId        Int
+  academicYearId  Int
+  status          ElectiveGroupStatus         @default(ACTIVE)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  archivedAt      DateTime?
+  restoredAt      DateTime?
+  createdBy       String
+  branch          Branch                      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  academicYear    AcademicYear                @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  electiveSubjects ElectiveSubject[]
+  timetables      Timetable[]
+  attendances     Attendance[]
+  homework        Homework[]
+  grades          Grade[]
+  
+  @@unique([name, branchId, academicYearId])
+  @@index([branchId, academicYearId, status])
+  @@index([status, createdAt])
+}
+
+model ElectiveSubject {
+  id                      Int                          @id @default(autoincrement())
+  electiveGroupId         Int
+  subjectId               Int
+  teacherIds              String[]                     @default([])
+  maxStudents             Int?
+  description             String?
+  status                  ElectiveSubjectStatus        @default(ACTIVE)
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+  electiveGroup           ElectiveGroup                @relation(fields: [electiveGroupId], references: [id], onDelete: Cascade)
+  subject                 Subject                      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  studentAssignments      ElectiveStudentAssignment[]
+  timetables              Timetable[]
+  attendances             Attendance[]
+  homework                Homework[]
+  grades                  Grade[]
+  
+  @@unique([electiveGroupId, subjectId])
+  @@index([electiveGroupId, status])
+  @@index([subjectId])
+}
+
+model ElectiveStudentAssignment {
+  id                Int                   @id @default(autoincrement())
+  electiveSubjectId Int
+  studentId         String
+  assignedAt        DateTime              @default(now())
+  assignedBy        String
+  status            ElectiveAssignmentStatus @default(ACTIVE)
+  electiveSubject   ElectiveSubject       @relation(fields: [electiveSubjectId], references: [id], onDelete: Cascade)
+  student           Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  @@unique([electiveSubjectId, studentId])
+  @@index([studentId, status])
+  @@index([electiveSubjectId, status])
+}
+
+// ----------------------------------------------------------------------------
+// Elective Class System Models (Single Class Electives)
+// ----------------------------------------------------------------------------
+model ElectiveClass {
+  id              Int                         @id @default(autoincrement())
+  name            String
+  description     String?
+  branchId        Int
+  academicYearId  Int
+  classId         Int
+  status          ElectiveClassStatus         @default(ACTIVE)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  archivedAt      DateTime?
+  restoredAt      DateTime?
+  createdBy       String
+  branch          Branch                      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  academicYear    AcademicYear                @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  class           Class                       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjects        ElectiveClassSubject[]
+  
+  @@unique([name, branchId, academicYearId, classId])
+  @@index([branchId, academicYearId, classId, status])
+  @@index([status, createdAt])
+}
+
+model ElectiveClassSubject {
+  id                      Int                                @id @default(autoincrement())
+  electiveClassId         Int
+  subjectId               Int
+  teacherIds              String[]                           @default([])
+  maxStudents             Int?
+  description             String?
+  status                  ElectiveSubjectStatus              @default(ACTIVE)
+  createdAt               DateTime                           @default(now())
+  updatedAt               DateTime                           @updatedAt
+  electiveClass           ElectiveClass                      @relation(fields: [electiveClassId], references: [id], onDelete: Cascade)
+  subject                 Subject                            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  studentAssignments      ElectiveClassStudentAssignment[]
+  
+  @@unique([electiveClassId, subjectId])
+  @@index([electiveClassId, status])
+  @@index([subjectId])
+}
+
+model ElectiveClassStudentAssignment {
+  id                      Int                      @id @default(autoincrement())
+  electiveClassSubjectId  Int
+  studentId               String
+  assignedAt              DateTime                 @default(now())
+  assignedBy              String
+  status                  ElectiveAssignmentStatus @default(ACTIVE)
+  electiveClassSubject    ElectiveClassSubject     @relation(fields: [electiveClassSubjectId], references: [id], onDelete: Cascade)
+  student                 Student                  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  @@unique([electiveClassSubjectId, studentId])
+  @@index([studentId, status])
+  @@index([electiveClassSubjectId, status])
 }

@@ -7,6 +7,7 @@ import TeacherHomeworkList from "./TeacherHomeworkList";
 import TeacherHomeworkFilters from "./TeacherHomeworkFilters";
 import TeacherHomeworkCreation from "./TeacherHomeworkCreation";
 import TeacherHomeworkGrading from "./TeacherHomeworkGrading";
+import { csrfFetch } from '@/hooks/useCsrfToken';
 
 type ViewType = "list" | "export" | "edit" | "grading" | "create";
 
@@ -116,7 +117,7 @@ const TeacherHomeworkContainer = ({ teacherId }: TeacherHomeworkContainerProps) 
 
   const handleHomeworkAction = async (homeworkId: number, action: 'archive' | 'restore' | 'delete') => {
     try {
-      const response = await fetch(`/api/teacher-homework?id=${homeworkId}&action=${action}`, {
+      const response = await csrfFetch(`/api/teacher-homework?id=${homeworkId}&action=${action}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

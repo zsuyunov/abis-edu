@@ -1,18 +1,18 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
-  // Add connection pooling parameters to DATABASE_URL for Neon
+  // Add connection pooling parameters to DATABASE_URL for better timeout handling
   const databaseUrl = process.env.DATABASE_URL || '';
   const urlWithPooling = databaseUrl.includes('?') 
-    ? `${databaseUrl}&connection_limit=10&pool_timeout=20&connect_timeout=10`
-    : `${databaseUrl}?connection_limit=10&pool_timeout=20&connect_timeout=10`;
+    ? `${databaseUrl}&connection_limit=10&pool_timeout=20&connect_timeout=10&socket_timeout=20`
+    : `${databaseUrl}?connection_limit=10&pool_timeout=20&connect_timeout=10&socket_timeout=20`;
 
   return new PrismaClient({
     // Only log errors and warnings, no query logs
     log: ['error', 'warn'],
     // Performance optimizations
     errorFormat: 'minimal',
-    // Connection management for Neon with pooling
+    // Connection management for better timeout handling
     datasources: {
       db: {
         url: urlWithPooling,
@@ -22,17 +22,15 @@ const prismaClientSingleton = () => {
 }
 
 declare const globalThis: {
-  prismaGlobal: ReturnType<typeof prismaClientSingleton>;
+  prismaGlobal: ReturnType<typeof prismaClientSingleton> | undefined;
 } & typeof global;
 
 const prisma = globalThis.prismaGlobal ?? prismaClientSingleton()
 
-// Optimize Prisma for production and static generation
-if (process.env.NODE_ENV === 'production' || process.env.NEXT_PHASE === 'phase-production-build') {
-  // Enable connection pooling and warm up connections
-  prisma.$connect().then(() => {
-    console.log('✅ Database connected with connection pooling')
-  }).catch((error) => {
+// Ensure connection is established on startup
+if (process.env.NODE_ENV !== 'production') {
+  // In development, ensure connection is ready
+  prisma.$connect().catch((error) => {
     console.error('❌ Database connection failed:', error)
   })
 }
@@ -47,8 +45,8 @@ export async function withPrismaRetry<T>(
   operation: () => Promise<T>,
   options?: { retries?: number; baseDelayMs?: number }
 ): Promise<T> {
-  const maxRetries = options?.retries ?? 2
-  const baseDelayMs = options?.baseDelayMs ?? 150
+  const maxRetries = options?.retries ?? 3
+  const baseDelayMs = options?.baseDelayMs ?? 200
 
   let attempt = 0
   // eslint-disable-next-line no-constant-condition
@@ -68,7 +66,9 @@ export async function withPrismaRetry<T>(
         message.includes('Connection lost') ||
         errorString.includes('kind: Closed') ||
         message.includes('ETIMEDOUT') ||
-        message.includes('ENOTFOUND');
+        message.includes('ENOTFOUND') ||
+        message.includes('Response from the Engine was empty') ||
+        message.includes('Engine is not yet connected');
 
       if (!isTransient || attempt >= maxRetries) {
         throw error
@@ -80,7 +80,31 @@ export async function withPrismaRetry<T>(
       try {
         // Force disconnect and reconnect
         await prisma.$disconnect();
+        
+        // For "Response from the Engine was empty" errors, wait longer before reconnecting
+        if (message.includes('Response from the Engine was empty') || message.includes('Engine is not yet connected')) {
+          console.warn('   Prisma engine error detected, waiting longer before reconnect...');
+          await new Promise((r) => setTimeout(r, 1000)); // Wait 1 second for engine to stabilize
+          
+          // If this is the second attempt and still failing, try to reset the global prisma instance
+          if (attempt >= 2) {
+            console.warn('   Multiple engine failures detected, attempting to reset Prisma client...');
+            try {
+              // Force disconnect and create a new instance
+              await prisma.$disconnect();
+              // Clear the global instance to force recreation
+              if (process.env.NODE_ENV !== 'production') {
+                globalThis.prismaGlobal = undefined;
+              }
+              // The next operation will create a fresh instance
+            } catch (resetError) {
+              console.warn('   Prisma client reset failed:', resetError);
+            }
+          }
+        }
+        
         await prisma.$connect();
+        console.warn('   Database reconnected successfully');
       } catch (reconnectError) {
         // Ignore reconnect errors; we'll still backoff and retry the operation
         console.warn('   Reconnect attempt failed, will retry operation anyway');

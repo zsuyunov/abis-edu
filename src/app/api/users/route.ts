@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
     // Ultra-fast response with instant caching
     const response = NextResponse.json({
@@ -34,4 +36,4 @@ export async function GET(request: NextRequest) {
       { status: 200 }
     );
   }
-}
+}));

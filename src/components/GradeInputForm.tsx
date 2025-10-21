@@ -58,12 +58,13 @@ const GradeInputForm: React.FC<GradeInputFormProps> = ({
       setLoading(true);
       const response = await fetch(`/api/students/by-class?classId=${classId}`);
       if (response.ok) {
-        const data = await response.json();
-        setStudents(data);
+        const result = await response.json();
+        const students = result.success ? result.data : result;
+        setStudents(students);
         
         // Initialize grades object
         const initialGrades: Record<string, GradeEntry> = {};
-        data.forEach((student: Student) => {
+        students.forEach((student: Student) => {
           initialGrades[student.id] = {
             studentId: student.id,
             grade: null,

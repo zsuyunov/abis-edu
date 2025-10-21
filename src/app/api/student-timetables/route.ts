@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async function GET(request: NextRequest) {
   try {
     // Use header-based authentication like teacher-timetables
     const userId = request.headers.get('x-user-id');
@@ -58,9 +60,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No academic year available" }, { status: 404 });
     }
 
-    // Build where clause
-    const whereClause: any = {
+    // Get student's elective subject assignments
+    const electiveAssignments = await prisma.electiveStudentAssignment.findMany({
+      where: {
+        studentId: studentId,
+        status: 'ACTIVE'
+      },
+      include: {
+        electiveSubject: {
+          include: {
+            electiveGroup: true,
+            subject: true
+          }
+        }
+      }
+    });
+
+    const electiveSubjectIds = electiveAssignments.map(a => a.electiveSubjectId);
+
+    // Build where clause for regular class timetables
+    const classWhereClause: any = {
       classId: student.classId,
+      academicYearId: parseInt(targetAcademicYearId!),
+      isActive: true,
+      electiveSubjectId: null, // Exclude elective timetables
+    };
+
+    // Build where clause for elective timetables
+    const electiveWhereClause: any = {
+      electiveSubjectId: { in: electiveSubjectIds },
       academicYearId: parseInt(targetAcademicYearId!),
       isActive: true,
     };
@@ -68,20 +96,23 @@ export async function GET(request: NextRequest) {
     if (subjectId) {
       const parsedSubjectId = parseInt(subjectId);
       if (!isNaN(parsedSubjectId)) {
-        whereClause.subjectId = parsedSubjectId;
+        classWhereClause.subjectId = parsedSubjectId;
+        electiveWhereClause.subjectId = parsedSubjectId;
       }
     }
 
     if (startDate && endDate) {
-      whereClause.startTime = {
+      const dateFilter = {
         gte: new Date(startDate),
         lte: new Date(endDate),
       };
+      classWhereClause.startTime = dateFilter;
+      electiveWhereClause.startTime = dateFilter;
     }
 
-    // Get timetables
-    const timetables = await prisma.timetable.findMany({
-      where: whereClause,
+    // Get regular class timetables
+    const classTimetables = await prisma.timetable.findMany({
+      where: classWhereClause,
       include: {
         subject: true,
         class: true,
@@ -92,6 +123,29 @@ export async function GET(request: NextRequest) {
         startTime: "asc",
       },
     });
+
+    // Get elective timetables (only if student has elective assignments)
+    const electiveTimetables = electiveSubjectIds.length > 0 ? await prisma.timetable.findMany({
+      where: electiveWhereClause,
+      include: {
+        subject: true,
+        class: true,
+        branch: true,
+        academicYear: true,
+        electiveGroup: true,
+        electiveSubject: {
+          include: {
+            subject: true
+          }
+        }
+      },
+      orderBy: {
+        startTime: "asc",
+      },
+    }) : [];
+
+    // Merge class and elective timetables
+    const timetables = [...classTimetables, ...electiveTimetables];
 
     // Get all unique teacher IDs from all timetables
     const allTeacherIds = Array.from(new Set(
@@ -115,10 +169,10 @@ export async function GET(request: NextRequest) {
     // Create a map for quick teacher lookup
     const teacherMap = new Map(teachers.map(teacher => [teacher.id, teacher]));
 
-    // Group timetables by time slot and day to combine multiple subjects/teachers
-    const groupedTimetables = new Map();
+    // Process timetables - for electives, only show subjects the student is assigned to
+    const processedTimetables = new Map();
     
-    timetables.forEach(timetable => {
+    timetables.forEach((timetable: any) => {
       const formatTime = (date: Date) => {
         // Use UTC methods to avoid timezone conversion issues
         const hours = date.getUTCHours().toString().padStart(2, '0');
@@ -126,11 +180,24 @@ export async function GET(request: NextRequest) {
         return `${hours}:${minutes}`;
       };
 
-      const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
+      const isElective = !!timetable.electiveSubjectId;
       
-      if (!groupedTimetables.has(timeKey)) {
-        groupedTimetables.set(timeKey, {
-          id: timetable.id, // Use first timetable ID as primary
+      // For elective timetables, check if student is assigned to this specific elective subject
+      if (isElective) {
+        const isStudentAssigned = electiveSubjectIds.includes(timetable.electiveSubjectId);
+        if (!isStudentAssigned) {
+          return; // Skip this timetable if student is not assigned to this elective subject
+        }
+      }
+
+      // Create unique key for each timetable entry
+      const timeKey = isElective 
+        ? `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-elective-${timetable.electiveSubjectId}`
+        : `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-class-${timetable.classId}-subject-${timetable.subjectId}`;
+      
+      if (!processedTimetables.has(timeKey)) {
+        processedTimetables.set(timeKey, {
+          id: timetable.id,
           branchId: timetable.branchId,
           classId: timetable.classId,
           academicYearId: timetable.academicYearId,
@@ -145,45 +212,38 @@ export async function GET(request: NextRequest) {
           branch: timetable.branch,
           class: timetable.class,
           academicYear: timetable.academicYear,
-          subjectIds: [],
-          subjects: [],
-          teacherIds: [],
+          electiveGroup: timetable.electiveGroup || null,
+          electiveSubject: timetable.electiveSubject || null,
+          isElective: isElective,
+          // For students, show only the specific subject they're assigned to
+          subjectIds: [timetable.subject?.id].filter(Boolean),
+          subjects: timetable.subject ? [timetable.subject] : [],
+          teacherIds: timetable.teacherIds || [],
           teachers: []
         });
-      }
-      
-      const grouped = groupedTimetables.get(timeKey);
-      
-      // Add subject if not already present
-      if (timetable.subject && !grouped.subjectIds.includes(timetable.subject.id)) {
-        grouped.subjectIds.push(timetable.subject.id);
-        grouped.subjects.push(timetable.subject);
-      }
-      
-      // Add teachers if not already present
-      if (timetable.teacherIds && timetable.teacherIds.length > 0) {
-        timetable.teacherIds.forEach(teacherId => {
-          if (!grouped.teacherIds.includes(teacherId)) {
-            grouped.teacherIds.push(teacherId);
-            // Add teacher details if available
+
+        // Add teacher details
+        const grouped = processedTimetables.get(timeKey);
+        if (timetable.teacherIds && timetable.teacherIds.length > 0) {
+          timetable.teacherIds.forEach((teacherId: string) => {
             const teacher = teacherMap.get(teacherId);
             if (teacher) {
               grouped.teachers.push(teacher);
             }
-          }
-        });
+          });
+        }
       }
     });
 
     // Convert map to array and sort by start time
-    const formattedTimetables = Array.from(groupedTimetables.values()).sort((a, b) => {
+    const formattedTimetables = Array.from(processedTimetables.values()).sort((a, b) => {
       const timeA = a.startTime.split(':').map(Number);
       const timeB = b.startTime.split(':').map(Number);
       return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
     });
 
-    // Get subjects for filter
-    const subjects = await prisma.subject.findMany({
+    // Get subjects for filter - include both class subjects and elective subjects
+    const classSubjects = await prisma.subject.findMany({
       where: {
         TeacherAssignment: {
           some: {
@@ -195,6 +255,26 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { name: "asc" },
     });
+
+    // Get elective subjects that the student is assigned to
+    const electiveSubjects = await prisma.subject.findMany({
+      where: {
+        electiveSubjects: {
+          some: {
+            id: { in: electiveSubjectIds },
+            status: 'ACTIVE'
+          }
+        }
+      },
+      orderBy: { name: "asc" },
+    });
+
+    // Combine and deduplicate subjects
+    const allSubjects = [...classSubjects, ...electiveSubjects];
+    const uniqueSubjects = allSubjects.filter((subject, index, self) => 
+      index === self.findIndex(s => s.id === subject.id)
+    );
+    const subjects = uniqueSubjects.sort((a, b) => a.name.localeCompare(b.name));
 
     // Get academic years
     const availableAcademicYears = await prisma.academicYear.findMany({
@@ -236,4 +316,4 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching student timetables:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-}
+}));

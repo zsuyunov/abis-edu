@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async function GET(request: NextRequest, _ctx?: any, locals?: { user?: { id: string; role: string } }) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = AuthService.extractTokenFromHeader(authHeader);
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    
-    const session = await AuthService.verifyToken(token);
-    if (!session?.id) {
+    const user = locals?.user;
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const url = new URL(request.url);
-    const studentId = url.searchParams.get("studentId") || session.id;
+    const studentId = url.searchParams.get("studentId") || user.id;
     const academicYearId = url.searchParams.get("academicYearId");
     const subjectId = url.searchParams.get("subjectId");
     const gradeType = url.searchParams.get("gradeType"); // DAILY, WEEKLY, etc.
@@ -25,9 +21,25 @@ export async function GET(request: NextRequest) {
     const timeFilter = url.searchParams.get("timeFilter") || "current"; // current, past
     const view = url.searchParams.get("view") || "overview"; // overview, analytics, export
     
-    // Verify student can only access their own data
-    if (session.id !== studentId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    // SECURITY: Verify student can only access their own data
+    if (user.role === 'STUDENT' && user.id !== studentId) {
+      console.warn(`🚨 SECURITY: Student ${user.id} attempted to access gradebook of student ${studentId}`);
+      return NextResponse.json({ error: "Access denied: You can only access your own gradebook" }, { status: 403 });
+    }
+
+    // SECURITY: Parents can only access their children's data
+    if (user.role === 'PARENT') {
+      const studentParent = await prisma.studentParent.findFirst({
+        where: {
+          parentId: user.id,
+          studentId: studentId
+        }
+      });
+      
+      if (!studentParent) {
+        console.warn(`🚨 SECURITY: Parent ${user.id} attempted to access gradebook of non-child student ${studentId}`);
+        return NextResponse.json({ error: "Access denied: You can only access your children's gradebook" }, { status: 403 });
+      }
     }
 
     // Get student information with class and academic year details
@@ -351,7 +363,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}));
 
 // Helper functions
 function getGradesByType(grades: any[]) {

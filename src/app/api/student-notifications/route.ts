@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
       notifications.push({
         id: `upcoming-${timetable.id}`,
         type: "upcoming",
-        title: `Upcoming: Class ${timetable.class.name}`,
+        title: `Upcoming: ${timetable.class?.name || 'Elective Class'}`,
         message: `${message}`,
         timestamp: timetable.startTime,
         read: false,
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
         notifications.push({
           id: `change-${timetable.id}`,
           type: "change",
-          title: `Schedule Updated: Class ${timetable.class.name}`,
+          title: `Schedule Updated: ${timetable.class?.name || 'Elective Class'}`,
           message: `Class details have been updated for ${timetable.startTime.toLocaleDateString()}`,
           timestamp: timetable.updatedAt,
           read: false,

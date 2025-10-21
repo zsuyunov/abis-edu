@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('TEACHER')(async function GET(request: NextRequest) {
   try {
     const headersList = headers();
     const teacherId = headersList.get("x-user-id");
@@ -89,4 +91,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}));

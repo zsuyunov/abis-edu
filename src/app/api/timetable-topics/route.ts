@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
 import prisma from "@/lib/prisma";
-import { headers } from "next/headers";
+import { authenticateJWT } from '@/middlewares/authenticateJWT';
+import { authorizeRole } from '@/middlewares/authorizeRole';
+import { withConnection } from "@/lib/dbConnection";
 
 async function postHandler(request: NextRequest) {
   try {
-    const headersList = headers();
-    const teacherId = headersList.get("x-user-id");
-    
+    const teacherId = request.headers.get("x-user-id");
     
     if (!teacherId) {
       console.log('❌ Unauthorized: No teacher ID provided');
@@ -17,6 +17,7 @@ async function postHandler(request: NextRequest) {
     const body = await request.json();
     const { timetableId, title, description } = body;
     
+    console.log('📝 Creating/updating topic:', { timetableId, title, teacherId });
 
     if (!timetableId || !title) {
       console.log('❌ Missing required fields');
@@ -48,7 +49,6 @@ async function postHandler(request: NextRequest) {
       return NextResponse.json({ error: "Timetable not found" }, { status: 404 });
     }
 
-
     // Check if teacher is assigned to this timetable
     if (!timetable.teacherIds ||
         !Array.isArray(timetable.teacherIds) ||
@@ -56,7 +56,9 @@ async function postHandler(request: NextRequest) {
       
       // For now, let's be more permissive and allow any teacher to add topics
       // This can be made stricter later if needed
+      console.log('⚠️ Teacher not assigned to timetable, but allowing topic creation');
     } else {
+      console.log('✅ Teacher is assigned to timetable');
     }
 
     // First, try to find existing topic for this timetable
@@ -68,6 +70,7 @@ async function postHandler(request: NextRequest) {
 
     let topic;
     if (existingTopic) {
+      console.log('🔄 Updating existing topic:', existingTopic.id);
       // Update existing topic
       topic = await prisma.timetableTopic.update({
         where: {
@@ -80,6 +83,15 @@ async function postHandler(request: NextRequest) {
         },
       });
     } else {
+      // Only create topics for timetables with a classId (not elective timetables)
+      if (!timetable.classId) {
+        console.log('❌ Cannot create topics for elective timetables without a specific class');
+        return NextResponse.json({
+          error: 'Cannot create topics for elective timetables without a specific class'
+        }, { status: 400 });
+      }
+
+      console.log('✨ Creating new topic');
       // Create new topic
       topic = await prisma.timetableTopic.create({
         data: {
@@ -107,7 +119,7 @@ async function postHandler(request: NextRequest) {
   }
 }
 
-export const POST = withCSRF(postHandler);
+export const POST = authenticateJWT(authorizeRole('TEACHER')(withCSRF(withConnection(postHandler))));
 
 export async function GET(request: NextRequest) {
   try {
