@@ -164,7 +164,7 @@ async function postHandler(request: NextRequest, _ctx?: any, locals?: { user?: {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.clone().json();
     
     const { studentId, classId, subjectId, date, status, notes, attendance, lessonNumber, electiveSubjectId, electiveGroupId } = body;
 

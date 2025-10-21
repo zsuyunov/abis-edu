@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 import { withConnection } from "@/lib/dbConnection";
@@ -43,18 +43,20 @@ async function getHandler(request: NextRequest) {
     const mode = url.searchParams.get("mode");
 
     // Get teacher's assignments to determine access
-    const teacherAssignments = await prisma.teacherAssignment.findMany({
-      where: {
-        teacherId: userId,
-        status: "ACTIVE",
-      },
-      include: {
-        Branch: true,
-        AcademicYear: true,
-        Class: true,
-        Subject: true,
-      },
-    });
+    const teacherAssignments = await withPrismaRetry(() => 
+      prisma.teacherAssignment.findMany({
+        where: {
+          teacherId: userId,
+          status: "ACTIVE",
+        },
+        include: {
+          Branch: true,
+          AcademicYear: true,
+          Class: true,
+          Subject: true,
+        },
+      })
+    );
 
 
     if (teacherAssignments.length === 0) {
@@ -66,9 +68,11 @@ async function getHandler(request: NextRequest) {
     // Get academic year
     let targetAcademicYearId = academicYearId;
     if (!targetAcademicYearId) {
-      const currentYear = await prisma.academicYear.findFirst({
-        where: { isCurrent: true, status: "ACTIVE" },
-      });
+      const currentYear = await withPrismaRetry(() => 
+        prisma.academicYear.findFirst({
+          where: { isCurrent: true, status: "ACTIVE" },
+        })
+      );
       targetAcademicYearId = currentYear?.id?.toString() || null;
     }
 
@@ -204,30 +208,32 @@ async function getHandler(request: NextRequest) {
     // Log the final where clause for debugging
 
     // Fetch timetables with related data
-    const timetables = await prisma.timetable.findMany({
-      where: whereClause,
-      include: {
-        subject: true,
-        class: {
-          include: {
-        branch: true,
-        academicYear: true,
+    const timetables = await withPrismaRetry(() => 
+      prisma.timetable.findMany({
+        where: whereClause,
+        include: {
+          subject: true,
+          class: {
+            include: {
+          branch: true,
+          academicYear: true,
+            },
           },
+          electiveGroup: true,
+          electiveSubject: {
+            include: {
+              subject: true,
+              electiveGroup: true
+            }
+          },
+          branch: true,
+          academicYear: true,
         },
-        electiveGroup: true,
-        electiveSubject: {
-          include: {
-            subject: true,
-            electiveGroup: true
-          }
+        orderBy: {
+          startTime: 'asc',
         },
-        branch: true,
-        academicYear: true,
-      },
-      orderBy: {
-        startTime: 'asc',
-      },
-    });
+      })
+    );
 
     
     
@@ -237,18 +243,20 @@ async function getHandler(request: NextRequest) {
     ));
 
     // Fetch teacher details for all teacher IDs
-    const teachers = allTeacherIds.length > 0 ? await prisma.teacher.findMany({
-      where: {
-        id: { in: allTeacherIds }
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        teacherId: true,
-        email: true
-      }
-    }) : [];
+    const teachers = allTeacherIds.length > 0 ? await withPrismaRetry(() => 
+      prisma.teacher.findMany({
+        where: {
+          id: { in: allTeacherIds }
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          teacherId: true,
+          email: true
+        }
+      })
+    ) : [];
 
     // Create a map for quick teacher lookup
     const teacherMap = new Map(teachers.map(teacher => [teacher.id, teacher]));

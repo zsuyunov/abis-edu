@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,17 +10,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Get teacher's assignments
-    const teacherAssignments = await prisma.teacherAssignment.findMany({
-      where: {
-        teacherId: userId,
-        status: "ACTIVE",
-      },
-      include: {
-        Class: true,
-        Subject: true,
-        Branch: true,
-      },
-    });
+    const teacherAssignments = await withPrismaRetry(() => 
+      prisma.teacherAssignment.findMany({
+        where: {
+          teacherId: userId,
+          status: "ACTIVE",
+        },
+        include: {
+          Class: true,
+          Subject: true,
+          Branch: true,
+        },
+      })
+    );
 
     if (teacherAssignments.length === 0) {
       return NextResponse.json({ timetables: [] });
@@ -61,23 +63,25 @@ export async function GET(request: NextRequest) {
     };
 
     // Get today's timetables for the teacher's assigned classes and subjects
-    const todaysTimetables = await prisma.timetable.findMany({
-      where: whereClause,
-      include: {
-        subject: true,
-        class: {
-          include: {
-            branch: true,
-            academicYear: true,
-          },
-        }
-        // Note: 'homework' relation is not directly available in the Timetable model
-        // We'll handle homework separately if needed
-      },
-      orderBy: {
-        startTime: "asc",
-      },
-    });
+    const todaysTimetables = await withPrismaRetry(() => 
+      prisma.timetable.findMany({
+        where: whereClause,
+        include: {
+          subject: true,
+          class: {
+            include: {
+              branch: true,
+              academicYear: true,
+            },
+          }
+          // Note: 'homework' relation is not directly available in the Timetable model
+          // We'll handle homework separately if needed
+        },
+        orderBy: {
+          startTime: "asc",
+        },
+      })
+    );
 
     // Get upcoming timetables for today
     const upcomingToday = todaysTimetables.filter(timetable =>

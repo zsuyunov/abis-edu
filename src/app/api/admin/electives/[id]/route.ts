@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 
+// TEMPORARILY COMMENTED OUT - ELECTIVE ROUTES CAUSING ISSUES
+/*
 // GET - Fetch a single elective group by ID
 export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(
   request: NextRequest,
@@ -218,4 +220,23 @@ export const DELETE = authenticateJWT(authorizeRole('ADMIN')(async function DELE
     );
   }
 }));
+*/
 
+// Temporary placeholder endpoints
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  return NextResponse.json({ 
+    error: "Elective routes temporarily disabled for maintenance" 
+  }, { status: 503 });
+}
+
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  return NextResponse.json({ 
+    error: "Elective routes temporarily disabled for maintenance" 
+  }, { status: 503 });
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  return NextResponse.json({ 
+    error: "Elective routes temporarily disabled for maintenance" 
+  }, { status: 503 });
+}
