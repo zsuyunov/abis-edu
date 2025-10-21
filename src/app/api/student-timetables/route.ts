@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 import { AuthService } from "@/lib/auth";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
@@ -21,18 +21,20 @@ export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async func
     const view = url.searchParams.get("view") || "weekly"; // weekly, monthly, termly, yearly
 
     // Get student information with class details
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      include: {
-        class: {
-          include: {
-            academicYear: true,
-            branch: true,
+    const student = await withPrismaRetry(() => 
+      prisma.student.findUnique({
+        where: { id: studentId },
+        include: {
+          class: {
+            include: {
+              academicYear: true,
+              branch: true,
+            },
           },
+          branch: true,
         },
-        branch: true,
-      },
-    });
+      })
+    );
 
     if (!student) {
       return NextResponse.json({ error: "Student not found" }, { status: 404 });

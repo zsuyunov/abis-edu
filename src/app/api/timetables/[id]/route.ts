@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const timetable = await prisma.timetable.findUnique({
-      where: { id: parseInt(params.id) },
-      include: {
-        branch: { select: { id: true, shortName: true } },
-        class: { select: { id: true, name: true } },
-        academicYear: { select: { id: true, name: true } },
-        subject: { select: { id: true, name: true } }
-      },
-    });
+    const timetable = await withPrismaRetry(() => 
+      prisma.timetable.findUnique({
+        where: { id: parseInt(params.id) },
+        include: {
+          branch: { select: { id: true, shortName: true } },
+          class: { select: { id: true, name: true } },
+          academicYear: { select: { id: true, name: true } },
+          subject: { select: { id: true, name: true } }
+        },
+      })
+    );
 
     if (!timetable) {
       return NextResponse.json(

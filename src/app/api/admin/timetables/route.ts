@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
-import prisma from '@/lib/prisma';
+import prisma, { withPrismaRetry } from '@/lib/prisma';
 
 // GET - Fetch timetables with filtering
 export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
@@ -34,18 +34,20 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(req
     }
 
     // Fetch timetables from database (exclude legacy virtual)
-    const timetables = await prisma.timetable.findMany({
-      where: { ...whereClause, buildingName: { not: 'virtual' } },
-      include: {
-        subject: true,
-        class: true,
-        branch: true,
-        academicYear: true,
-      },
-      orderBy: {
-        startTime: 'asc',
-      },
-    });
+    const timetables = await withPrismaRetry(() => 
+      prisma.timetable.findMany({
+        where: { ...whereClause, buildingName: { not: 'virtual' } },
+        include: {
+          subject: true,
+          class: true,
+          branch: true,
+          academicYear: true,
+        },
+        orderBy: {
+          startTime: 'asc',
+        },
+      })
+    );
 
     // Get all unique teacher IDs from all timetables
     const allTeacherIds = Array.from(new Set(
@@ -53,18 +55,20 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(req
     ));
 
     // Fetch teacher details for all teacher IDs
-    const teachers = allTeacherIds.length > 0 ? await prisma.teacher.findMany({
-      where: {
-        id: { in: allTeacherIds }
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        teacherId: true,
-        email: true
-      }
-    }) : [];
+    const teachers = allTeacherIds.length > 0 ? await withPrismaRetry(() => 
+      prisma.teacher.findMany({
+        where: {
+          id: { in: allTeacherIds }
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          teacherId: true,
+          email: true
+        }
+      })
+    ) : [];
 
     // Create a map for quick teacher lookup
     const teacherMap = new Map(teachers.map(teacher => [teacher.id, teacher]));
@@ -271,9 +275,11 @@ async function postHandler(request: NextRequest) {
 
     // Validate that all subjects exist
     const allSubjectIds = body.subjectTeacherPairs.map((pair: any) => pair.subjectId);
-    const subjects = await prisma.subject.findMany({
-      where: { id: { in: allSubjectIds } }
-    });
+    const subjects = await withPrismaRetry(() => 
+      prisma.subject.findMany({
+        where: { id: { in: allSubjectIds } }
+      })
+    );
 
     if (subjects.length !== allSubjectIds.length) {
       const foundIds = subjects.map((s: any) => s.id);
@@ -285,9 +291,11 @@ async function postHandler(request: NextRequest) {
 
     // Validate that the class exists (only for non-elective timetables)
     if (!isElectiveTimetable) {
-      const classExists = await prisma.class.findUnique({
-        where: { id: parseInt(body.classId) }
-      });
+      const classExists = await withPrismaRetry(() => 
+        prisma.class.findUnique({
+          where: { id: parseInt(body.classId) }
+        })
+      );
 
       if (!classExists) {
         return NextResponse.json({ 
@@ -297,9 +305,11 @@ async function postHandler(request: NextRequest) {
     }
 
     // Validate that the branch exists
-    const branchExists = await prisma.branch.findUnique({
-      where: { id: parseInt(body.branchId) }
-    });
+    const branchExists = await withPrismaRetry(() => 
+      prisma.branch.findUnique({
+        where: { id: parseInt(body.branchId) }
+      })
+    );
 
     if (!branchExists) {
       return NextResponse.json({ 
@@ -308,9 +318,11 @@ async function postHandler(request: NextRequest) {
     }
 
     // Validate that the academic year exists
-    const academicYearExists = await prisma.academicYear.findUnique({
-      where: { id: parseInt(body.academicYearId) }
-    });
+    const academicYearExists = await withPrismaRetry(() => 
+      prisma.academicYear.findUnique({
+        where: { id: parseInt(body.academicYearId) }
+      })
+    );
 
     if (!academicYearExists) {
       return NextResponse.json({ 
@@ -341,18 +353,20 @@ async function postHandler(request: NextRequest) {
       // Only auto-assign for non-elective timetables
       if (finalTeacherIds.length === 0 && !isElectiveTimetable && body.classId) {
         // Auto-assign teachers specifically for this subject
-        const subjectTeacherAssignments = await prisma.teacherAssignment.findMany({
-          where: {
-            classId: parseInt(body.classId),
-            subjectId: subjectId,
-            academicYearId: parseInt(body.academicYearId),
-            status: 'ACTIVE',
-            role: 'TEACHER'
-          },
-          include: {
-            Teacher: true
-          }
-        });
+        const subjectTeacherAssignments = await withPrismaRetry(() => 
+          prisma.teacherAssignment.findMany({
+            where: {
+              classId: parseInt(body.classId),
+              subjectId: subjectId,
+              academicYearId: parseInt(body.academicYearId),
+              status: 'ACTIVE',
+              role: 'TEACHER'
+            },
+            include: {
+              Teacher: true
+            }
+          })
+        );
         
         finalTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
       }
@@ -390,21 +404,23 @@ async function postHandler(request: NextRequest) {
         timetableData.electiveSubjectId = parseInt(body.electiveSubjectId);
       }
 
-      const timetableEntry = await prisma.timetable.create({
-        data: timetableData,
-        include: {
-          subject: true,
-          class: true,
-          branch: true,
-          academicYear: true,
-          electiveGroup: true,
-          electiveSubject: {
-            include: {
-              subject: true
-            }
-          },
-        }
-      });
+      const timetableEntry = await withPrismaRetry(() => 
+        prisma.timetable.create({
+          data: timetableData,
+          include: {
+            subject: true,
+            class: true,
+            branch: true,
+            academicYear: true,
+            electiveGroup: true,
+            electiveSubject: {
+              include: {
+                subject: true
+              }
+            },
+          }
+        })
+      );
 
       timetableEntries.push(timetableEntry);
     }

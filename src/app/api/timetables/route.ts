@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -101,41 +101,45 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    const timetables = await prisma.timetable.findMany({
-      where,
-      select: {
-        id: true,
-        branchId: true,
-        classId: true,
-        academicYearId: true,
-        dayOfWeek: true,
-        subjectId: true,
-        teacherIds: true,
-        startTime: true,
-        endTime: true,
-        roomNumber: true,
-        buildingName: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        timetableTemplateId: true,
-        branch: { select: { id: true, shortName: true } },
-        class: { select: { id: true, name: true } },
-        academicYear: { select: { id: true, name: true } },
-      },
-      orderBy: [
-        { startTime: "asc" },
-      ],
-    });
+    const timetables = await withPrismaRetry(() => 
+      prisma.timetable.findMany({
+        where,
+        select: {
+          id: true,
+          branchId: true,
+          classId: true,
+          academicYearId: true,
+          dayOfWeek: true,
+          subjectId: true,
+          teacherIds: true,
+          startTime: true,
+          endTime: true,
+          roomNumber: true,
+          buildingName: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+          timetableTemplateId: true,
+          branch: { select: { id: true, shortName: true } },
+          class: { select: { id: true, name: true } },
+          academicYear: { select: { id: true, name: true } },
+        },
+        orderBy: [
+          { startTime: "asc" },
+        ],
+      })
+    );
 
     // Fetch subjects for each timetable
     const timetablesWithSubjects = await Promise.all(
       timetables.map(async (timetable) => {
         const subject = timetable.subjectId 
-          ? await prisma.subject.findUnique({
-              where: { id: timetable.subjectId },
-              select: { id: true, name: true }
-            })
+          ? await withPrismaRetry(() => 
+              prisma.subject.findUnique({
+                where: { id: timetable.subjectId! },
+                select: { id: true, name: true }
+              })
+            )
           : null;
         
         return {
@@ -200,26 +204,28 @@ async function postHandler(request: NextRequest) {
       return undefined;
     };
 
-    const timetable = await prisma.timetable.create({
-      data: {
-        branchId: body.branchId,
-        classId: body.classId,
-        academicYearId: body.academicYearId,
-        subjectId: body.subjectId,
-        teacherIds: body.teacherId ? [body.teacherId] : [],
-        dayOfWeek: body.dayOfWeek,
-        startTime: createTimeDate(body.startTime) || new Date('1970-01-01T00:00:00.000Z'),
-        endTime: createTimeDate(body.endTime) || new Date('1970-01-01T00:00:00.000Z'),
-        roomNumber: body.roomNumber,
-        buildingName: body.buildingName || null,
-        isActive: body.isActive !== undefined ? body.isActive : true,
-      },
-      include: {
-        branch: { select: { id: true, shortName: true } },
-        class: { select: { id: true, name: true } },
-        academicYear: { select: { id: true, name: true } },
-      },
-    });
+    const timetable = await withPrismaRetry(() => 
+      prisma.timetable.create({
+        data: {
+          branchId: body.branchId,
+          classId: body.classId,
+          academicYearId: body.academicYearId,
+          subjectId: body.subjectId,
+          teacherIds: body.teacherId ? [body.teacherId] : [],
+          dayOfWeek: body.dayOfWeek,
+          startTime: createTimeDate(body.startTime) || new Date('1970-01-01T00:00:00.000Z'),
+          endTime: createTimeDate(body.endTime) || new Date('1970-01-01T00:00:00.000Z'),
+          roomNumber: body.roomNumber,
+          buildingName: body.buildingName || null,
+          isActive: body.isActive !== undefined ? body.isActive : true,
+        },
+        include: {
+          branch: { select: { id: true, shortName: true } },
+          class: { select: { id: true, name: true } },
+          academicYear: { select: { id: true, name: true } },
+        },
+      })
+    );
 
     return NextResponse.json(timetable, { status: 201 });
   } catch (error) {
