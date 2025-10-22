@@ -5,16 +5,44 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  GraduationCap, 
-  BookOpen, 
-  Users, 
-  Calendar, 
-  Settings, 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  GraduationCap,
+  BookOpen,
+  Users,
+  Calendar,
+  Settings,
   Eye,
   Edit,
   Archive,
-  RotateCcw
+  RotateCcw,
+  Trash2,
+  MoreVertical,
+  Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ElectiveClassCreator from './ElectiveClassCreator';
@@ -78,6 +106,10 @@ export default function ElectiveClassManager({
   const [isLoading, setIsLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState<ElectiveClass | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [editingClass, setEditingClass] = useState<ElectiveClass | null>(null);
+  const [deletingClass, setDeletingClass] = useState<ElectiveClass | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     fetchElectiveClasses();
@@ -129,6 +161,52 @@ export default function ElectiveClassManager({
     } catch (error) {
       console.error('Error updating elective class:', error);
       toast.error('Failed to update elective class');
+    }
+  };
+
+  const handleEditClass = (electiveClass: ElectiveClass) => {
+    setEditingClass(electiveClass);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteClass = async (electiveClass: ElectiveClass) => {
+    try {
+      // Check if there are any student assignments
+      const hasStudentAssignments = electiveClass.subjects.some(subject =>
+        (subject as any)._count?.studentAssignments > 0
+      );
+
+      if (hasStudentAssignments) {
+        toast.error('Cannot delete elective class with student assignments. Please remove all student assignments first.');
+        return;
+      }
+
+      const response = await fetch('/api/elective-classes', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: electiveClass.id,
+          status: 'ARCHIVED',
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Elective class deleted successfully');
+        fetchElectiveClasses();
+        setShowDeleteModal(false);
+        setDeletingClass(null);
+        if (selectedClass?.id === electiveClass.id) {
+          setSelectedClass(null);
+        }
+      } else {
+        toast.error(data.error || 'Failed to delete elective class');
+      }
+    } catch (error) {
+      console.error('Error deleting elective class:', error);
+      toast.error('Failed to delete elective class');
     }
   };
 
@@ -444,9 +522,39 @@ export default function ElectiveClassManager({
                       {electiveClass.class.name} • {electiveClass.branch.shortName}
                     </CardDescription>
                   </div>
-                  <Badge className={getStatusColor(electiveClass.status)}>
-                    {electiveClass.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={getStatusColor(electiveClass.status)}>
+                      {electiveClass.status}
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setSelectedClass(electiveClass)}>
+                          <Eye className="w-4 h-4 mr-2" />
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleEditClass(electiveClass)}>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setDeletingClass(electiveClass);
+                            setShowDeleteModal(true);
+                          }}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -485,6 +593,91 @@ export default function ElectiveClassManager({
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Elective Class</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingClass?.name}"? This action cannot be undone.
+              {deletingClass?.subjects.some(s => (s as any)._count?.studentAssignments > 0) &&
+                " Note: This class has student assignments that will also be removed."
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingClass && handleDeleteClass(deletingClass)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Elective Class</DialogTitle>
+            <DialogDescription>
+              Update the elective class information and manage subject assignments.
+            </DialogDescription>
+          </DialogHeader>
+          {editingClass && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Class</label>
+                  <p className="text-gray-600">{editingClass.class.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Branch</label>
+                  <p className="text-gray-600">{editingClass.branch.shortName}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Current Subjects ({editingClass.subjects.length})</label>
+                <div className="mt-2 space-y-2">
+                  {editingClass.subjects.map((subject) => (
+                    <div key={subject.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span className="font-medium">{subject.subject.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">
+                          Max: {subject.maxStudents || 'No limit'}
+                        </span>
+                        <Button size="sm" variant="outline">
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button className="mt-2" variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Subject
+                </Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => {
+              // TODO: Implement save functionality
+              setShowEditModal(false);
+              setEditingClass(null);
+            }}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

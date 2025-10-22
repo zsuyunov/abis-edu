@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 
@@ -13,25 +13,27 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(req
     }
 
     // Get subjects assigned to the class through timetables
-    const subjects = await prisma.subject.findMany({
-      where: {
-        timetables: {
-          some: {
-            classId: parseInt(classId),
-            isActive: true
-          }
+    const subjects = await withPrismaRetry(() => 
+      prisma.subject.findMany({
+        where: {
+          timetables: {
+            some: {
+              classId: parseInt(classId),
+              isActive: true
+            }
+          },
+          status: "ACTIVE"
         },
-        status: "ACTIVE"
-      },
-      select: {
-        id: true,
-        name: true,
-        status: true
-      },
-      orderBy: {
-        name: "asc"
-      }
-    });
+        select: {
+          id: true,
+          name: true,
+          status: true
+        },
+        orderBy: {
+          name: "asc"
+        }
+      })
+    );
 
     const response = NextResponse.json(subjects);
     // Ensure no caching for fresh data

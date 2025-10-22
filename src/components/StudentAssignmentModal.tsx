@@ -157,15 +157,35 @@ const StudentAssignmentModal = ({
         }
       );
 
-      const data = await response.json();
-
       if (response.ok) {
-        toast.success(data.message || "Students assigned successfully!");
-        setSelectedStudents(new Set());
-        onSuccess();
-        fetchData(); // Refresh the data
+        const data = await response.json();
+        if (data.success) {
+          toast.success(data.message || "Students assigned successfully!");
+          setSelectedStudents(new Set());
+          setSearchQuery("");
+          onSuccess();
+          fetchData(); // Refresh the data
+        } else {
+          // Handle detailed error messages for conflicts
+          if (data.details && Array.isArray(data.details)) {
+            // Show the first conflict error (there might be multiple)
+            toast.error(data.details[0]);
+          } else {
+            toast.error(data.error || "Failed to assign students");
+          }
+        }
       } else {
-        toast.error(data.error || "Failed to assign students");
+        // Handle HTTP error responses (like 409)
+        try {
+          const errorData = await response.json();
+          if (errorData.details && Array.isArray(errorData.details)) {
+            toast.error(errorData.details[0]);
+          } else {
+            toast.error(errorData.error || `Failed to assign students (${response.status})`);
+          }
+        } catch (parseError) {
+          toast.error(`Failed to assign students (${response.status})`);
+        }
       }
     } catch (error) {
       console.error("Error assigning students:", error);

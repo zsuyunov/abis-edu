@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import prisma, { withPrismaRetry } from '@/lib/prisma';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
+import { checkStudentSubjectConflict, getConflictErrorMessage } from '@/lib/elective-conflict-checker';
 
 // GET - Get all students assigned to an elective subject
 export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(
@@ -86,16 +87,29 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
     }
 
     // Check if elective subject exists and get max students limit
-    const electiveSubject = await prisma.electiveSubject.findUnique({
-      where: { id: electiveSubjectId },
-      include: {
-        _count: {
-          select: {
-            studentAssignments: true
+    const electiveSubject = await withPrismaRetry(() =>
+      prisma.electiveSubject.findUnique({
+        where: { id: electiveSubjectId },
+        include: {
+          subject: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          electiveGroup: {
+            select: {
+              name: true
+            }
+          },
+          _count: {
+            select: {
+              studentAssignments: true
+            }
           }
         }
-      }
-    });
+      })
+    );
 
     if (!electiveSubject) {
       return NextResponse.json(
@@ -108,15 +122,35 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
     if (electiveSubject.maxStudents) {
       const currentStudents = electiveSubject._count.studentAssignments;
       const newTotal = currentStudents + studentIds.length;
-      
+
       if (newTotal > electiveSubject.maxStudents) {
         return NextResponse.json(
-          { 
-            error: `Cannot assign ${studentIds.length} student(s). Maximum capacity is ${electiveSubject.maxStudents}, currently ${currentStudents} assigned.` 
+          {
+            error: `Cannot assign ${studentIds.length} student(s). Maximum capacity is ${electiveSubject.maxStudents}, currently ${currentStudents} assigned.`
           },
           { status: 400 }
         );
       }
+    }
+
+    // Check for conflicts with elective classes
+    const conflictErrors = [];
+    for (const studentId of studentIds) {
+      const conflictResult = await checkStudentSubjectConflict(studentId, electiveSubject.subjectId);
+      if (conflictResult.hasConflict) {
+        const errorMessage = getConflictErrorMessage(conflictResult);
+        conflictErrors.push(`Student ID ${studentId}: ${errorMessage}`);
+      }
+    }
+
+    if (conflictErrors.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Student assignment conflicts detected',
+          details: conflictErrors
+        },
+        { status: 409 }
+      );
     }
 
     // Create student assignments
@@ -126,13 +160,15 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
     for (const studentId of studentIds) {
       try {
         // Check if student exists and is active
-        const student = await prisma.student.findUnique({
-          where: { id: studentId },
-          select: {
-            id: true,
-            status: true
-          }
-        });
+        const student = await withPrismaRetry(() =>
+          prisma.student.findUnique({
+            where: { id: studentId },
+            select: {
+              id: true,
+              status: true
+            }
+          })
+        );
 
         if (!student) {
           errors.push(`Student ID ${studentId} not found`);
@@ -145,14 +181,16 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
         }
 
         // Check if already assigned
-        const existing = await prisma.electiveStudentAssignment.findUnique({
-          where: {
-            electiveSubjectId_studentId: {
-              electiveSubjectId,
-              studentId
+        const existing = await withPrismaRetry(() =>
+          prisma.electiveStudentAssignment.findUnique({
+            where: {
+              electiveSubjectId_studentId: {
+                electiveSubjectId,
+                studentId
+              }
             }
-          }
-        });
+          })
+        );
 
         if (existing) {
           errors.push(`Student ID ${studentId} is already assigned to this elective`);
@@ -160,7 +198,8 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
         }
 
         // Create assignment
-        const assignment = await prisma.electiveStudentAssignment.create({
+        const assignment = await withPrismaRetry(() =>
+          prisma.electiveStudentAssignment.create({
           data: {
             electiveSubjectId,
             studentId,
@@ -183,7 +222,7 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
               }
             }
           }
-        });
+        }));
 
         createdAssignments.push(assignment);
       } catch (err) {
@@ -195,10 +234,12 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
     if (electiveSubject.maxStudents) {
       const newTotal = electiveSubject._count.studentAssignments + createdAssignments.length;
       if (newTotal >= electiveSubject.maxStudents) {
-        await prisma.electiveSubject.update({
-          where: { id: electiveSubjectId },
-          data: { status: 'FULL' }
-        });
+        await withPrismaRetry(() =>
+          prisma.electiveSubject.update({
+            where: { id: electiveSubjectId },
+            data: { status: 'FULL' }
+          })
+        );
       }
     }
 
@@ -238,12 +279,14 @@ export const DELETE = authenticateJWT(authorizeRole('ADMIN')(async function DELE
     }
 
     // Delete assignment
-    const deleted = await prisma.electiveStudentAssignment.deleteMany({
-      where: {
-        electiveSubjectId,
-        studentId
-      }
-    });
+    const deleted = await withPrismaRetry(() =>
+      prisma.electiveStudentAssignment.deleteMany({
+        where: {
+          electiveSubjectId,
+          studentId
+        }
+      })
+    );
 
     if (deleted.count === 0) {
       return NextResponse.json(
@@ -253,23 +296,27 @@ export const DELETE = authenticateJWT(authorizeRole('ADMIN')(async function DELE
     }
 
     // Update status from FULL to ACTIVE if student was removed
-    const electiveSubject = await prisma.electiveSubject.findUnique({
-      where: { id: electiveSubjectId },
-      include: {
-        _count: {
-          select: {
-            studentAssignments: true
+    const electiveSubject = await withPrismaRetry(() =>
+      prisma.electiveSubject.findUnique({
+        where: { id: electiveSubjectId },
+        include: {
+          _count: {
+            select: {
+              studentAssignments: true
+            }
           }
         }
-      }
-    });
+      })
+    );
 
     if (electiveSubject && electiveSubject.status === 'FULL' && electiveSubject.maxStudents) {
       if (electiveSubject._count.studentAssignments < electiveSubject.maxStudents) {
-        await prisma.electiveSubject.update({
-          where: { id: electiveSubjectId },
-          data: { status: 'ACTIVE' }
-        });
+        await withPrismaRetry(() =>
+          prisma.electiveSubject.update({
+            where: { id: electiveSubjectId },
+            data: { status: 'ACTIVE' }
+          })
+        );
       }
     }
 

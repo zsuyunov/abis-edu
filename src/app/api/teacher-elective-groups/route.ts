@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import prisma, { withPrismaRetry } from '@/lib/prisma';
 
-// TEMPORARILY COMMENTED OUT - ELECTIVE ROUTES CAUSING ISSUES
-/*
 export async function GET(request: NextRequest) {
   try {
     // Get authenticated user from header
@@ -49,7 +47,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get unique branch IDs from teacher's assignments
-    const branchIds = [...new Set(teacherAssignments.map(ta => ta.branchId))];
+    const branchIds = Array.from(new Set(teacherAssignments.map(ta => ta.branchId)));
 
     // Fetch elective groups for the teacher's branches
     const electiveGroups = await prisma.electiveGroup.findMany({
@@ -144,14 +142,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-*/
-
-// Temporary placeholder endpoint
-export async function GET(request: NextRequest) {
-  return NextResponse.json({ 
-    error: "Elective routes temporarily disabled for maintenance",
-    electiveGroups: [],
-    totalGroups: 0
-  }, { status: 503 });
 }

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
-
-const prisma = new PrismaClient();
+import prisma, { withPrismaRetry } from '@/lib/prisma';
+import { checkStudentSubjectConflict, getConflictErrorMessage } from '@/lib/elective-conflict-checker';
 
 // GET - Fetch elective class student assignments
 async function getHandler(request: NextRequest) {
@@ -24,7 +23,8 @@ async function getHandler(request: NextRequest) {
       whereClause.studentId = studentId;
     }
 
-    const assignments = await prisma.electiveClassStudentAssignment.findMany({
+    const assignments = await withPrismaRetry(() =>
+      prisma.electiveClassStudentAssignment.findMany({
       where: whereClause,
       include: {
         student: {
@@ -67,7 +67,7 @@ async function getHandler(request: NextRequest) {
       orderBy: {
         assignedAt: 'desc',
       },
-    });
+    }));
 
     return NextResponse.json({
       success: true,
@@ -100,18 +100,27 @@ async function postHandler(request: NextRequest) {
     }
 
     // Get the elective class subject to validate class constraint
-    const electiveClassSubject = await prisma.electiveClassSubject.findUnique({
-      where: {
-        id: parseInt(electiveClassSubjectId),
-      },
-      include: {
-        electiveClass: {
-          select: {
-            classId: true,
+    const electiveClassSubject = await withPrismaRetry(() =>
+      prisma.electiveClassSubject.findUnique({
+        where: {
+          id: parseInt(electiveClassSubjectId),
+        },
+        include: {
+          subject: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          electiveClass: {
+            select: {
+              classId: true,
+              name: true
+            },
           },
         },
-      },
-    });
+      })
+    );
 
     if (!electiveClassSubject) {
       return NextResponse.json(
@@ -121,13 +130,15 @@ async function postHandler(request: NextRequest) {
     }
 
     // Validate that all students belong to the same class as the elective class
-    const students = await prisma.student.findMany({
-      where: {
-        id: { in: studentIds },
-        classId: electiveClassSubject.electiveClass.classId,
-        status: 'ACTIVE',
-      },
-    });
+    const students = await withPrismaRetry(() =>
+      prisma.student.findMany({
+        where: {
+          id: { in: studentIds },
+          classId: electiveClassSubject.electiveClass.classId,
+          status: 'ACTIVE',
+        },
+      })
+    );
 
     if (students.length !== studentIds.length) {
       return NextResponse.json(
@@ -136,13 +147,15 @@ async function postHandler(request: NextRequest) {
       );
     }
 
-    // Check for existing assignments
-    const existingAssignments = await prisma.electiveClassStudentAssignment.findMany({
-      where: {
-        electiveClassSubjectId: parseInt(electiveClassSubjectId),
-        studentId: { in: studentIds },
-      },
-    });
+    // Check for existing assignments in elective class subject
+    const existingAssignments = await withPrismaRetry(() =>
+      prisma.electiveClassStudentAssignment.findMany({
+        where: {
+          electiveClassSubjectId: parseInt(electiveClassSubjectId),
+          studentId: { in: studentIds },
+        },
+      })
+    );
 
     if (existingAssignments.length > 0) {
       const existingStudentIds = existingAssignments.map(a => a.studentId);
@@ -152,14 +165,36 @@ async function postHandler(request: NextRequest) {
       );
     }
 
+    // Check for conflicts with elective groups
+    const conflictErrors = [];
+    for (const studentId of studentIds) {
+      const conflictResult = await checkStudentSubjectConflict(studentId, electiveClassSubject.subjectId);
+      if (conflictResult.hasConflict) {
+        const errorMessage = getConflictErrorMessage(conflictResult);
+        conflictErrors.push(`Student ID ${studentId}: ${errorMessage}`);
+      }
+    }
+
+    if (conflictErrors.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Student assignment conflicts detected',
+          details: conflictErrors
+        },
+        { status: 409 }
+      );
+    }
+
     // Check max students limit
     if (electiveClassSubject.maxStudents) {
-      const currentAssignments = await prisma.electiveClassStudentAssignment.count({
-        where: {
-          electiveClassSubjectId: parseInt(electiveClassSubjectId),
-          status: 'ACTIVE',
-        },
-      });
+      const currentAssignments = await withPrismaRetry(() =>
+        prisma.electiveClassStudentAssignment.count({
+          where: {
+            electiveClassSubjectId: parseInt(electiveClassSubjectId),
+            status: 'ACTIVE',
+          },
+        })
+      );
 
       if (currentAssignments + studentIds.length > electiveClassSubject.maxStudents) {
         return NextResponse.json(
@@ -170,20 +205,23 @@ async function postHandler(request: NextRequest) {
     }
 
     // Create assignments
-    const assignments = await prisma.electiveClassStudentAssignment.createMany({
-      data: studentIds.map((studentId: string) => ({
-        electiveClassSubjectId: parseInt(electiveClassSubjectId),
-        studentId,
-        assignedBy,
-      })),
-    });
+    const assignments = await withPrismaRetry(() =>
+      prisma.electiveClassStudentAssignment.createMany({
+        data: studentIds.map((studentId: string) => ({
+          electiveClassSubjectId: parseInt(electiveClassSubjectId),
+          studentId,
+          assignedBy,
+        })),
+      })
+    );
 
     // Fetch created assignments with includes
-    const createdAssignments = await prisma.electiveClassStudentAssignment.findMany({
-      where: {
-        electiveClassSubjectId: parseInt(electiveClassSubjectId),
-        studentId: { in: studentIds },
-      },
+    const createdAssignments = await withPrismaRetry(() =>
+      prisma.electiveClassStudentAssignment.findMany({
+        where: {
+          electiveClassSubjectId: parseInt(electiveClassSubjectId),
+          studentId: { in: studentIds },
+        },
       include: {
         student: {
           select: {
@@ -216,7 +254,7 @@ async function postHandler(request: NextRequest) {
           },
         },
       },
-    });
+    }));
 
     return NextResponse.json({
       success: true,
@@ -242,14 +280,16 @@ async function deleteHandler(request: NextRequest) {
 
     if (id) {
       // Remove single assignment by ID
-      await prisma.electiveClassStudentAssignment.update({
-        where: {
-          id: parseInt(id),
-        },
-        data: {
-          status: 'WITHDRAWN',
-        },
-      });
+      await withPrismaRetry(() =>
+        prisma.electiveClassStudentAssignment.update({
+          where: {
+            id: parseInt(id),
+          },
+          data: {
+            status: 'WITHDRAWN',
+          },
+        })
+      );
 
       return NextResponse.json({
         success: true,
@@ -257,16 +297,18 @@ async function deleteHandler(request: NextRequest) {
       });
     } else if (studentId && electiveClassSubjectId) {
       // Remove assignment by student and elective class subject
-      await prisma.electiveClassStudentAssignment.updateMany({
-        where: {
-          studentId,
-          electiveClassSubjectId: parseInt(electiveClassSubjectId),
-          status: 'ACTIVE',
-        },
-        data: {
-          status: 'WITHDRAWN',
-        },
-      });
+      await withPrismaRetry(() =>
+        prisma.electiveClassStudentAssignment.updateMany({
+          where: {
+            studentId,
+            electiveClassSubjectId: parseInt(electiveClassSubjectId),
+            status: 'ACTIVE',
+          },
+          data: {
+            status: 'WITHDRAWN',
+          },
+        })
+      );
 
       return NextResponse.json({
         success: true,

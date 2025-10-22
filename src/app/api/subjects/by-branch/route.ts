@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 
@@ -18,17 +18,19 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(req
     // The filtering will be handled on the frontend based on the selected branch
 
     // Fetch subjects
-    const subjects = await prisma.subject.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        status: true
-      },
-      orderBy: {
-        name: "asc"
-      }
-    });
+    const subjects = await withPrismaRetry(() => 
+      prisma.subject.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          status: true
+        },
+        orderBy: {
+          name: "asc"
+        }
+      })
+    );
 
     const response = NextResponse.json(subjects);
     // Ensure no caching for fresh data

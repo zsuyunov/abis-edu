@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
+import prisma, { withPrismaRetry } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
 
 // GET - Fetch elective classes
 async function getHandler(request: NextRequest) {
@@ -20,7 +20,8 @@ async function getHandler(request: NextRequest) {
       );
     }
 
-    const electiveClasses = await prisma.electiveClass.findMany({
+    const electiveClasses = await withPrismaRetry(() =>
+      prisma.electiveClass.findMany({
       where: {
         branchId: parseInt(branchId),
         academicYearId: parseInt(academicYearId),
@@ -78,7 +79,7 @@ async function getHandler(request: NextRequest) {
       orderBy: {
         createdAt: 'desc',
       },
-    });
+    }));
 
     return NextResponse.json({
       success: true,
@@ -113,15 +114,45 @@ async function postHandler(request: NextRequest) {
       );
     }
 
+    // Check if any elective class already exists for this class (only one elective class per actual class allowed)
+    const existingElectiveClassForClass = await withPrismaRetry(() =>
+      prisma.electiveClass.findFirst({
+        where: {
+          classId: parseInt(classId),
+          academicYearId: parseInt(academicYearId),
+          status: {
+            in: ['ACTIVE', 'INACTIVE']
+          }
+        },
+        include: {
+          branch: {
+            select: {
+              shortName: true
+            }
+          }
+        }
+      })
+    );
+
+    if (existingElectiveClassForClass) {
+      return NextResponse.json(
+        {
+          error: `An elective class already exists for this class in ${existingElectiveClassForClass.branch.shortName}. Only one elective class is allowed per actual class.`
+        },
+        { status: 409 }
+      );
+    }
+
     // Check if elective class with same name already exists for this branch, academic year, and class
-    const existingElectiveClass = await prisma.electiveClass.findFirst({
+    const existingElectiveClass = await withPrismaRetry(() =>
+      prisma.electiveClass.findFirst({
       where: {
         name,
         branchId: parseInt(branchId),
         academicYearId: parseInt(academicYearId),
         classId: parseInt(classId),
       },
-    });
+    }));
 
     if (existingElectiveClass) {
       return NextResponse.json(
@@ -130,7 +161,8 @@ async function postHandler(request: NextRequest) {
       );
     }
 
-    const electiveClass = await prisma.electiveClass.create({
+    const electiveClass = await withPrismaRetry(() =>
+      prisma.electiveClass.create({
       data: {
         name,
         description,
@@ -160,7 +192,7 @@ async function postHandler(request: NextRequest) {
           },
         },
       },
-    });
+    }));
 
     return NextResponse.json({
       success: true,
@@ -206,7 +238,8 @@ async function putHandler(request: NextRequest) {
       }
     }
 
-    const electiveClass = await prisma.electiveClass.update({
+    const electiveClass = await withPrismaRetry(() =>
+      prisma.electiveClass.update({
       where: {
         id: parseInt(id),
       },
@@ -245,7 +278,7 @@ async function putHandler(request: NextRequest) {
           },
         },
       },
-    });
+    }));
 
     return NextResponse.json({
       success: true,
@@ -271,3 +304,4 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(r
 export const PUT = authenticateJWT(authorizeRole('ADMIN')(async function PUT(request: NextRequest) {
   return putHandler(request);
 }));
+

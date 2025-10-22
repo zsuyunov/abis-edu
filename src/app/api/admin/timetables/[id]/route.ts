@@ -146,7 +146,6 @@ async function putHandler(
           });
           
           subjectTeacherIds = subjectTeacherAssignments.map(ta => ta.teacherId);
-          console.log(`📚 Subject ${subjectId} auto-assigned teachers: [${subjectTeacherIds.join(', ')}]`);
         }
 
         const timetableData = {
@@ -163,12 +162,6 @@ async function putHandler(
           isActive: currentTimetable.isActive,
           ...otherData
         };
-        
-        console.log(`💾 Creating timetable for subject ${subjectId}:`, {
-          day: timetableData.dayOfWeek,
-          room: timetableData.roomNumber,
-          teachers: subjectTeacherIds
-        });
         
         const newTimetable = await prisma.timetable.create({
           data: timetableData,

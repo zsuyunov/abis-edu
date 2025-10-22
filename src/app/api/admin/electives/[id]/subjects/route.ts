@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import prisma, { withPrismaRetry } from '@/lib/prisma';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 
@@ -11,7 +11,8 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(
   try {
     const electiveGroupId = parseInt(params.id);
 
-    const electiveSubjects = await prisma.electiveSubject.findMany({
+    const electiveSubjects = await withPrismaRetry(() =>
+      prisma.electiveSubject.findMany({
       where: {
         electiveGroupId
       },
@@ -32,12 +33,13 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(
       orderBy: {
         createdAt: 'desc'
       }
-    });
+    }));
 
     // Fetch teacher details for each subject
     const subjectsWithTeachers = await Promise.all(
       electiveSubjects.map(async (electiveSubject) => {
-        const teachers = await prisma.teacher.findMany({
+        const teachers = await withPrismaRetry(() =>
+          prisma.teacher.findMany({
           where: {
             id: {
               in: electiveSubject.teacherIds
@@ -51,7 +53,7 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(
             email: true,
             status: true
           }
-        });
+        }));
 
         return {
           ...electiveSubject,
@@ -93,9 +95,11 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
     }
 
     // Check if elective group exists
-    const electiveGroup = await prisma.electiveGroup.findUnique({
-      where: { id: electiveGroupId }
-    });
+    const electiveGroup = await withPrismaRetry(() =>
+      prisma.electiveGroup.findUnique({
+        where: { id: electiveGroupId }
+      })
+    );
 
     if (!electiveGroup) {
       return NextResponse.json(
@@ -105,7 +109,8 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
     }
 
     // Get teacher assignments for the subjects
-    const teacherAssignments = await prisma.teacherAssignment.findMany({
+    const teacherAssignments = await withPrismaRetry(() =>
+      prisma.teacherAssignment.findMany({
       where: {
         subjectId: {
           in: subjectIds.map((id: string) => parseInt(id))
@@ -118,7 +123,7 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
         subjectId: true,
         teacherId: true
       }
-    });
+    }));
 
     // Group teachers by subject
     const teachersBySubject = teacherAssignments.reduce((acc, assignment) => {
@@ -142,14 +147,16 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
         const subjectIdInt = parseInt(subjectId);
 
         // Check if already assigned
-        const existing = await prisma.electiveSubject.findUnique({
-          where: {
-            electiveGroupId_subjectId: {
-              electiveGroupId,
-              subjectId: subjectIdInt
+        const existing = await withPrismaRetry(() =>
+          prisma.electiveSubject.findUnique({
+            where: {
+              electiveGroupId_subjectId: {
+                electiveGroupId,
+                subjectId: subjectIdInt
+              }
             }
-          }
-        });
+          })
+        );
 
         if (existing) {
           errors.push(`Subject ID ${subjectId} is already assigned to this elective group`);
@@ -158,7 +165,8 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
 
         const teacherIds = teachersBySubject[subjectIdInt] || [];
 
-        const electiveSubject = await prisma.electiveSubject.create({
+        const electiveSubject = await withPrismaRetry(() =>
+          prisma.electiveSubject.create({
           data: {
             electiveGroupId,
             subjectId: subjectIdInt,
@@ -175,7 +183,7 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(
               }
             }
           }
-        });
+        }));
 
         createdSubjects.push(electiveSubject);
       } catch (err) {
@@ -219,11 +227,13 @@ export const DELETE = authenticateJWT(authorizeRole('ADMIN')(async function DELE
     }
 
     // Check if there are student assignments
-    const studentCount = await prisma.electiveStudentAssignment.count({
-      where: {
-        electiveSubjectId: parseInt(electiveSubjectId)
-      }
-    });
+    const studentCount = await withPrismaRetry(() =>
+      prisma.electiveStudentAssignment.count({
+        where: {
+          electiveSubjectId: parseInt(electiveSubjectId)
+        }
+      })
+    );
 
     if (studentCount > 0) {
       return NextResponse.json(
@@ -235,11 +245,13 @@ export const DELETE = authenticateJWT(authorizeRole('ADMIN')(async function DELE
     }
 
     // Delete elective subject
-    await prisma.electiveSubject.delete({
-      where: {
-        id: parseInt(electiveSubjectId)
-      }
-    });
+    await withPrismaRetry(() =>
+      prisma.electiveSubject.delete({
+        where: {
+          id: parseInt(electiveSubjectId)
+        }
+      })
+    );
 
     return NextResponse.json({
       success: true,

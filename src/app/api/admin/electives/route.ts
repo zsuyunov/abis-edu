@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import prisma, { withPrismaRetry } from '@/lib/prisma';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 
-// TEMPORARILY COMMENTED OUT - ELECTIVE ROUTES CAUSING ISSUES
-/*
 // GET - Fetch all elective groups with filters
 export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(request: NextRequest) {
   try {
@@ -124,15 +122,17 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(r
     }
 
     // Check if elective group with same name exists for the branch and academic year
-    const existingGroup = await prisma.electiveGroup.findUnique({
-      where: {
-        name_branchId_academicYearId: {
-          name,
-          branchId: parseInt(branchId),
-          academicYearId: parseInt(academicYearId)
+    const existingGroup = await withPrismaRetry(() => 
+      prisma.electiveGroup.findUnique({
+        where: {
+          name_branchId_academicYearId: {
+            name,
+            branchId: parseInt(branchId),
+            academicYearId: parseInt(academicYearId)
+          }
         }
-      }
-    });
+      })
+    );
 
     if (existingGroup) {
       return NextResponse.json(
@@ -142,31 +142,33 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(r
     }
 
     // Create elective group
-    const electiveGroup = await prisma.electiveGroup.create({
-      data: {
-        name,
-        description: description || null,
-        branchId: parseInt(branchId),
-        academicYearId: parseInt(academicYearId),
-        createdBy: userId,
-        status: 'ACTIVE'
-      },
-      include: {
-        branch: {
-          select: {
-            id: true,
-            shortName: true,
-            legalName: true
-          }
+    const electiveGroup = await withPrismaRetry(() => 
+      prisma.electiveGroup.create({
+        data: {
+          name,
+          description: description || null,
+          branchId: parseInt(branchId),
+          academicYearId: parseInt(academicYearId),
+          createdBy: userId,
+          status: 'ACTIVE'
         },
-        academicYear: {
-          select: {
-            id: true,
-            name: true
+        include: {
+          branch: {
+            select: {
+              id: true,
+              shortName: true,
+              legalName: true
+            }
+          },
+          academicYear: {
+            select: {
+              id: true,
+              name: true
+            }
           }
         }
-      }
-    });
+      })
+    );
 
     return NextResponse.json({
       success: true,
@@ -182,18 +184,4 @@ export const POST = authenticateJWT(authorizeRole('ADMIN')(async function POST(r
     );
   }
 }));
-*/
-
-// Temporary placeholder endpoints
-export async function GET(request: NextRequest) {
-  return NextResponse.json({ 
-    error: "Elective routes temporarily disabled for maintenance" 
-  }, { status: 503 });
-}
-
-export async function POST(request: NextRequest) {
-  return NextResponse.json({ 
-    error: "Elective routes temporarily disabled for maintenance" 
-  }, { status: 503 });
-}
 

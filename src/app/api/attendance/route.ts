@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCSRF } from '@/lib/security';
-import { PrismaClient } from '@prisma/client';
+import prisma, { withPrismaRetry } from '@/lib/prisma';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 import { validateOwnership } from '@/middlewares/validateOwnership';
 import { auditLogger } from '@/middlewares/auditLogger';
 import { rateLimit, RatePresets } from '@/middlewares/rateLimit';
-
-const prisma = new PrismaClient();
 
 async function deleteHandler(request: NextRequest, _ctx?: any, locals?: { user?: { id: string } }) {
   try {

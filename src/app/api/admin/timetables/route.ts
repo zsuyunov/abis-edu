@@ -87,8 +87,6 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(req
 
       const timeKey = `${timetable.dayOfWeek}-${formatTime(timetable.startTime)}-${formatTime(timetable.endTime)}-${timetable.classId}-${timetable.roomNumber || ''}`;
       
-      console.log(`🔑 Grouping key for subject ${timetable.subjectId}:`, timeKey);
-      
       if (!groupedTimetables.has(timeKey)) {
         groupedTimetables.set(timeKey, {
           id: timetable.id, // Use first timetable ID as primary
@@ -141,14 +139,6 @@ export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET(req
       const timeA = a.startTime.split(':').map(Number);
       const timeB = b.startTime.split(':').map(Number);
       return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
-    });
-
-    // Log timetables with multiple subjects for debugging
-    console.log(`📊 Total grouped timetables: ${formattedTimetables.length}`);
-    formattedTimetables.forEach((tt, idx) => {
-      if (tt.subjects && tt.subjects.length > 1) {
-        console.log(`📚 Grouped timetable ${idx}: ${tt.subjects.length} subjects:`, tt.subjects.map((s: any) => s.name));
-      }
     });
 
     return NextResponse.json({

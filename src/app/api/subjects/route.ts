@@ -1,26 +1,26 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
-
-const prisma = new PrismaClient();
 
 export const GET = authenticateJWT(authorizeRole('ADMIN')(async function GET() {
   try {
     // Fetch real subjects from database
-    const subjects = await prisma.subject.findMany({
-      where: {
-        status: "ACTIVE"
-      },
-      select: {
-        id: true,
-        name: true,
-        status: true
-      },
-      orderBy: {
-        name: "asc"
-      }
-    });
+    const subjects = await withPrismaRetry(() => 
+      prisma.subject.findMany({
+        where: {
+          status: "ACTIVE"
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true
+        },
+        orderBy: {
+          name: "asc"
+        }
+      })
+    );
     
     const response = NextResponse.json({
       success: true,

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma, { withPrismaRetry } from '@/lib/prisma';
 
 // GET - Fetch today's attendance statistics
 export async function GET(request: NextRequest) {
@@ -13,31 +11,35 @@ export async function GET(request: NextRequest) {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     // Get today's attendance records
-    const todayAttendance = await prisma.attendance.findMany({
-      where: {
-        date: {
-          gte: today,
-          lt: tomorrow
-        }
-      },
-      include: {
-        student: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            studentId: true
+    const todayAttendance = await withPrismaRetry(() => 
+      prisma.attendance.findMany({
+        where: {
+          date: {
+            gte: today,
+            lt: tomorrow
+          }
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              studentId: true
+            }
           }
         }
-      }
-    });
+      })
+    );
 
     // Calculate statistics
-    const totalStudents = await prisma.student.count({
-      where: {
-        status: 'ACTIVE'
-      }
-    });
+    const totalStudents = await withPrismaRetry(() => 
+      prisma.student.count({
+        where: {
+          status: 'ACTIVE'
+        }
+      })
+    );
 
     const presentCount = todayAttendance.filter(record => record.status === 'PRESENT').length;
     const absentCount = todayAttendance.filter(record => record.status === 'ABSENT').length;
