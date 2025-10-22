@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma, { withPrismaRetry } from "@/lib/prisma";
+import prisma, { withPrismaRetry, withDatabaseConnection } from "@/lib/prisma";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 import { withConnection } from "@/lib/dbConnection";
