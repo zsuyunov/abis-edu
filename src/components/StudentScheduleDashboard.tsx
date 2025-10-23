@@ -32,7 +32,7 @@ interface TimetableEntry {
     id: string;
     name: string;
   };
-  topics: Array<{
+  timetableTopics: Array<{
     id: string;
     title: string;
     description: string;
@@ -139,7 +139,7 @@ const StudentScheduleDashboard = ({ studentId, studentData }: StudentScheduleDas
           lessonNumber: timetable.lessonNumber || 1,
           classroom: timetable.roomNumber || timetable.buildingName || "Classroom",
           subject: timetable.subject,
-          topics: timetable.topics || [],
+          timetableTopics: timetable.timetableTopics || [],
           attendance: timetable.attendance
         };
       });
@@ -409,8 +409,8 @@ const StudentScheduleDashboard = ({ studentId, studentData }: StudentScheduleDas
 
                         <div className="text-sm text-gray-600 flex items-center gap-2">
                           <BookOpen className="w-4 h-4" />
-                          {timetable.topics.length > 0 
-                            ? timetable.topics[0].title 
+                          {timetable.timetableTopics.length > 0
+                            ? timetable.timetableTopics[0].title
                             : "No lesson topic"
                           }
                         </div>

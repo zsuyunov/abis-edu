@@ -72,7 +72,7 @@ async function postHandler(request: NextRequest) {
     cookiesToClear.forEach(cookieName => {
       response.cookies.set(cookieName, '', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production',
         sameSite: 'strict',
         maxAge: 0,
         path: '/'

@@ -157,8 +157,8 @@ export default function ElectiveClassCreator({
   const handleSubjectAssignment = () => {
     if (selectedSubjects.size === 0) {
       toast.error('Please select at least one subject');
-      return;
-    }
+        return;
+      }
     setCurrentStep('students');
   };
 
@@ -190,7 +190,7 @@ export default function ElectiveClassCreator({
 
   const handleAssignSubjects = async () => {
     try {
-      setIsLoading(true);
+    setIsLoading(true);
 
       const selectedSubjectIds = Array.from(selectedSubjects);
 
@@ -226,22 +226,22 @@ export default function ElectiveClassCreator({
 
       // Then assign subjects to the created elective class
       const assignResponse = await fetch(`/api/elective-classes/${electiveClassId}/subjects`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
           subjectIds: selectedSubjectIds,
           maxStudents: 30, // Default max students
-        }),
-      });
+          }),
+        });
 
       if (assignResponse.ok) {
         toast.success('Elective class created and subjects assigned successfully');
         resetForm();
-        if (onElectiveClassCreated) {
-          onElectiveClassCreated();
-        }
+      if (onElectiveClassCreated) {
+        onElectiveClassCreated();
+      }
       } else {
         const error = await assignResponse.json();
         toast.error(error.error || 'Failed to assign subjects');
@@ -317,19 +317,19 @@ export default function ElectiveClassCreator({
               <CardHeader className="bg-gray-50 border-b border-gray-200">
                 <CardTitle className="text-lg text-gray-900">Basic Information</CardTitle>
                 <CardDescription className="text-gray-600">
-                  Select a class to create electives for. The name will be generated automatically.
-                </CardDescription>
-              </CardHeader>
+                Select a class to create electives for. The name will be generated automatically.
+              </CardDescription>
+            </CardHeader>
               <CardContent className="space-y-4 bg-white p-6">
-                <div className="space-y-2">
-                  <Label htmlFor="classId">Select Class *</Label>
-                  <Select
-                    value={formData.classId}
+              <div className="space-y-2">
+                <Label htmlFor="classId">Select Class *</Label>
+                <Select
+                  value={formData.classId}
                     onValueChange={(value) => setFormData({ ...formData, classId: value })}
-                  >
+                >
                     <SelectTrigger className="w-full h-12 bg-white border-2 border-gray-300 hover:border-purple-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200">
                       <SelectValue placeholder="Select a class" className="text-gray-700" />
-                    </SelectTrigger>
+                  </SelectTrigger>
                     <SelectContent className="w-full bg-white border-2 border-gray-200 shadow-xl z-[300] max-h-64 overflow-y-auto">
                       {loadingClasses ? (
                         <SelectItem value="loading" disabled className="text-gray-500">
@@ -353,37 +353,37 @@ export default function ElectiveClassCreator({
                               <span className="font-medium text-gray-900">{cls.name}</span>
                               <span className="text-sm text-gray-500">
                                 {cls.branch.shortName} • {cls._count.students} students
-                              </span>
-                            </div>
-                          </SelectItem>
+                          </span>
+                        </div>
+                      </SelectItem>
                         ))
                       )}
-                    </SelectContent>
-                  </Select>
-                </div>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description (Optional)</Label>
-                  <Textarea
-                    id="description"
+              <div className="space-y-2">
+                <Label htmlFor="description">Description (Optional)</Label>
+                <Textarea
+                  id="description"
                     placeholder="Add any additional notes or description for this elective class"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+            </CardContent>
+          </Card>
 
             <div className="flex justify-end pt-4 border-t border-gray-200">
-              <Button
-                type="button"
+                <Button
+                  type="button"
                 onClick={handleClassSelection}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2"
-              >
+                >
                 Next: Assign Subjects
                 <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
+                </Button>
             </div>
           </div>
         )}
@@ -397,17 +397,17 @@ export default function ElectiveClassCreator({
                 <p className="text-sm text-gray-600">
                   Select subjects to assign to {selectedClass?.name}
                 </p>
-              </div>
-              <Button
-                type="button"
+                </div>
+                        <Button
+                          type="button"
                 variant="outline"
                 onClick={() => setCurrentStep('class')}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
-              </Button>
-            </div>
-
+                        </Button>
+                      </div>
+                      
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -428,8 +428,8 @@ export default function ElectiveClassCreator({
                   <X className="w-4 h-4 text-gray-400" />
                 </Button>
               )}
-            </div>
-
+                        </div>
+                        
             {/* Subject Selection */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Available Subjects */}
@@ -444,7 +444,7 @@ export default function ElectiveClassCreator({
                       <div className="text-gray-500">Loading subjects...</div>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                        <div className="space-y-2">
                       {(() => {
                         const filteredSubjects = availableSubjects.filter(subject =>
                           subject.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -457,8 +457,8 @@ export default function ElectiveClassCreator({
                               <div className="font-medium">No subjects found</div>
                               <div className="text-sm">
                                 {searchQuery ? 'Try adjusting your search terms' : 'No subjects available'}
-                              </div>
-                            </div>
+                        </div>
+                      </div>
                           );
                         }
 
@@ -526,14 +526,14 @@ export default function ElectiveClassCreator({
                             >
                               <X className="w-4 h-4" />
                             </Button>
+                                </div>
+                              ) : null;
+                            })}
                           </div>
-                        ) : null;
-                      })}
-                    </div>
-                  )}
+                        )}
                 </CardContent>
               </Card>
-            </div>
+                      </div>
 
             <div className="flex justify-between items-center pt-4 border-t border-gray-200">
               <Button
@@ -564,7 +564,7 @@ export default function ElectiveClassCreator({
                 )}
               </Button>
             </div>
-          </div>
+                      </div>
         )}
 
         {/* Step 3: Student Assignment */}
@@ -596,23 +596,23 @@ export default function ElectiveClassCreator({
               </p>
               
               <div className="flex justify-center space-x-4 pt-4 border-t border-gray-200">
-                <Button
-                  type="button"
-                  variant="outline"
+              <Button
+                type="button"
+                variant="outline"
                   onClick={() => setCurrentStep('subjects')}
                   className="border-2 border-gray-300 hover:border-purple-400 hover:bg-purple-50"
-                >
+              >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Back to Subjects
-                </Button>
-                <Button
+              </Button>
+            <Button
                   type="button"
                   onClick={resetForm}
                   className="bg-green-600 hover:bg-green-700 text-white px-6 py-2"
                 >
                   Complete Setup
-                </Button>
-              </div>
+            </Button>
+          </div>
             </div>
           </div>
         )}

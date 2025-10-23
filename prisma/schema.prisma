@@ -243,6 +243,7 @@ model Timetable {
   electiveSubject           ElectiveSubject?           @relation(fields: [electiveSubjectId], references: [id], onDelete: Cascade)
   TimetableTemplate         TimetableTemplate?         @relation(fields: [timetableTemplateId], references: [id])
   timetableTemplateId       Int?
+  timetableTopics          TimetableTopic[]
 
   @@index([branchId, classId, academicYearId])
   @@index([dayOfWeek, startTime])
@@ -1198,6 +1199,7 @@ model TimetableTopic {
   class          Class            @relation(fields: [classId], references: [id])
   branch         Branch           @relation(fields: [branchId], references: [id])
   academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id])
+  timetable      Timetable        @relation(fields: [timetableId], references: [id])
 
   @@index([timetableId])
   @@index([teacherId])

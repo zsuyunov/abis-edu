@@ -289,7 +289,7 @@ const StudentTodayView = ({
           >
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold text-gray-900">{currentLesson.subject.name}</h4>
-              {currentLesson.topics?.length > 0 && (
+              {currentLesson.timetableTopics?.length > 0 && (
                 <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
                   <Eye className="w-3 h-3" />
                   Topics
@@ -334,7 +334,7 @@ const StudentTodayView = ({
           >
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold text-gray-900">{nextLesson.subject.name}</h4>
-              {nextLesson.topics?.length > 0 && (
+              {nextLesson.timetableTopics?.length > 0 && (
                 <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
                   <Eye className="w-3 h-3" />
                   Topics
@@ -415,10 +415,10 @@ const StudentTodayView = ({
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {lesson.topics?.length > 0 && (
+                      {lesson.timetableTopics?.length > 0 && (
                         <span className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
                           <Sparkles className="w-3 h-3" />
-                          {lesson.topics.length}
+                          {lesson.timetableTopics.length}
                         </span>
                       )}
                       <span className="text-sm font-medium text-gray-600">

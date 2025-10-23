@@ -1,9 +1,7 @@
 // Database query optimizations for improved performance
 // Compatible with existing schema - TypeScript safe
 
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from './prisma';
 
 // Optimized student timetable query
 export const getOptimizedStudentTimetables = async (
@@ -293,4 +291,4 @@ CREATE INDEX IF NOT EXISTS idx_timetable_topic_timetable ON "TimetableTopic"("ti
 CREATE INDEX IF NOT EXISTS idx_homework_assigned_date ON "Homework"("assignedDate", "dueDate");
 `;
 
-export { prisma };
+// prisma is already exported from the main prisma file

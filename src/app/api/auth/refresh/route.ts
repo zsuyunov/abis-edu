@@ -175,7 +175,7 @@ async function postHandler(request: NextRequest) {
     // Update cookies with new tokens
     response.cookies.set('auth_token', newAccessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production',
       sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
       maxAge: 15 * 60, // 15 minutes
       path: '/',
@@ -183,7 +183,7 @@ async function postHandler(request: NextRequest) {
 
     response.cookies.set('refresh_token', newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production',
       sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/api/auth',

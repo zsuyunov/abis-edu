@@ -205,7 +205,7 @@ async function getHandler(request: NextRequest) {
       whereClause.subjectId = parseInt(subjectId);
     }
 
-    // Log the final where clause for debugging
+    // Remove all logging for cleaner terminal output
 
     // Fetch timetables with related data
     const timetables = await withPrismaRetry(() => 
@@ -228,6 +228,7 @@ async function getHandler(request: NextRequest) {
           },
           branch: true,
           academicYear: true,
+          timetableTopics: true, // Include timetable topics
         },
         orderBy: {
           startTime: 'asc',

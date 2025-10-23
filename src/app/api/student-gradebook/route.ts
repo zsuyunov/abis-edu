@@ -4,7 +4,7 @@ import { AuthService } from "@/lib/auth";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async function GET(request: NextRequest, _ctx?: any, locals?: { user?: { id: string; role: string } }) {
+export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT', 'ADMIN')(async function GET(request: NextRequest, _ctx?: any, locals?: { user?: { id: string; role: string } }) {
   try {
     const user = locals?.user;
     if (!user) {
@@ -41,6 +41,8 @@ export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async func
         return NextResponse.json({ error: "Access denied: You can only access your children's gradebook" }, { status: 403 });
       }
     }
+
+    // SECURITY: Admin can access any student's gradebook (no additional restrictions)
 
     // Get student information with class and academic year details
     const student = await prisma.student.findUnique({

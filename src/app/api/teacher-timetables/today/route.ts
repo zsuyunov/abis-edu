@@ -73,7 +73,8 @@ export async function GET(request: NextRequest) {
               branch: true,
               academicYear: true,
             },
-          }
+          },
+          timetableTopics: true, // Include timetable topics
           // Note: 'homework' relation is not directly available in the Timetable model
           // We'll handle homework separately if needed
         },

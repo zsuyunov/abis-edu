@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     // Also set CSRF token in a cookie for easier access
     response.cookies.set('csrf_token', csrfToken, {
       httpOnly: false, // Allow JavaScript access
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production',
       sameSite: 'strict',
       maxAge: 3600, // 1 hour
       path: '/',

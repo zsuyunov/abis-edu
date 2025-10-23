@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withCSRF } from '@/lib/security';
-import prisma from "@/lib/prisma";
+import prisma, { withPrismaRetry } from "@/lib/prisma";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 import { withConnection } from "@/lib/dbConnection";
@@ -17,7 +17,10 @@ async function postHandler(request: NextRequest) {
     const body = await request.json();
     const { timetableId, title, description } = body;
     
-    console.log('📝 Creating/updating topic:', { timetableId, title, teacherId });
+    // Only log in development
+    if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+      console.log('📝 Creating/updating topic:', { timetableId, title, teacherId });
+    }
 
     if (!timetableId || !title) {
       console.log('❌ Missing required fields');
@@ -28,7 +31,7 @@ async function postHandler(request: NextRequest) {
     }
 
     // Get timetable data to populate required fields
-    const timetable = await prisma.timetable.findUnique({
+    const timetable = await withPrismaRetry(() => prisma.timetable.findUnique({
       where: { id: timetableId },
       select: {
         id: true,
@@ -42,10 +45,9 @@ async function postHandler(request: NextRequest) {
         branchId: true,
         academicYearId: true
       },
-    });
+    }));
 
     if (!timetable) {
-      console.log('❌ Timetable not found:', timetableId);
       return NextResponse.json({ error: "Timetable not found" }, { status: 404 });
     }
 
@@ -56,23 +58,29 @@ async function postHandler(request: NextRequest) {
       
       // For now, let's be more permissive and allow any teacher to add topics
       // This can be made stricter later if needed
-      console.log('⚠️ Teacher not assigned to timetable, but allowing topic creation');
+      if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+        console.log('⚠️ Teacher not assigned to timetable, but allowing topic creation');
+      }
     } else {
-      console.log('✅ Teacher is assigned to timetable');
+      if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+        console.log('✅ Teacher is assigned to timetable');
+      }
     }
 
     // First, try to find existing topic for this timetable
-    const existingTopic = await prisma.timetableTopic.findFirst({
+    const existingTopic = await withPrismaRetry(() => prisma.timetableTopic.findFirst({
       where: {
         timetableId: parseInt(timetableId),
       },
-    });
+    }));
 
     let topic;
     if (existingTopic) {
-      console.log('🔄 Updating existing topic:', existingTopic.id);
+      if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+        console.log('🔄 Updating existing topic:', existingTopic.id);
+      }
       // Update existing topic
-      topic = await prisma.timetableTopic.update({
+      topic = await withPrismaRetry(() => prisma.timetableTopic.update({
         where: {
           id: existingTopic.id,
         },
@@ -81,35 +89,42 @@ async function postHandler(request: NextRequest) {
           description,
           teacherId,
         },
-      });
+      }));
     } else {
       // Only create topics for timetables with a classId (not elective timetables)
       if (!timetable.classId) {
-        console.log('❌ Cannot create topics for elective timetables without a specific class');
         return NextResponse.json({
           error: 'Cannot create topics for elective timetables without a specific class'
         }, { status: 400 });
       }
 
-      console.log('✨ Creating new topic');
+      if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+        console.log('✨ Creating new topic');
+      }
       // Create new topic
-      topic = await prisma.timetableTopic.create({
+      topic = await withPrismaRetry(() => prisma.timetableTopic.create({
         data: {
           title,
           description,
           timetableId: parseInt(timetableId),
           teacherId: teacherId,
           subjectId: timetable.subjectId,
-          classId: timetable.classId,
-          branchId: timetable.branchId,
-          academicYearId: timetable.academicYearId,
+          classId: timetable.classId!,
+          branchId: timetable.branchId!,
+          academicYearId: timetable.academicYearId!,
           status: "IN_PROGRESS",
         },
-      });
+      }));
     }
 
-    console.log('✅ Topic saved successfully:', topic.id);
-    return NextResponse.json({ success: true, topic });
+    if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+      console.log('✅ Topic saved successfully:', topic.id);
+    }
+    return NextResponse.json({ 
+      success: true, 
+      message: existingTopic ? 'Topic updated successfully' : 'Topic created successfully',
+      topic 
+    });
   } catch (error) {
     console.error("Error creating/updating timetable topic:", error);
     return NextResponse.json(
@@ -133,14 +148,47 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const topics = await prisma.timetableTopic.findMany({
+    const topics = await withPrismaRetry(() => prisma.timetableTopic.findMany({
       where: {
         timetableId: parseInt(timetableId),
+      },
+      include: {
+        teacher: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          }
+        },
+        subject: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        class: {
+          select: {
+            id: true,
+            name: true,
+          }
+        },
+        branch: {
+          select: {
+            id: true,
+            shortName: true,
+          }
+        },
+        academicYear: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
       },
       orderBy: {
         createdAt: "desc",
       },
-    });
+    }));
 
     return NextResponse.json({ topics });
   } catch (error) {

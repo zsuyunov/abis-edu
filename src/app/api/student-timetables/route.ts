@@ -120,6 +120,7 @@ export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async func
         class: true,
         branch: true,
         academicYear: true,
+        timetableTopics: true, // Include timetable topics
       },
       orderBy: {
         startTime: "asc",
@@ -139,7 +140,8 @@ export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async func
           include: {
             subject: true
           }
-        }
+        },
+        timetableTopics: true, // Include timetable topics
       },
       orderBy: {
         startTime: "asc",

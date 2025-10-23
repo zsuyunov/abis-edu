@@ -249,7 +249,7 @@ export async function middleware(request: NextRequest) {
   // Set non-httpOnly cookie for client-side access (if needed)
   response.cookies.set("userId", user.id, {
     httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production",
     sameSite: "lax", // Changed from 'strict' to 'lax' for better compatibility
     maxAge: 60 * 60 * 24 * 7, // 7 days
   });

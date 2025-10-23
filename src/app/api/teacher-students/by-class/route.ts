@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
-
-const prisma = new PrismaClient();
 
 export const GET = authenticateJWT(authorizeRole('TEACHER')(async function GET(request: NextRequest) {
   try {
@@ -64,6 +62,7 @@ export const GET = authenticateJWT(authorizeRole('TEACHER')(async function GET(r
       { status: 500 }
     );
   } finally {
-    await prisma.$disconnect();
+    // Don't disconnect the shared Prisma client
+    // await prisma.$disconnect();
   }
 }));

@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  X, 
-  Plus, 
-  Save, 
-  FileText, 
-  Paperclip, 
-  Calendar, 
-  Clock, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  X,
+  Plus,
+  Save,
+  FileText,
+  Paperclip,
+  Calendar,
+  Clock,
+  CheckCircle,
+  AlertCircle,
   XCircle,
   Edit3,
   Trash2,
@@ -18,6 +18,7 @@ import {
   Eye,
   BookOpen
 } from "lucide-react";
+import { toast } from "react-toastify";
 
 interface Topic {
   id?: string;
@@ -46,16 +47,17 @@ interface ClassworkTopicsModalProps {
   isReadOnly?: boolean;
 }
 
-const ClassworkTopicsModal = ({ 
-  timetableSlot, 
-  existingTopics, 
-  onClose, 
-  onSave, 
-  isReadOnly = false 
+const ClassworkTopicsModal = ({
+  timetableSlot,
+  existingTopics,
+  onClose,
+  onSave,
+  isReadOnly = false
 }: ClassworkTopicsModalProps) => {
   const [topics, setTopics] = useState<Topic[]>(existingTopics || []);
   const [isEditing, setIsEditing] = useState(false);
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [newTopic, setNewTopic] = useState<Topic>({
     topicTitle: "",
     topicDescription: "",
@@ -64,6 +66,36 @@ const ClassworkTopicsModal = ({
     progressPercentage: 0
   });
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    fetchTopics();
+  }, [timetableSlot.id]);
+
+  const fetchTopics = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/timetable-topics?timetableId=${timetableSlot.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        // Convert API topics to component format
+        const convertedTopics = data.topics.map((topic: any) => ({
+          id: topic.id.toString(),
+          topicTitle: topic.title,
+          topicDescription: topic.description || '',
+          attachments: topic.attachments || [],
+          status: topic.status,
+          progressPercentage: topic.progressPercentage || 0,
+          completedAt: topic.completedAt,
+          createdAt: topic.createdAt
+        }));
+        setTopics(convertedTopics);
+      }
+    } catch (error) {
+      console.error("Error fetching topics:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const statusColors = {
     DRAFT: "bg-gray-100 text-gray-700 border-gray-300",
@@ -122,10 +154,57 @@ const ClassworkTopicsModal = ({
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      await onSave(topics);
+
+      // Save topics to database
+      for (const topic of topics) {
+        if (topic.id && topic.id.startsWith('temp-')) {
+          // New topic - create via API
+          const response = await fetch('/api/timetable-topics', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              timetableId: timetableSlot.id,
+              title: topic.topicTitle,
+              description: topic.topicDescription,
+              status: topic.status,
+              attachments: topic.attachments || [],
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save topic');
+          }
+        } else {
+          // Update existing topic via API
+          const response = await fetch(`/api/timetable-topics/${topic.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              title: topic.topicTitle,
+              description: topic.topicDescription,
+              status: topic.status,
+              attachments: topic.attachments || [],
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to update topic');
+          }
+        }
+      }
+
+      toast.success("Topics saved successfully!");
+      fetchTopics(); // Refresh the topics list
       onClose();
     } catch (error) {
       console.error("Error saving topics:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to save topics");
     } finally {
       setIsSaving(false);
     }
@@ -217,29 +296,41 @@ const ClassworkTopicsModal = ({
 
         {/* Content */}
         <div className="p-6 max-h-[60vh] overflow-y-auto">
-          {/* Existing Topics */}
-          <div className="space-y-4 mb-6">
-            {topics.map((topic) => (
-              <div key={topic.id} className="bg-white/80 border border-gray-200 rounded-xl p-4 shadow-sm">
-                {editingTopicId === topic.id ? (
-                  <EditTopicForm
-                    topic={topic}
-                    onSave={(updatedTopic) => handleUpdateTopic(topic.id!, updatedTopic)}
-                    onCancel={() => setEditingTopicId(null)}
-                    onFileUpload={(files) => handleFileUpload(topic.id!, files)}
-                  />
-                ) : (
-                  <TopicDisplay
-                    topic={topic}
-                    onEdit={() => handleEditTopic(topic.id!)}
-                    onDelete={() => handleDeleteTopic(topic.id!)}
-                    onFileUpload={(files) => handleFileUpload(topic.id!, files)}
-                    isReadOnly={isReadOnly}
-                  />
-                )}
+          {/* Loading state */}
+          {loading ? (
+            <div className="space-y-4 mb-6">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Existing Topics */}
+              <div className="space-y-4 mb-6">
+                {topics.map((topic) => (
+                  <div key={topic.id} className="bg-white/80 border border-gray-200 rounded-xl p-4 shadow-sm">
+                    {editingTopicId === topic.id ? (
+                      <EditTopicForm
+                        topic={topic}
+                        onSave={(updatedTopic) => handleUpdateTopic(topic.id!, updatedTopic)}
+                        onCancel={() => setEditingTopicId(null)}
+                        onFileUpload={(files) => handleFileUpload(topic.id!, files)}
+                      />
+                    ) : (
+                      <TopicDisplay
+                        topic={topic}
+                        onEdit={() => handleEditTopic(topic.id!)}
+                        onDelete={() => handleDeleteTopic(topic.id!)}
+                        onFileUpload={(files) => handleFileUpload(topic.id!, files)}
+                        isReadOnly={isReadOnly}
+                      />
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
           {/* Add New Topic */}
           {!isReadOnly && (
@@ -294,6 +385,8 @@ const ClassworkTopicsModal = ({
                 </button>
               )}
             </div>
+          )}
+            </>
           )}
         </div>
 

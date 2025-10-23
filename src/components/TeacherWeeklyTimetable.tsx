@@ -44,11 +44,13 @@ interface TimetableEntry {
   teacher: { id: string; firstName: string; lastName: string };
   branch: { id: number; shortName: string };
   academicYear?: { id: number; name: string };
-  topics?: Array<{
+  timetableTopics?: Array<{
     id: number;
     title: string;
     description?: string;
-    status: 'draft' | 'in_progress' | 'completed' | 'cancelled';
+    status: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+    createdAt?: string;
+    updatedAt?: string;
   }>;
   isElective?: boolean;
   electiveGroup?: { id: number; name: string } | null;
@@ -195,7 +197,7 @@ const TeacherWeeklyTimetable = ({
 
 
   const getTopicStatusColor = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'completed': return 'bg-green-100 text-green-700 border-green-200';
       case 'in_progress': return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'draft': return 'bg-gray-100 text-gray-700 border-gray-200';
@@ -205,7 +207,7 @@ const TeacherWeeklyTimetable = ({
   };
 
   const getStatusIcon = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'completed': return <Check className="w-3 h-3" />;
       case 'in_progress': return <Timer className="w-3 h-3" />;
       case 'cancelled': return <X className="w-3 h-3" />;
@@ -392,16 +394,16 @@ const TeacherWeeklyTimetable = ({
                           </div>
                         </div>
 
-                          {/* Topics Summary */}
-                          {timetable.topics && timetable.topics.length > 0 && (
+                           {/* Topics Summary */}
+                           {timetable.timetableTopics && timetable.timetableTopics.length > 0 && (
                             <div className="mt-3 pt-2 border-t border-gray-200">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs text-gray-600">
-                                  {timetable.topics.length} topic{timetable.topics.length !== 1 ? 's' : ''}
+                                  {timetable.timetableTopics.length} topic{timetable.timetableTopics.length !== 1 ? 's' : ''}
                               </span>
                                 <div className="flex gap-1">
-                                  {timetable.topics.slice(0, 3).map((topic) => (
-                                    <div 
+                                  {timetable.timetableTopics.slice(0, 3).map((topic) => (
+                                    <div
                                       key={topic.id}
                                       className={`w-2 h-2 rounded-full border ${getTopicStatusColor(topic.status)}`}
                                     />
@@ -504,7 +506,7 @@ const TeacherWeeklyTimetable = ({
             date: selectedTimetable.fullDate,
             room: selectedTimetable.roomNumber
           }}
-          existingTopics={(selectedTimetable.topics || []).map(topic => ({
+          existingTopics={(selectedTimetable.timetableTopics || []).map(topic => ({
             id: topic.id.toString(),
             topicTitle: topic.title,
             topicDescription: topic.description || "",
@@ -516,10 +518,57 @@ const TeacherWeeklyTimetable = ({
             setShowTopicModal(false);
             setSelectedTimetable(null);
           }}
-          onSave={(topics) => {
-            // Handle saving topics
-            console.log('Topics saved:', topics);
-            fetchTimetables();
+          onSave={async (topics) => {
+            try {
+              // Save topics to database
+              for (const topic of topics) {
+                if (topic.id && topic.id.startsWith('temp-')) {
+                  // New topic - create via API
+                  const response = await fetch('/api/timetable-topics', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      timetableId: selectedTimetable.id,
+                      title: topic.topicTitle,
+                      description: topic.topicDescription,
+                      status: topic.status,
+                      attachments: topic.attachments || [],
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    throw new Error('Failed to save topic');
+                  }
+                } else {
+                  // Update existing topic via API
+                  const response = await fetch(`/api/timetable-topics/${topic.id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      title: topic.topicTitle,
+                      description: topic.topicDescription,
+                      status: topic.status,
+                      attachments: topic.attachments || [],
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    throw new Error('Failed to update topic');
+                  }
+                }
+              }
+
+              fetchTimetables();
+              setShowTopicModal(false);
+              setSelectedTimetable(null);
+            } catch (error) {
+              console.error('Error saving topics:', error);
+              // Handle error (show toast, etc.)
+            }
           }}
         />
       )}

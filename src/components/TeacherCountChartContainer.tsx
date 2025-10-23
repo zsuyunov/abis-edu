@@ -8,7 +8,7 @@ const TeacherCountChartContainer = async () => {
   let girls = 0;
 
   // Skip database queries during static generation if no DATABASE_URL
-  if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+  if ((process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') && !process.env.DATABASE_URL) {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4 shadow-sm border border-gray-100">
         <div className="flex justify-between items-center">

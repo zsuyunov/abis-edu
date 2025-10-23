@@ -1,38 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 
-const prisma = new PrismaClient();
-
-export const GET = authenticateJWT(authorizeRole('TEACHER')(async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('TEACHER', 'ADMIN')(async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const classId = searchParams.get('classId');
-    const teacherId = request.headers.get("x-user-id");
+    const userId = request.headers.get("x-user-id");
+    const userRole = request.headers.get("x-user-role");
 
     if (!classId) {
       return NextResponse.json({ error: 'Class ID is required' }, { status: 400 });
     }
 
-    if (!teacherId) {
-      return NextResponse.json({ error: 'Teacher ID is required' }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    // Verify that the teacher is assigned to this class
-    const teacherAssignment = await prisma.teacherAssignment.findFirst({
-      where: {
-        teacherId: teacherId,
-        classId: parseInt(classId),
-        status: 'ACTIVE'
+    // For teachers, verify they are assigned to this class
+    if (userRole === 'TEACHER') {
+      const teacherAssignment = await prisma.teacherAssignment.findFirst({
+        where: {
+          teacherId: userId,
+          classId: parseInt(classId),
+          status: 'ACTIVE'
+        }
+      });
+
+      if (!teacherAssignment) {
+        return NextResponse.json({ 
+          error: 'You are not assigned to this class' 
+        }, { status: 403 });
       }
-    });
-
-    if (!teacherAssignment) {
-      return NextResponse.json({ 
-        error: 'You are not assigned to this class' 
-      }, { status: 403 });
     }
+    
+    // For admins, no additional verification needed
 
     // Fetch students by class ID
     const students = await prisma.student.findMany({
@@ -64,6 +67,7 @@ export const GET = authenticateJWT(authorizeRole('TEACHER')(async function GET(r
       { status: 500 }
     );
   } finally {
-    await prisma.$disconnect();
+    // Don't disconnect the shared Prisma client
+    // await prisma.$disconnect();
   }
 }));

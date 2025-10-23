@@ -23,7 +23,7 @@ export class SecurityHeaders {
   ): NextResponse {
     // Generate nonce for inline scripts (if not provided)
     const nonce = options.nonce || this.generateNonce();
-    const isDev = process.env.NODE_ENV !== 'production';
+    const isDev = process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test';
     
     // Build connect-src with custom domains if provided
     const connectSrcDomains = ["'self'"];

@@ -495,7 +495,7 @@ async function postHandler(request: NextRequest) {
     // Set access token in httpOnly cookie (short-lived)
     response.cookies.set('auth_token', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production',
       sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
       maxAge: 15 * 60, // 15 minutes
       path: '/',
@@ -504,7 +504,7 @@ async function postHandler(request: NextRequest) {
     // Set refresh token in httpOnly cookie (longer-lived)
     response.cookies.set('refresh_token', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production',
       sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/api/auth',
@@ -528,7 +528,8 @@ async function postHandler(request: NextRequest) {
       { status: 500 }
     );
   } finally {
-    await prisma.$disconnect();
+    // Don't disconnect the shared Prisma client - it should remain connected for other operations
+    // await prisma.$disconnect();
   }
 }
 

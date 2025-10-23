@@ -4,7 +4,7 @@ import { AuthService } from "@/lib/auth";
 import { authenticateJWT } from '@/middlewares/authenticateJWT';
 import { authorizeRole } from '@/middlewares/authorizeRole';
 
-export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async function GET(request: NextRequest) {
+export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT', 'ADMIN')(async function GET(request: NextRequest) {
   try {
     // Try header-based auth first, then fallback to token auth
     const studentId = request.headers.get('x-user-id');
@@ -37,10 +37,42 @@ export const GET = authenticateJWT(authorizeRole('STUDENT', 'PARENT')(async func
     const academicYearId: string | undefined = academicYearIdRaw === null ? undefined : academicYearIdRaw;
     const view = url.searchParams.get("view") || "stats"; // stats, calendar, analytics
 
-    // Verify student can only access their own attendance data
-    if (authenticatedUserId !== requestedStudentId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    // Get user role for authorization check
+    const authHeader = request.headers.get('authorization');
+    const token = AuthService.extractTokenFromHeader(authHeader);
+    let userRole = 'STUDENT'; // Default role
+    
+    if (token) {
+      const session = await AuthService.verifyToken(token);
+      if (session?.role) {
+        userRole = session.role;
+      }
     }
+
+    // SECURITY: Verify access permissions based on role
+    if (userRole === 'STUDENT' && authenticatedUserId !== requestedStudentId) {
+      return NextResponse.json({ error: "Access denied: Students can only access their own attendance data" }, { status: 403 });
+    }
+    
+    if (userRole === 'PARENT') {
+      // Parents can only access their children's data
+      if (!authenticatedUserId) {
+        return NextResponse.json({ error: "Access denied: Parent ID not found" }, { status: 403 });
+      }
+      
+      const studentParent = await prisma.studentParent.findFirst({
+        where: {
+          parentId: authenticatedUserId,
+          studentId: requestedStudentId
+        }
+      });
+      
+      if (!studentParent) {
+        return NextResponse.json({ error: "Access denied: Parents can only access their children's attendance data" }, { status: 403 });
+      }
+    }
+    
+    // Admin can access any student's attendance data (no additional restrictions)
 
     // Get student information
     const student = await prisma.student.findUnique({
